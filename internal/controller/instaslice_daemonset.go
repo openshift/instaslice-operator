@@ -218,13 +218,15 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					}
 					nodeName := os.Getenv("NODE_NAME")
 					if errUpdatingNodeCapacity := r.updateNodeCapacity(ctx, nodeName); errUpdatingNodeCapacity != nil {
-						return ctrl.Result{Requeue: true}, nil
+						return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 					}
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,
 						Namespace: "default", // TODO: modify
 					}
+
+					//TODO: could be merged with the deleted call below
 					err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 					if err != nil {
 						log.FromContext(ctx).Error(err, "error getting latest instaslice object")
@@ -238,22 +240,22 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					}
 				}
 				//if cache does not have a valid entry do nothing
-				return ctrl.Result{}, nil
+				// return ctrl.Result{}, nil
 
 			}
 
 		}
-		//TODO: if cm and instaslice resource does not exists, then slice was never created, can early terminate
+
 		if allocations.Allocationstatus == "deleted" {
 			log.FromContext(ctx).Info("Performing cleanup ", "pod", allocations.PodName)
 			if errDeletingCm := r.deleteConfigMap(ctx, allocations.PodName, allocations.Namespace); errDeletingCm != nil {
 				log.FromContext(ctx).Error(errDeletingCm, "error deleting configmap for ", "pod", allocations.PodName)
-				return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
+				return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 			}
 
 			if errDeletingInstaSliceResource := r.cleanUpInstaSliceResource(ctx, allocations.PodName); errDeletingInstaSliceResource != nil {
 				log.FromContext(ctx).Error(errDeletingInstaSliceResource, "Error deleting InstaSlice resource object")
-				return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
+				return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 			}
 
 			nodeName := os.Getenv("NODE_NAME")
@@ -263,6 +265,8 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			deletePrepared := r.cleanUpCiAndGi(ctx, allocations.PodUUID, instaslice)
 			log.FromContext(ctx).Info("Done deleting ci and gi for ", "pod", allocations.PodName)
 			delete(cachedPreparedMig, allocations.PodName)
+
+			//TODO: could be merged with the creating call above
 			var updateInstasliceObject inferencev1alpha1.Instaslice
 			typeNamespacedName := types.NamespacedName{
 				Name:      instaslice.Name,
@@ -271,6 +275,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 			if err != nil {
 				log.FromContext(ctx).Error(err, "error getting latest instaslice object")
+				return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 			}
 			delete(updateInstasliceObject.Spec.Prepared, deletePrepared)
 			delete(updateInstasliceObject.Spec.Allocations, allocations.PodUUID)
@@ -280,7 +285,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 			}
 
-			return ctrl.Result{}, nil
+			// return ctrl.Result{}, nil
 		}
 
 	}

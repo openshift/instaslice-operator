@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"regexp"
 	"strings"
 	"time"
@@ -112,12 +113,18 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						log.FromContext(ctx).Info("unable to set instaslice to state deleted for ", "pod", allocation.PodName)
 						return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 					}
-					errRemovingFinalizer := controllerutil.RemoveFinalizer(pod, "org.instaslice/accelarator")
+
+					latestPod := &v1.Pod{}
+					errGettingPod := r.Get(ctx, req.NamespacedName, latestPod)
+					if errGettingPod != nil {
+						//TODO: should we retry?
+						log.FromContext(ctx).Error(errGettingPod, "error getting latest copy of pod")
+					}
+					errRemovingFinalizer := controllerutil.RemoveFinalizer(latestPod, "org.instaslice/accelarator")
 					if !errRemovingFinalizer {
 						log.FromContext(ctx).Info("finalizer not deleted for ", "pod", pod.Name)
 					}
-
-					if err := r.Update(ctx, pod); err != nil {
+					if err := r.Update(ctx, latestPod); err != nil {
 						log.FromContext(ctx).Info("unable to update removal of finalizer, retrying")
 						return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 					}
@@ -233,7 +240,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			// find the GPU on the node and the GPU index where the slice can be created
 			allocDetails, err := r.findDeviceForASlice(&instaslice, profileName, policy, pod)
 			if err != nil {
-				log.FromContext(ctx).Info("sufficient capacity not available to allocate GPU for ", "pod", pod.Name, "node", instaslice.Name)
 				continue
 			}
 			podHasNodeAllocation = true
@@ -262,15 +268,14 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					log.FromContext(ctx).Error(err, "Error updating instaslice allocations")
 					return ctrl.Result{Requeue: true}, nil
 				}
-			} //else {
-			// 	log.FromContext(ctx).Info("requeuing, cluster does not have resources for ", "pod", pod.Name)
-			// 	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-			// }
+			}
 		}
-		// if the cluster does not have suitable node, requeue request
+		//if the cluster does not have suitable node, requeue request
 		if !podHasNodeAllocation {
 			log.FromContext(ctx).Info("no suitable node found in cluster for ", "pod", pod.Name)
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+			// Generate a random duration between 1 and 10 seconds
+			randomDuration := time.Duration(rand.Intn(10)+1) * time.Second
+			return ctrl.Result{RequeueAfter: randomDuration}, nil
 		}
 
 	}
