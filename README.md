@@ -8,41 +8,44 @@ Experimental InstaSlice works with GPU operator to create mig slices on demand.
 
 ### Prerequisites
 - [Go](https://go.dev/doc/install) v1.22.0+
-- [Docker](https://docs.docker.com/get-docker/) v17.03+
+- **TODO:** Docker desktop or Docker engine? [Docker](https://docs.docker.com/get-docker/) v17.03+
+- [KinD](https://kind.sigs.k8s.io/docs/user/quick-start/) v0.23.0+
+- [Helm](https://helm.sh/docs/intro/install/) v3.0.0+
 - [Docker buildx plugin](https://github.com/docker/buildx) for building cross-platform images.
 - [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl) v1.11.3+.
-- Access to a [KinD](https://kind.sigs.k8s.io/docs/user/quick-start/) cluster.
+
+### Install NVIDIA GPU software on the host
+
+**TODO**: Do we need to install drivers and CUDA toolkit on the host? Link to NVIDIA documentation https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#driver-installation
+
+### Set up Docker backend for Kind
+
+**TODO:** Install the NVIDIA Container Toolkit (CTK) https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+
+**TODO**: Link to NVIDIA documentation / k8s-device-plugin README https://github.com/NVIDIA/k8s-dra-driver/blob/main/README.md
+
+### Enable NVIDIA Helm repo
+
+https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/getting-started.html#procedure
 
 ### Install KinD cluster with GPU operator
 
-- Make sure the GPUs on the host have MIG enabled
+- Make sure the GPUs on the host have MIG disabled
 
-```sh
+```console
+# nvidia-smi
+Mon Aug  5 17:52:22 2024
 +-----------------------------------------------------------------------------------------+
-| NVIDIA-SMI 550.54.14              Driver Version: 550.54.14      CUDA Version: 12.4     |
+| NVIDIA-SMI 560.28.03              Driver Version: 560.28.03      CUDA Version: 12.6     |
 |-----------------------------------------+------------------------+----------------------+
 | GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
 | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
 |                                         |                        |               MIG M. |
 |=========================================+========================+======================|
-|   0  NVIDIA A100-PCIE-40GB          Off |   00000000:0E:00.0 Off |                   On |
-| N/A   36C    P0             33W /  250W |       0MiB /  40960MiB |     N/A      Default |
-|                                         |                        |              Enabled |
+|   0  NVIDIA A100-PCIE-40GB          Off |   00000000:07:00.0 Off |                    0 |
+| N/A   26C    P0             31W /  250W |       1MiB /  40960MiB |      0%      Default |
+|                                         |                        |             Disabled |
 +-----------------------------------------+------------------------+----------------------+
-|   1  NVIDIA A100-PCIE-40GB          Off |   00000000:0F:00.0 Off |                   On |
-| N/A   40C    P0             32W /  250W |       0MiB /  40960MiB |     N/A      Default |
-|                                         |                        |              Enabled |
-+-----------------------------------------+------------------------+----------------------+
-
-+-----------------------------------------------------------------------------------------+
-| MIG devices:                                                                            |
-+------------------+----------------------------------+-----------+-----------------------+
-| GPU  GI  CI  MIG |                     Memory-Usage |        Vol|      Shared           |
-|      ID  ID  Dev |                       BAR1-Usage | SM     Unc| CE ENC DEC OFA JPG    |
-|                  |                                  |        ECC|                       |
-|==================+==================================+===========+=======================|
-|  No MIG devices found                                                                   |
-+-----------------------------------------------------------------------------------------+
 
 +-----------------------------------------------------------------------------------------+
 | Processes:                                                                              |
@@ -50,16 +53,17 @@ Experimental InstaSlice works with GPU operator to create mig slices on demand.
 |        ID   ID                                                               Usage      |
 |=========================================================================================|
 |  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
 ```
 
 - Run the below script
-```sh
+```console
 sh ./deploy/setup.sh
 ```
 NOTE: Please check if all the pods in GPU operator are completed or Running before moving to the next step.
 
-```sh
-(base) openstack@netsres62:~/asmalvan/instaslice2$ kubectl get pods -n gpu-operator
+```console
+# kubectl get pods -n gpu-operator
 NAME                                                              READY   STATUS      RESTARTS   AGE
 gpu-feature-discovery-578q8                                       1/1     Running     0          102s
 gpu-operator-1714053627-node-feature-discovery-gc-9b857c99phlnn   1/1     Running     0          7m21s
@@ -76,8 +80,8 @@ nvidia-operator-validator-kh6jf                                   1/1     Runnin
 
 - After all the pods are Running/Completed, run nvidia-smi on the host and check if MIG slices appear on the all the GPUs of the host.
 
-```sh
-(base) openstack@netsres62:~/asmalvan/instaslice2$ nvidia-smi
+```console
+# nvidia-smi
 Thu Apr 25 10:08:24 2024
 +-----------------------------------------------------------------------------------------+
 | NVIDIA-SMI 550.54.14              Driver Version: 550.54.14      CUDA Version: 12.4     |
@@ -134,16 +138,15 @@ Thu Apr 25 10:08:24 2024
 |=========================================================================================|
 |  No running processes found                                                             |
 +-----------------------------------------------------------------------------------------+
-(base) openstack@netsres62:~/asmalvan/instaslice2$
 ```
 
 
-- Delete mig slices using the commmand
+- Delete mig slices using the command
 
 ```sh
 sudo nvidia-smi mig -dci && sudo nvidia-smi mig -dgi
 
-uccessfully destroyed compute instance ID  0 from GPU  0 GPU instance ID  9
+Successfully destroyed compute instance ID  0 from GPU  0 GPU instance ID  9
 Successfully destroyed compute instance ID  0 from GPU  0 GPU instance ID 10
 Successfully destroyed compute instance ID  0 from GPU  0 GPU instance ID  3
 Successfully destroyed compute instance ID  0 from GPU  0 GPU instance ID  2
