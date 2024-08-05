@@ -50,10 +50,13 @@ type AllocationPolicy interface {
 	SetAllocationDetails(profileName string, newStart, size uint32, podUUID string, nodename string, processed string, discoveredGiprofile int, Ciprofileid int, Ciengprofileid int, namespace string, podName string, gpuUuid string) *inferencev1alpha1.AllocationDetails
 }
 
+// not implemented
 type RightToLeftPolicy struct{}
 
+// not implemented
 type LeftToRightPolicy struct{}
 
+// first fit policy is implemented at the moment
 type FirstFitPolicy struct{}
 
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices,verbs=get;list;watch;create;update;patch;delete
@@ -91,13 +94,14 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err := r.List(ctx, &instasliceList, &client.ListOptions{}); err != nil {
 		log.FromContext(ctx).Error(err, "Error listing Instaslice")
 	}
-	// pod is completed move allocation to deleted state and go to next pod
+
+	// pod is completed move allocation to deleting state and return
 	if pod.Status.Phase == v1.PodSucceeded && controllerutil.ContainsFinalizer(pod, "org.instaslice/accelarator") {
 		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocation := range instaslice.Spec.Allocations {
 				if podUuid == string(pod.UID) {
 					log.FromContext(ctx).Info("deleting allocation for completed ", "pod", allocation.PodName)
-					allocation.Allocationstatus = "deleted"
+					allocation.Allocationstatus = "deleting"
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,
@@ -147,7 +151,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 	// handle graceful termination of pods, wait for about 30 seconds from the time deletiontimestamp is set on the pod
 	if !pod.DeletionTimestamp.IsZero() {
-		log.FromContext(ctx).Info("set status to deleted for ", "pod", pod.Name)
+		log.FromContext(ctx).Info("set status to deleting for ", "pod", pod.Name)
 		if controllerutil.ContainsFinalizer(pod, "org.instaslice/accelarator") {
 			if controllerutil.RemoveFinalizer(pod, "org.instaslice/accelarator") {
 				if err := r.Update(ctx, pod); err != nil {
@@ -161,7 +165,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					if podUuid == string(pod.UID) {
 						elapsed := time.Since(pod.DeletionTimestamp.Time)
 						if elapsed > 30*time.Second {
-							allocation.Allocationstatus = "deleted"
+							allocation.Allocationstatus = "deleting"
 							var updateInstasliceObject inferencev1alpha1.Instaslice
 							typeNamespacedName := types.NamespacedName{
 								Name:      instaslice.Name,
@@ -283,6 +287,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	return ctrl.Result{}, nil
 }
 
+// find node, gpu and gpu index to place the slice
 func (r *InstasliceReconciler) findDeviceForASlice(instaslice *inferencev1alpha1.Instaslice, profileName string, policy AllocationPolicy, pod *v1.Pod) (*inferencev1alpha1.AllocationDetails, error) {
 	//TODO: discover this value, this may work for A100 and H100 for now.
 	for gpuuuid, _ := range instaslice.Spec.MigGPUUUID {
@@ -364,9 +369,10 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 
 		}
 	}
-
+	// deleted allocations can be reused
+	// ungated allocations are already counted in prepared
 	for _, item := range instaslice.Spec.Allocations {
-		if item.GPUUUID == gpuUUID {
+		if item.GPUUUID == gpuUUID && item.Allocationstatus != "deleted" && item.Allocationstatus != "ungated" {
 			for i := 0; i < int(item.Size); i++ {
 				gpuAllocatedIndex[int(item.Start)+i] = 1
 			}
@@ -444,7 +450,7 @@ func checkIfPodGated(pod *v1.Pod, isPodGated bool) bool {
 func (r *InstasliceReconciler) podMapFunc(ctx context.Context, obj client.Object) []reconcile.Request {
 	instaslice := obj.(*inferencev1alpha1.Instaslice)
 	for _, allocation := range instaslice.Spec.Allocations {
-		if allocation.Allocationstatus == "created" {
+		if allocation.Allocationstatus == "created" || allocation.Allocationstatus == "deleted" {
 			return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: allocation.Namespace, Name: allocation.PodName}}}
 		}
 	}
@@ -512,13 +518,4 @@ func (l *RightToLeftPolicy) SetAllocationDetails(profileName string, newStart, s
 	namespace string, podName string, gpuUuid string) *inferencev1alpha1.AllocationDetails {
 	// Implement the left-to-right policy here
 	return &inferencev1alpha1.AllocationDetails{}
-}
-
-func isPodDeletionProcessed(str string, arr []string) bool {
-	for _, v := range arr {
-		if v == str {
-			return false
-		}
-	}
-	return true
 }

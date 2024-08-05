@@ -71,6 +71,7 @@ spec:
         args:
         - --leader-elect
         image: asm582/instaslicev2-controller:latest
+        #imagePullPolicy: IfNotPresent
         name: manager
         securityContext:
           allowPrivilegeEscalation: true
@@ -129,6 +130,7 @@ spec:
         - --leader-elect
         name: daemonset
         image: asm582/instaslicev2-daemonset:latest
+        #imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: true
           privileged: true
