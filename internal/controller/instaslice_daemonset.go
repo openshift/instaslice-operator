@@ -37,6 +37,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	customerr "errors"
+
 	nvdevice "github.com/NVIDIA/go-nvlib/pkg/nvlib/device"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -98,6 +100,9 @@ type preparedMig struct {
 // TODO: remove once we figure out NVML calls that does CI and GI discovery
 var cachedPreparedMig = make(map[string]preparedMig)
 
+var ErrInvalidArgument = customerr.New("Invalid Argument")
+var ErrInsufficientResources = customerr.New("Insufficient Resources")
+
 func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
 	nodeName := os.Getenv("NODE_NAME")
@@ -131,10 +136,25 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			if errUpdatingNodeCapacity := r.updateNodeCapacity(ctx, nodeName); errUpdatingNodeCapacity != nil {
 				return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 			}
-			deletePrepared := r.cleanUpCiAndGi(ctx, allocations.PodUUID, instaslice)
+			deletePrepared, errDeletingCiorGi := r.cleanUpCiAndGi(ctx, allocations.PodUUID, instaslice)
+			if errDeletingCiorGi != nil {
+				// deleting CI and GI is important
+				// avoid "error": "Insufficient Resources",
+				// which means that previous GI was not deleted and hence daemonset is unable to
+				// recreate MIG on the same index. this will cause slice to not get realized and
+				// workload would never run.
+				//avoid "error" : "Invalid Argument"
+				// which means that slice was deleted in previous reconcile logic and controller is trying to
+				// delete an non-existent slice
+				if !customerr.Is(errDeletingCiorGi, ErrInsufficientResources) && !customerr.Is(errDeletingCiorGi, ErrInvalidArgument) {
+					log.FromContext(ctx).Error(errDeletingCiorGi, "error deleting ci or gi for ", "pod", allocations.PodName)
+					// we only see the above two errors in both cases it should never be retried
+					//return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+				}
+
+			}
 			log.FromContext(ctx).Info("Done deleting ci and gi for ", "pod", allocations.PodName)
 			delete(cachedPreparedMig, allocations.PodName)
-
 			//TODO: could be merged with the creating call above
 			var updateInstasliceObject inferencev1alpha1.Instaslice
 			typeNamespacedName := types.NamespacedName{
@@ -146,8 +166,20 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				log.FromContext(ctx).Error(err, "error getting latest instaslice object")
 				return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 			}
-			delete(updateInstasliceObject.Spec.Prepared, deletePrepared)
-			//delete(updateInstasliceObject.Spec.Allocations, allocations.PodUUID)
+			// previous reconcile loop might have deleted prepared
+			// so we need to search the MIG UUID in prepared section
+			if deletePrepared != "" {
+				delete(updateInstasliceObject.Spec.Prepared, deletePrepared)
+			} else {
+				var searchToDelPrepared string
+				for migUuid, v := range updateInstasliceObject.Spec.Prepared {
+					if v.PodUUID == allocations.PodUUID {
+						searchToDelPrepared = migUuid
+					}
+				}
+				delete(updateInstasliceObject.Spec.Prepared, searchToDelPrepared)
+			}
+
 			allocations.Allocationstatus = "deleted"
 			updateInstasliceObject.Spec.Allocations[allocations.PodUUID] = allocations
 			errUpdatingAllocation := r.Update(ctx, &updateInstasliceObject)
@@ -155,8 +187,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				log.FromContext(ctx).Error(errUpdatingAllocation, "Error updating InstaSlice object for ", "pod", allocations.PodName)
 				return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 			}
-
-			// return ctrl.Result{}, nil
 		}
 		// create new slice by obeying controller allocation
 		if allocations.Allocationstatus == "creating" {
@@ -296,11 +326,13 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 						}
 
 					}
-					if updatedAllocation.Allocationstatus == "deleting" {
-						log.FromContext(ctx).Info("allocation was deleted in the middle of creation for ", "pod", existingAllocations.PodName)
-						//Requeue the request to be deleted later
-						return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
-					}
+					// user may have deleted the pod and hence the allocation status changed to deleted
+					// do nothing and perform clean up in the next reconcile loop
+					// if updatedAllocation.Allocationstatus == "deleting" {
+					// 	log.FromContext(ctx).Info("allocation was deleted in the middle of creation for ", "pod", existingAllocations.PodName)
+					// 	//Requeue the request to be deleted later
+					// 	return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+					// }
 				}
 			}
 
@@ -449,7 +481,7 @@ func (r *InstaSliceDaemonsetReconciler) getAllocation(instaslice inferencev1alph
 
 // deletes CI and GI in that order.
 // TODO: split this method into two methods.
-func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, podUuid string, instaslice inferencev1alpha1.Instaslice) string {
+func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, podUuid string, instaslice inferencev1alpha1.Instaslice) (string, error) {
 	ret := nvml.Init()
 	if ret != nvml.SUCCESS {
 		log.FromContext(ctx).Error(ret, "Unable to initialize NVML")
@@ -461,30 +493,32 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, podU
 		if value.PodUUID == podUuid {
 			parent, errRecievingDeviceHandle := nvml.DeviceGetHandleByUUID(value.Parent)
 			if errRecievingDeviceHandle != nvml.SUCCESS {
-				log.FromContext(ctx).Error(errRecievingDeviceHandle, "Error obtaining GPU handle")
+				log.FromContext(ctx).Error(errRecievingDeviceHandle, "error obtaining GPU handle")
 			}
 			gi, errRetrievingGi := parent.GetGpuInstanceById(int(value.Giinfoid))
 			if errRetrievingGi != nvml.SUCCESS {
-				log.FromContext(ctx).Error(errRetrievingGi, "Error obtaining GPU instance")
+				log.FromContext(ctx).Error(errRetrievingGi, "error obtaining GPU instance")
 			}
 			ci, errRetrievingCi := gi.GetComputeInstanceById(int(value.Ciinfoid))
 			if errRetrievingCi != nvml.SUCCESS {
-				log.FromContext(ctx).Error(errRetrievingCi, "Error obtaining Compute instance")
+				log.FromContext(ctx).Error(errRetrievingCi, "error obtaining Compute instance")
 			}
 			errDestroyingCi := ci.Destroy()
 			if errDestroyingCi != nvml.SUCCESS {
-				log.FromContext(ctx).Error(errDestroyingCi, "Error deleting Compute instance")
+				log.FromContext(ctx).Error(errDestroyingCi, "error deleting Compute instance")
+				return "", errDestroyingCi
 			}
 			errDestroyingGi := gi.Destroy()
 			if errDestroyingGi != nvml.SUCCESS {
-				log.FromContext(ctx).Error(errDestroyingGi, "Error deleting GPU instance")
+				log.FromContext(ctx).Error(errDestroyingGi, "error deleting GPU instance")
+				return "", errDestroyingGi
 			}
 			candidateDel = migUUID
-			log.FromContext(ctx).Info("Done deleting MIG slice for pod", "UUID", value.PodUUID)
+			log.FromContext(ctx).Info("done deleting MIG slice for pod", "UUID", value.PodUUID)
 		}
 	}
 
-	return candidateDel
+	return candidateDel, nil
 }
 
 // delete custom extended resource when a pod is deleted.
@@ -743,6 +777,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*infe
 	return instaslice, ret, gpuModelMap, false, nil, nil
 }
 
+// TODO: remove this logic once we are able to use clean slate GPUs from upstream GPU operator fixes
 func (r *InstaSliceDaemonsetReconciler) discoverDanglingSlices(instaslice *inferencev1alpha1.Instaslice) error {
 	h := &deviceHandler{}
 	h.nvml = nvml.New()
