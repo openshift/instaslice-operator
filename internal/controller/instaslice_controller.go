@@ -168,8 +168,9 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		// remove the finalizer
 		if controllerutil.RemoveFinalizer(pod, "org.instaslice/accelarator") {
 			if err := r.Update(ctx, pod); err != nil {
-				log.FromContext(ctx).Info("unable to update removal of finalizer, retrying")
-				return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
+				log.FromContext(ctx).Error(err, "unable to update removal of finalizer, retrying")
+				// requeing immediately as the finalizer removal gets lost
+				return ctrl.Result{Requeue: true}, nil
 			}
 			log.FromContext(ctx).Info("finalizer deleted")
 		}
