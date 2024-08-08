@@ -28,6 +28,14 @@ import (
 	"codeflare.dev/instaslice/test/utils"
 )
 
+//TODO: add more test cases -
+// 1. delete instaslice object, fill the object with dangling slices ie no capacity available and
+// verify that allocation should not exists in instaslice object.
+// 2. check size and index value based on different mig slice profiles requested.
+// 3. submit 3 pods with 3g.20gb slice and verify that two allocations exists in instaslice object.
+// 4. submit a test pod with 1g.20gb slice and later delete it. verify the allocation status to be
+// in state deleting
+
 var _ = Describe("controller", Ordered, func() {
 	var namespace string = "instaslicev2-system"
 
