@@ -18,7 +18,7 @@ InstaSlice will help if
 # Demo
 
 
-[InstaSlice demo](samples/demo_script/demo_video/instaslice.mov)
+[InstaSlice demo](samples/demo_script/demo_video/instaslice.mp4)
 
 ## Getting Started
 
