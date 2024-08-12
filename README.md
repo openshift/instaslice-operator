@@ -2,7 +2,23 @@
 
 # InstaSlice
 
-Experimental InstaSlice works with GPU operator to create mig slices on demand.
+InstaSlice works with GPU operator to create mig slices on demand.
+
+# Why InstaSlice
+
+Partiionable accelarators provided by vendors need partition to be created at node boot-time or to change partitions one would have to evict all the workloads at the node level to create new set of partitions. 
+
+InstaSlice will help if
+
+ - user does not know all the accelarator partitions needed apriori on every node on the cluster
+ - user partition requirements change at the workload level rather than the node level
+ - user does not want to learn or use new API to request accelarators slices
+ - user prefers to use stable device plugins APIs for creating partitions
+
+# Demo
+
+
+[InstaSlice demo](samples/demo_script/demo_video/instaslice.mov)
 
 ## Getting Started
 

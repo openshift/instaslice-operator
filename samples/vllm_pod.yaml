@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vllm
+  labels:
+    app: vllm
+  finalizers:
+  - org.instaslice/accelarator
+spec:
+  schedulingGates:
+  - name: org.instaslice/accelarator
+  containers:
+  - name: vllm
+    image: quay.io/chenw615/vllm_dra:latest
+    imagePullPolicy: IfNotPresent
+    ports:
+    - containerPort: 8000
+    env:
+    - name: HUGGING_FACE_HUB_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: huggingface-secret
+          key: HF_TOKEN
+    - name: MODEL_NAME
+      value: "facebook/opt-125m"
+    envFrom:
+      - configMapRef:
+          name: vllm
+    volumeMounts:
+    - name: cache-volume
+      mountPath: /root/.cache/huggingface
+    resources:
+      limits:
+        nvidia.com/mig-3g.20gb: 1 
+  volumes:
+  - name: cache-volume
+    persistentVolumeClaim:
+      claimName: huggingface-cache-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+  selector:
+    app: vllm
