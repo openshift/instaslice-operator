@@ -1,0 +1,42 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tf-notebook
+  labels:
+    app: tf-notebook
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8888
+    name: http
+    targetPort: 8888
+  selector:
+    app: tf-notebook
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tf-notebook
+  finalizers:
+  - org.instaslice/accelarator
+  labels:
+    app: tf-notebook
+spec:
+  schedulingGates:
+  - name: org.instaslice/accelarator
+  securityContext:
+    fsGroup: 0
+  containers:
+  - name: tf-notebook
+    image: tensorflow/tensorflow:latest-gpu-jupyter
+    imagePullPolicy: IfNotPresent
+    resources:
+      limits:
+        nvidia.com/mig-3g.20gb: 1
+    envFrom:
+      - configMapRef:
+          name: tf-notebook
+    ports:
+    - containerPort: 8888
+      name: notebook
