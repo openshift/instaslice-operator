@@ -47,7 +47,9 @@ type InstasliceReconciler struct {
 
 // AllocationPolicy interface with a single method
 type AllocationPolicy interface {
-	SetAllocationDetails(profileName string, newStart, size uint32, podUUID string, nodename string, processed string, discoveredGiprofile int, Ciprofileid int, Ciengprofileid int, namespace string, podName string, gpuUuid string) *inferencev1alpha1.AllocationDetails
+	SetAllocationDetails(profileName string, newStart, size uint32, podUUID string, nodename string, processed string,
+		discoveredGiprofile int, Ciprofileid int, Ciengprofileid int, namespace string, podName string, gpuUuid string,
+		cpumilli int64, memory int64) *inferencev1alpha1.AllocationDetails
 }
 
 // not implemented
@@ -268,7 +270,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		podHasNodeAllocation := false
 		for _, instaslice := range instasliceList.Items {
 			// find the GPU on the node and the GPU index where the slice can be created
-			allocDetails, err := r.findDeviceForASlice(&instaslice, profileName, policy, pod)
+			allocDetails, err := r.findNodeAndDeviceForASlice(ctx, &instaslice, profileName, policy, pod)
 			if err != nil {
 				continue
 			}
@@ -313,30 +315,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	return ctrl.Result{}, nil
 }
 
-// find node, gpu and gpu index to place the slice
-func (r *InstasliceReconciler) findDeviceForASlice(instaslice *inferencev1alpha1.Instaslice, profileName string, policy AllocationPolicy, pod *v1.Pod) (*inferencev1alpha1.AllocationDetails, error) {
-	//TODO: discover this value, this may work for A100 and H100 for now.
-	for gpuuuid, _ := range instaslice.Spec.MigGPUUUID {
-		if instaslice.Spec.Allocations == nil {
-			instaslice.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
-		}
-		newStart := r.getStartIndexFromPreparedState(instaslice, gpuuuid, profileName)
-		//size cannot be 9 atleast for A100s 40GB/80GB and H100 variants
-		notValidIndex := uint32(9)
-		if newStart == notValidIndex {
-			//Move to next GPU
-			continue
-		}
-		size, discoveredGiprofile, Ciprofileid, Ciengprofileid := r.extractGpuProfile(instaslice, profileName)
-		allocDetails := policy.SetAllocationDetails(profileName, uint32(newStart), uint32(size),
-			string(pod.UID), instaslice.Name, "creating", discoveredGiprofile,
-			Ciprofileid, Ciengprofileid, pod.Namespace, pod.Name, gpuuuid)
-		return allocDetails, nil
-	}
-
-	return nil, fmt.Errorf("failed to find allocatable gpu")
-}
-
 // Extract profile name from the container limits spec
 func (*InstasliceReconciler) extractProfileName(limits v1.ResourceList) string {
 	profileName := ""
@@ -373,90 +351,6 @@ func (*InstasliceReconciler) extractGpuProfile(instaslice *inferencev1alpha1.Ins
 		}
 	}
 	return size, discoveredGiprofile, Ciprofileid, Ciengprofileid
-}
-
-// accounting logic that finds the correct GPU and index where a slice could be placed.
-func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferencev1alpha1.Instaslice, gpuUUID string, profileName string) uint32 {
-	//TODO: generalize, A100 and H100 have 8 indexes for 3g and 7g and 7 for rest, so go with 8 and we are bounded by
-	//only valid placement indexes for a profile.
-	var gpuAllocatedIndex [8]uint32
-	// clean slate init
-	for i := range gpuAllocatedIndex {
-		gpuAllocatedIndex[i] = 0
-	}
-	//TODO: remove this once we start using GPU operator with device plugin fix
-	for _, item := range instaslice.Spec.Prepared {
-		if item.Parent == gpuUUID {
-			for i := 0; i < int(item.Size); i++ {
-				gpuAllocatedIndex[int(item.Start)+i] = 1
-			}
-
-		}
-	}
-	// deleted allocations can be reused
-	// ungated allocations are already counted in prepared
-	for _, item := range instaslice.Spec.Allocations {
-		if item.GPUUUID == gpuUUID && item.Allocationstatus != "deleted" && item.Allocationstatus != "ungated" {
-			for i := 0; i < int(item.Size); i++ {
-				gpuAllocatedIndex[int(item.Start)+i] = 1
-			}
-		}
-	}
-
-	var neededContinousSlot int
-	var possiblePlacements []int
-	for _, placement := range instaslice.Spec.Migplacement {
-		if placement.Profile == profileName {
-			neededContinousSlot = placement.Placements[0].Size
-			for _, placement := range placement.Placements {
-				possiblePlacements = append(possiblePlacements, placement.Start)
-			}
-			break
-		}
-	}
-	//TODO: generalize for other hardware models like A30, no slices can be placed on 9th index
-	//if we return 9 then assume no valid index is found.
-	var newStart = uint32(9)
-	for _, value := range possiblePlacements {
-		if gpuAllocatedIndex[value] == 0 {
-			if neededContinousSlot == 1 {
-				newStart = uint32(value)
-				break
-			}
-			if neededContinousSlot == 2 {
-				if value+neededContinousSlot < len(gpuAllocatedIndex) {
-					if gpuAllocatedIndex[value] == 0 && gpuAllocatedIndex[value+1] == 0 {
-						newStart = uint32(value)
-						break
-					}
-				}
-
-			}
-			if neededContinousSlot == 4 {
-				if value+neededContinousSlot < len(gpuAllocatedIndex) {
-					if gpuAllocatedIndex[value] == 0 && gpuAllocatedIndex[value+1] == 0 && gpuAllocatedIndex[value+2] == 0 && gpuAllocatedIndex[value+3] == 0 {
-						newStart = uint32(value)
-						break
-					}
-				}
-			}
-
-			if neededContinousSlot == 8 {
-				//special case
-				if value+neededContinousSlot < len(gpuAllocatedIndex) {
-					if gpuAllocatedIndex[value] == 0 && gpuAllocatedIndex[value+1] == 0 &&
-						gpuAllocatedIndex[value+2] == 0 && gpuAllocatedIndex[value+3] == 0 &&
-						gpuAllocatedIndex[value+4] == 0 && gpuAllocatedIndex[value+5] == 0 &&
-						gpuAllocatedIndex[value+6] == 0 && gpuAllocatedIndex[value+7] == 0 {
-						newStart = uint32(value)
-					}
-				}
-			}
-		}
-
-	}
-
-	return newStart
 }
 
 func checkIfPodGated(pod *v1.Pod, isPodGated bool) bool {
@@ -511,7 +405,7 @@ func (r *InstasliceReconciler) unGatePod(podUpdate *v1.Pod) *v1.Pod {
 // Policy based allocation - FirstFit
 func (r *FirstFitPolicy) SetAllocationDetails(profileName string, newStart, size uint32, podUUID, nodename string,
 	processed string, discoveredGiprofile int, Ciprofileid int, Ciengprofileid int,
-	namespace string, podName string, gpuUuid string) *inferencev1alpha1.AllocationDetails {
+	namespace string, podName string, gpuUuid string, cpuMilli int64, memory int64) *inferencev1alpha1.AllocationDetails {
 	return &inferencev1alpha1.AllocationDetails{
 		Profile:          profileName,
 		Start:            uint32(newStart),
@@ -525,6 +419,8 @@ func (r *FirstFitPolicy) SetAllocationDetails(profileName string, newStart, size
 		Namespace:        namespace,
 		PodName:          podName,
 		GPUUUID:          gpuUuid,
+		Cpu:              cpuMilli,
+		Memory:           memory,
 	}
 }
 

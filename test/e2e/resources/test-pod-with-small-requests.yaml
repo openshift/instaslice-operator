@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: cuda-vectoradd-1
+  name: cuda-vectoradd-small-requests
   finalizers:
   - org.instaslice/accelarator
 spec:
@@ -9,9 +9,12 @@ spec:
   schedulingGates:
   - name: org.instaslice/accelarator
   containers:
-  - name: cuda-vectoradd-1
+  - name: cuda-vectoradd-small-request
     image: "quay.io/tardieu/vectoradd:0.1.0"
     resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi" 
       limits:
         nvidia.com/mig-1g.5gb: 1
         org.instaslice/cuda-vectoradd-1: 1

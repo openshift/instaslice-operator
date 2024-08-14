@@ -6,6 +6,8 @@ items:
     name: kind-control-plane
     namespace: default
   spec:
+    cpuonnodeatboot: 72
+    memoryonnodeatboot: 1000000000
     MigGPUUUID:
       GPU-8d042338-e67f-9c48-92b4-5b55c7e5133c: NVIDIA A100-PCIE-40GB
       GPU-31cfe05c-ed13-cd17-d7aa-c63db5108c24: NVIDIA A100-PCIE-40GB

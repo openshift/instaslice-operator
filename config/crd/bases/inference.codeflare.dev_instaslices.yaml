@@ -53,10 +53,16 @@ spec:
                       type: integer
                     ciengprofileid:
                       type: integer
+                    cpu:
+                      format: int64
+                      type: integer
                     giprofileid:
                       type: integer
                     gpuUUID:
                       type: string
+                    memory:
+                      format: int64
+                      type: integer
                     namespace:
                       type: string
                     nodename:
@@ -77,8 +83,10 @@ spec:
                   - allocationStatus
                   - ciProfileid
                   - ciengprofileid
+                  - cpu
                   - giprofileid
                   - gpuUUID
+                  - memory
                   - namespace
                   - nodename
                   - podName
@@ -89,6 +97,12 @@ spec:
                   type: object
                 description: GPUID, Profile, start, podUUID
                 type: object
+              cpuonnodeatboot:
+                format: int64
+                type: integer
+              memoryonnodeatboot:
+                format: int64
+                type: integer
               migplacement:
                 items:
                   properties:

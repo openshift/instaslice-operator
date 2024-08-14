@@ -47,6 +47,8 @@ type AllocationDetails struct {
 	CIEngProfileID   int    `json:"ciengprofileid"`
 	Namespace        string `json:"namespace"`
 	PodName          string `json:"podName"`
+	Cpu              int64  `json:"cpu"`
+	Memory           int64  `json:"memory"`
 }
 
 // Define the struct for allocation details
@@ -67,8 +69,10 @@ type InstasliceSpec struct {
 	// GPUID, Profile, start, podUUID
 	Allocations map[string]AllocationDetails `json:"allocations,omitempty"`
 	//Prepared :  GPUID, Profile, start
-	Prepared     map[string]PreparedDetails `json:"prepared,omitempty"`
-	Migplacement []Mig                      `json:"migplacement,omitempty"`
+	Prepared           map[string]PreparedDetails `json:"prepared,omitempty"`
+	Migplacement       []Mig                      `json:"migplacement,omitempty"`
+	CpuOnNodeAtBoot    int64                      `json:"cpuonnodeatboot,omitempty"`
+	MemoryOnNodeAtBoot int64                      `json:"memoryonnodeatboot,omitempty"`
 }
 
 // InstasliceStatus defines the observed state of Instaslice
