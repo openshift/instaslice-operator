@@ -20,22 +20,64 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
+// Mig defines the MIG slice details
+type Mig struct {
+	Placements     []Placement `json:"placements,omitempty"`
+	Profile        string      `json:"profile,omitempty"`
+	Giprofileid    int         `json:"giprofileid"`
+	CIProfileID    int         `json:"ciProfileid"`
+	CIEngProfileID int         `json:"ciengprofileid"`
+}
+
+// Placement defines the placement details
+type Placement struct {
+	Size  int `json:"size"`
+	Start int `json:"start"`
+}
+
+// AllocationDetails defines the allocation details
+type AllocationDetails struct {
+	Profile          string `json:"profile"`
+	Start            uint32 `json:"start"`
+	Size             uint32 `json:"size"`
+	PodUUID          string `json:"podUUID"`
+	GPUUUID          string `json:"gpuUUID"`
+	Nodename         string `json:"nodename"`
+	Allocationstatus string `json:"allocationStatus"`
+	Giprofileid      int    `json:"giprofileid"`
+	CIProfileID      int    `json:"ciProfileid"`
+	CIEngProfileID   int    `json:"ciengprofileid"`
+	Namespace        string `json:"namespace"`
+	PodName          string `json:"podName"`
+}
+
+// PreparedDetails defines the prepared details
+type PreparedDetails struct {
+	Profile string `json:"profile"`
+	Start   uint32 `json:"start"`
+	Size    uint32 `json:"size"`
+	Parent  string `json:"parent"`
+	//Do we need POD UID here?
+	PodUUID  string `json:"podUUID"`
+	Giinfoid uint32 `json:"giinfo"`
+	Ciinfoid uint32 `json:"ciinfo"`
+}
 
 // InstasliceSpec defines the desired state of Instaslice
 type InstasliceSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of Instaslice. Edit instaslice_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	MigGPUUUID map[string]string `json:"MigGPUUUID,omitempty"`
+	// GPUID, Profile, start, podUUID
+	Allocations map[string]AllocationDetails `json:"allocations,omitempty"`
+	//Prepared :  GPUID, Profile, start
+	Prepared     map[string]PreparedDetails `json:"prepared,omitempty"`
+	Migplacement []Mig                      `json:"migplacement,omitempty"`
 }
 
 // InstasliceStatus defines the observed state of Instaslice
 type InstasliceStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Processed string `json:"processed,omitempty"`
 }
 
 //+kubebuilder:object:root=true
