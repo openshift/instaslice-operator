@@ -2,19 +2,12 @@
 # This file is used to track the info used to scaffold your project
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
-domain: codeflare.dev
+domain: inference.codeflare.dev
 layout:
 - go.kubebuilder.io/v4
-projectName: instaslice
-repo: codeflare.dev/instaslice
-resources:
-- api:
-    crdVersion: v1alpha1
-    namespaced: true
-  controller: true
-  domain: codeflare.dev
-  group: inference
-  kind: Instaslice
-  path: codeflare.dev/instaslice/api/v1alpha1
-  version: v1alpha1
+plugins:
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}
+projectName: instaslice-operator
+repo: github.com/openshift/instaslice-operator
 version: "3"

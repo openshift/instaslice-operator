@@ -5,8 +5,8 @@ metadata:
     app.kubernetes.io/name: clusterrolebinding
     app.kubernetes.io/instance: manager-rolebinding
     app.kubernetes.io/component: rbac
-    app.kubernetes.io/created-by: instaslicev2
-    app.kubernetes.io/part-of: instaslicev2
+    app.kubernetes.io/created-by: instaslice-operator
+    app.kubernetes.io/part-of: instaslice-operator
     app.kubernetes.io/managed-by: kustomize
   name: manager-rolebinding
 roleRef:
@@ -17,16 +17,3 @@ subjects:
 - kind: ServiceAccount
   name: controller-manager
   namespace: system
-# ---
-# apiVersion: rbac.authorization.k8s.io/v1
-# kind: ClusterRoleBinding
-# metadata:
-#   name: system:openshift:scc:privileged
-# roleRef:
-#   apiGroup: rbac.authorization.k8s.io
-#   kind: ClusterRole
-#   name: system:openshift:scc:privileged
-# subjects:
-# - kind: ServiceAccount
-#   name: controller-manager
-#   namespace: system
