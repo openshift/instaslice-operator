@@ -41,7 +41,9 @@ spec:
   - name: Instaslice Operator
     url: https://instaslice-operator.domain
   maintainers:
-  - email: mohammed.munir.abdi@ibm.com
+  - email: amalvank@redhat.com
+    name: Abhishek Malvankar
+  - email: mmunirab@redhat.com
     name: Mohammed Abdi
   maturity: alpha
   provider:
