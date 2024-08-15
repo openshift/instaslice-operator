@@ -775,8 +775,9 @@ func (r *InstaSliceDaemonsetReconciler) classicalResourcesOnNode(ctx context.Con
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: nodeName}, node); err != nil {
 		log.FromContext(ctx).Error(err, "unable to retrieve cpu and memory resource on the node")
 	}
-	cpu := node.Status.Capacity[v1.ResourceCPU]
-	memory := node.Status.Capacity[v1.ResourceMemory]
+	// Allocatable = Capacity - System Reserved - Kube Reserved - eviction hard
+	cpu := node.Status.Allocatable[v1.ResourceCPU]
+	memory := node.Status.Allocatable[v1.ResourceMemory]
 	cpuQuantity := cpu.Value()
 	memoryQuantity := memory.Value()
 	return cpuQuantity, memoryQuantity, nil
