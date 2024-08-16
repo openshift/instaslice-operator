@@ -32,6 +32,7 @@ RUN go mod download
 COPY cmd/controller/main.go cmd/controller/main.go
 COPY api/ api/
 COPY internal/controller/instaslice_controller.go internal/controller/instaslice_controller.go
+COPY internal/controller/pod_webhook.go internal/controller/pod_webhook.go
 
 # Build
 # the GOARCH has not a default value to allow the binary be built according to the host where the command

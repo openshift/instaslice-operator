@@ -70,8 +70,10 @@ spec:
         - /manager
         args:
         - --leader-elect
-        image: quay.io/amalvank/instaslicev2-controller:latest
-        imagePullPolicy: IfNotPresent
+        image: quay.io/amalvank/instaslicev2-controller-dev:latest
+        ports:
+        - containerPort: 8080
+        #imagePullPolicy: IfNotPresent
         name: manager
         securityContext:
           allowPrivilegeEscalation: true
@@ -93,13 +95,13 @@ spec:
           periodSeconds: 10
         # TODO(user): Configure the resources accordingly based on the project requirements.
         # More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-        resources:
-          limits:
-            cpu: 500m
-            memory: 128Mi
-          requests:
-            cpu: 10m
-            memory: 64Mi
+        # resources:
+        #   limits:
+        #     cpu: 500m
+        #     memory: 128Mi
+        #   requests:
+        #     cpu: 10m
+        #     memory: 64Mi
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
 ---
@@ -129,8 +131,8 @@ spec:
         args:
         - --leader-elect
         name: daemonset
-        image: quay.io/amalvank/instaslicev2-daemonset:latest
-        imagePullPolicy: IfNotPresent
+        image: quay.io/amalvank/instaslicev2-daemonset-dev:latest
+        #imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: true
           privileged: true

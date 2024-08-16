@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	inferencev1alpha1 "codeflare.dev/instaslice/api/v1alpha1"
 	"codeflare.dev/instaslice/internal/controller"
@@ -94,7 +95,6 @@ func main() {
 	webhookServer := webhook.NewServer(webhook.Options{
 		TLSOpts: tlsOpts,
 	})
-
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
@@ -122,6 +122,11 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+
+	//if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+	mgr.GetWebhookServer().Register("/mutate-v1-pod", &webhook.Admission{Handler: &controller.PodAnnotator{
+		Client: mgr.GetClient(), Decoder: admission.NewDecoder(mgr.GetScheme())}})
+	//}
 
 	if err = (&controller.InstasliceReconciler{
 		Client: mgr.GetClient(),

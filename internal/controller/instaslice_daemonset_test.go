@@ -108,7 +108,7 @@ func TestCleanUp(t *testing.T) {
 	}
 
 	// Call the cleanUp function
-	reconciler.cleanUp(context.Background(), string(pod.UID))
+	reconciler.cleanUpCiAndGi(context.Background(), string(pod.UID), *instaslice)
 
 	// Verify the Instaslice resource was updated
 	var updatedInstaslice inferencev1alpha1.Instaslice

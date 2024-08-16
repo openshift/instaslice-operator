@@ -35,18 +35,16 @@ type Placement struct {
 
 // Define the struct for allocation details
 type AllocationDetails struct {
-	Profile          string `json:"profile"`
-	Start            uint32 `json:"start"`
-	Size             uint32 `json:"size"`
-	PodUUID          string `json:"podUUID"`
-	GPUUUID          string `json:"gpuUUID"`
-	Nodename         string `json:"nodename"`
-	Allocationstatus string `json:"allocationStatus"`
-	Giprofileid      int    `json:"giprofileid"`
-	CIProfileID      int    `json:"ciProfileid"`
-	CIEngProfileID   int    `json:"ciengprofileid"`
-	Namespace        string `json:"namespace"`
-	PodName          string `json:"podName"`
+	Profile            string `json:"profile"`
+	Start              uint32 `json:"start"`
+	Size               uint32 `json:"size"`
+	PodUUID            string `json:"podUUID"`
+	GPUUUID            string `json:"gpuUUID"`
+	Nodename           string `json:"nodename"`
+	Allocationstatus   string `json:"allocationStatus"`
+	Resourceidentifier string `json:"resourceIdentifier"`
+	Namespace          string `json:"namespace"`
+	PodName            string `json:"podName"`
 }
 
 // Define the struct for allocation details

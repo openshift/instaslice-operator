@@ -198,6 +198,12 @@ Successfully created compute instance ID  0 on GPU  1 GPU instance ID  2 using p
 
 You are now all set to dynamically create slices on the cluster using InstaSlice.
 
+## Deploy the cert manager
+
+```sh
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.3/cert-manager.yaml
+```
+
 ### Running the controller
 
 - Refer to section `To Deploy on the cluster`
