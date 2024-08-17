@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	v1 "k8s.io/api/core/v1"
@@ -47,6 +48,10 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 	podName := pod.Name
 	if podName == "" {
 		return admission.Errored(400, fmt.Errorf("pod name should not be empty"))
+	}
+
+	if !hasMIGResource(pod) {
+		return admission.Allowed("No nvidia.com/mig-* resource found, skipping mutation.")
 	}
 
 	// Add finalizer
@@ -101,6 +106,25 @@ func containsString(slice []string, s string) bool {
 	for _, item := range slice {
 		if item == s {
 			return true
+		}
+	}
+	return false
+}
+
+// hasMIGResource checks if a pod has resource requests or limits with a key that matches `nvidia.com/mig-*`
+func hasMIGResource(pod *v1.Pod) bool {
+	for _, container := range pod.Spec.Containers {
+		// Check resource limits
+		for resourceName := range container.Resources.Limits {
+			if strings.HasPrefix(string(resourceName), "nvidia.com/mig-") {
+				return true
+			}
+		}
+		// Check resource requests
+		for resourceName := range container.Resources.Requests {
+			if strings.HasPrefix(string(resourceName), "nvidia.com/mig-") {
+				return true
+			}
 		}
 	}
 	return false
