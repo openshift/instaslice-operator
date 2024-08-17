@@ -118,7 +118,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		if allocations.Allocationstatus == "deleting" {
 			log.FromContext(ctx).Info("Performing cleanup ", "pod", allocations.PodName)
 			extendedResourceName := "org.instaslice/" + allocations.Resourceidentifier
-			if errDeletingCm := r.deleteConfigMap(ctx, extendedResourceName, allocations.Namespace); errDeletingCm != nil {
+			if errDeletingCm := r.deleteConfigMap(ctx, allocations.Resourceidentifier, allocations.Namespace); errDeletingCm != nil {
 				log.FromContext(ctx).Error(errDeletingCm, "error deleting configmap for ", "pod", allocations.PodName)
 				return ctrl.Result{Requeue: true}, nil
 			}
@@ -584,9 +584,9 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, podU
 }
 
 // delete custom extended resource when a pod is deleted.
-func (r *InstaSliceDaemonsetReconciler) cleanUpInstaSliceResource(ctx context.Context, podName string) error {
+func (r *InstaSliceDaemonsetReconciler) cleanUpInstaSliceResource(ctx context.Context, resourceIdentifierName string) error {
 	nodeName := os.Getenv("NODE_NAME")
-	deletePatch, err := deletePatchData(podName)
+	deletePatch, err := deletePatchData(resourceIdentifierName)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to create delete json patch data")
 		return err
@@ -598,10 +598,10 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpInstaSliceResource(ctx context.Co
 		log.FromContext(ctx).Error(err, "unable to fetch Node")
 		return err
 	}
-	resourceName := v1.ResourceName(fmt.Sprintf("org.instaslice/%s", podName))
+	resourceName := v1.ResourceName(resourceIdentifierName)
 	//&& val.String() == "1"
 	if _, ok := node.Status.Capacity[resourceName]; !ok {
-		log.FromContext(ctx).Info("skipping non-existent deletion of instaslice resource for ", "pod", podName)
+		log.FromContext(ctx).Info("skipping non-existent deletion of instaslice resource for ", "identifier", resourceIdentifierName)
 		return nil
 	}
 	if err := r.Status().Patch(ctx, node, client.RawPatch(types.JSONPatchType, deletePatch)); err != nil {
@@ -1030,7 +1030,7 @@ func createPatchData(resourceName string, resourceValue string) ([]byte, error) 
 func deletePatchData(resourceName string) ([]byte, error) {
 	patch := []ResPatchOperation{
 		{Op: "remove",
-			Path: fmt.Sprintf("/status/capacity/%s", strings.ReplaceAll("org.instaslice/"+resourceName, "/", "~1")),
+			Path: fmt.Sprintf("/status/capacity/%s", strings.ReplaceAll(resourceName, "/", "~1")),
 		},
 	}
 	return json.Marshal(patch)
