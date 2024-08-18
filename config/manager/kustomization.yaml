@@ -6,3 +6,6 @@ images:
 - name: controller
   newName: quay.io/amalvank/instaslicev2-controller
   newTag: latest
+- name: daemonset
+  newName: quay.io/amalvank/instaslicev2-daemonset
+  newTag: latest

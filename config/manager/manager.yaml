@@ -70,7 +70,7 @@ spec:
         - /manager
         args:
         - --leader-elect
-        image: quay.io/amalvank/instaslicev2-controller:latest
+        image: controller:latest
         imagePullPolicy: IfNotPresent
         name: manager
         securityContext:
@@ -129,7 +129,7 @@ spec:
         args:
         - --leader-elect
         name: daemonset
-        image: quay.io/amalvank/instaslicev2-daemonset:latest
+        image: daemonset:latest
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: true
