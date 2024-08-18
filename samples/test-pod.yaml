@@ -18,3 +18,7 @@ spec:
     envFrom:
       - configMapRef:
           name: cuda-vectoradd-1
+    command:
+      - sh
+      - -c
+      -  "nvidia-smi -L; ./vectorAdd && sleep 180"
