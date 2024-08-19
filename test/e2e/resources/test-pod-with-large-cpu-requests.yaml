@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cuda-vectoradd-large-cpu
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - name: cuda-vectoradd-large-cpu
+    image: "quay.io/tardieu/vectoradd:0.1.0"
+    resources:
+      requests:
+        cpu: "5000000000000m"
+        memory: "256Mi" 
+      limits:
+        nvidia.com/mig-1g.5gb: 1

@@ -49,8 +49,14 @@ spec:
                   properties:
                     allocationStatus:
                       type: string
+                    cpu:
+                      format: int64
+                      type: integer
                     gpuUUID:
                       type: string
+                    memory:
+                      format: int64
+                      type: integer
                     namespace:
                       type: string
                     nodename:
@@ -71,7 +77,9 @@ spec:
                       type: integer
                   required:
                   - allocationStatus
+                  - cpu
                   - gpuUUID
+                  - memory
                   - namespace
                   - nodename
                   - podName
@@ -81,8 +89,13 @@ spec:
                   - size
                   - start
                   type: object
-                description: GPUID, Profile, start, podUUID
                 type: object
+              cpuonnodeatboot:
+                format: int64
+                type: integer
+              memoryonnodeatboot:
+                format: int64
+                type: integer
               migplacement:
                 items:
                   properties:
@@ -144,7 +157,6 @@ spec:
                   - size
                   - start
                   type: object
-                description: 'Prepared :  GPUID, Profile, start'
                 type: object
             type: object
           status:

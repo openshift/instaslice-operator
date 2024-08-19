@@ -740,6 +740,15 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 	}
 
 	nodeName := os.Getenv("NODE_NAME")
+	cpu, memory, err := r.classicalResourcesOnNode(context.TODO(), nodeName)
+	if err != nil {
+		log.FromContext(context.TODO()).Error(err, "unable to get classical resources")
+		// should we fail here??
+		//os.Exit(1)
+	}
+	log.FromContext(context.TODO()).Info("classical resources obtained are ", "cpu", cpu, "memory", memory)
+	instaslice.Spec.CpuOnNodeAtBoot = cpu
+	instaslice.Spec.MemoryOnNodeAtBoot = memory
 	instaslice.Name = nodeName
 	instaslice.Namespace = "default"
 	instaslice.Spec.MigGPUUUID = gpuModelMap
@@ -758,6 +767,19 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 	}
 
 	return discoveredGpusOnHost, nil
+}
+
+func (r *InstaSliceDaemonsetReconciler) classicalResourcesOnNode(ctx context.Context, nodeName string) (int64, int64, error) {
+	node := &v1.Node{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: nodeName}, node); err != nil {
+		log.FromContext(ctx).Error(err, "unable to retrieve cpu and memory resource on the node")
+	}
+	// Allocatable = Capacity - System Reserved - Kube Reserved - eviction hard
+	cpu := node.Status.Allocatable[v1.ResourceCPU]
+	memory := node.Status.Allocatable[v1.ResourceMemory]
+	cpuQuantity := cpu.Value()
+	memoryQuantity := memory.Value()
+	return cpuQuantity, memoryQuantity, nil
 }
 
 // during init time we need to discover GPU that are MIG enabled and slices if any on them to start making allocations of the next pods.

@@ -70,10 +70,8 @@ spec:
         - /manager
         args:
         - --leader-elect
-        image: quay.io/amalvank/instaslicev2-controller-dev:latest
-        ports:
-        - containerPort: 8080
-        #imagePullPolicy: IfNotPresent
+        image: quay.io/amalvank/instaslicev2-controller:latest
+        imagePullPolicy: IfNotPresent
         name: manager
         securityContext:
           allowPrivilegeEscalation: true
@@ -131,8 +129,8 @@ spec:
         args:
         - --leader-elect
         name: daemonset
-        image: quay.io/amalvank/instaslicev2-daemonset-dev:latest
-        #imagePullPolicy: IfNotPresent
+        image: quay.io/amalvank/instaslicev2-controller:latest
+        imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: true
           privileged: true
