@@ -1,7 +1,5 @@
 # Image URL to use all building/pushing image targets
 IMG ?= quay.io/amalvank/instaslicev2-controller:latest
-IMG_DMST ?= quay.io/amalvank/instaslicev2-daemonset-dev:latest
-IMG ?= quay.io/amalvank/instaslicev2-controller:latest
 IMG_DMST ?= quay.io/amalvank/instaslicev2-daemonset:latest
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.

@@ -157,7 +157,13 @@ for documentation on building mutli-platform images with Docker. You can change 
 # PLATFORMS=linux/arm64,linux/amd64 make docker-buildx
 ```
 
-2. Deploy the controller and daemonset with the default images. All required CRDs will be installed by this command:
+2. Deploy the cert manager
+
+```console
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.3/cert-manager.yaml
+```
+
+3. Deploy the controller and daemonset with the default images. All required CRDs will be installed by this command:
 
 ```console
 # make deploy
@@ -181,7 +187,7 @@ Or with custom images:
 # IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> make docker-build docker-push deploy
 ```
 
-3. Verify that the InstaSlice pods are successfully running:
+4. Verify that the InstaSlice pods are successfully running:
 
 ```console
 # kubectl get pod -n instaslicev2-system

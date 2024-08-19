@@ -10,6 +10,6 @@ spec:
     resources:
       limits:
         nvidia.com/mig-1g.5gb: 1
-      requests:
-        cpu: 1
-        memory: 512 Mi
+      # requests:
+      #   cpu: 1000m
+      #   memory: 512Mi

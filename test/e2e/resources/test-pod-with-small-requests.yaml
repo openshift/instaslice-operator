@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: cuda-vectoradd-small-requests
+  name: vectoradd-small-req
 spec:
   restartPolicy: OnFailure
   containers:
-  - name: cuda-vectoradd-small-request
+  - name: vectoradd-small-req
     image: "quay.io/tardieu/vectoradd:0.1.0"
     resources:
       requests:

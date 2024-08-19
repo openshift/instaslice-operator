@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: cuda-vectoradd-no-requests
+  name: vectoradd-no-req
 spec:
   restartPolicy: OnFailure
   containers:
-  - name: cuda-vectoradd-no-requests
+  - name:  vectoradd-no-req
     image: "quay.io/tardieu/vectoradd:0.1.0"
     resources:
       limits:
