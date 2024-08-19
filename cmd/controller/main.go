@@ -123,10 +123,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	//if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-	mgr.GetWebhookServer().Register("/mutate-v1-pod", &webhook.Admission{Handler: &controller.PodAnnotator{
-		Client: mgr.GetClient(), Decoder: admission.NewDecoder(mgr.GetScheme())}})
-	//}
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		mgr.GetWebhookServer().Register("/mutate-v1-pod", &webhook.Admission{Handler: &controller.PodAnnotator{
+			Client: mgr.GetClient(), Decoder: admission.NewDecoder(mgr.GetScheme())}})
+	}
 
 	if err = (&controller.InstasliceReconciler{
 		Client: mgr.GetClient(),
