@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cuda-vectoradd-large-memory
+  finalizers:
+  - org.instaslice/accelarator
+spec:
+  restartPolicy: OnFailure
+  schedulingGates:
+  - name: org.instaslice/accelarator
+  containers:
+  - name: cuda-vectoradd-large-memory
+    image: "quay.io/tardieu/vectoradd:0.1.0"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1000000000000000Mi" 
+      limits:
+        nvidia.com/mig-1g.5gb: 1
+        org.instaslice/cuda-vectoradd-1: 1
+    envFrom:
+      - configMapRef:
+          name: cuda-vectoradd-1
