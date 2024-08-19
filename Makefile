@@ -1,6 +1,6 @@
 # Image URL to use all building/pushing image targets
-IMG ?= asm582/instaslicev2-controller:latest
-IMG_DMST ?= asm582/instaslicev2-daemonset:latest
+IMG ?= quay.io/amalvank/instaslicev2-controller:latest
+IMG_DMST ?= quay.io/amalvank/instaslicev2-daemonset:latest
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.29.0
@@ -142,7 +142,7 @@ docker-buildx: ## Build and push docker images with multi-platform support
 .PHONY: build-installer
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
 	mkdir -p dist
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG} daemonset=${IMG_DMST}
 	$(KUSTOMIZE) build config/default > dist/install.yaml
 
 ##@ Deployment
@@ -161,7 +161,7 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG} daemonset=${IMG_DMST}
 	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
 
 # .PHONY: deploy-daemonset
