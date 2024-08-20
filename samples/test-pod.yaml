@@ -10,6 +10,10 @@ spec:
     resources:
       limits:
         nvidia.com/mig-1g.5gb: 1
+    command:
+      - sh
+      - -c
+      -  "nvidia-smi -L; ./vectorAdd && sleep 180"
       # requests:
       #   cpu: 1000m
       #   memory: 512Mi
