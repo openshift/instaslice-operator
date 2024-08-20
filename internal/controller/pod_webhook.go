@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -56,7 +57,7 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 
 	// Add finalizer
 	finalizerName := "org.instaslice/accelarator"
-	if !containsString(pod.Finalizers, finalizerName) {
+	if !slices.Contains(pod.Finalizers, finalizerName) {
 		pod.Finalizers = append(pod.Finalizers, finalizerName)
 	}
 
@@ -100,15 +101,6 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 
 	// Return the patch response
 	return admission.PatchResponseFromRaw(req.Object.Raw, marshaledPod)
-}
-
-func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
 }
 
 // hasMIGResource checks if a pod has resource requests or limits with a key that matches `nvidia.com/mig-*`
