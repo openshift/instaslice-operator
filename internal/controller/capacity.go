@@ -1,3 +1,19 @@
+/*
+Copyright 2024.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package controller
 
 import (
@@ -51,9 +67,10 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 				continue
 			}
 			size, discoveredGiprofile, Ciprofileid, Ciengprofileid := r.extractGpuProfile(instaslice, profileName)
+			resourceIdentifier := pod.Spec.Containers[0].EnvFrom[0].ConfigMapRef.Name
 			allocDetails := policy.SetAllocationDetails(profileName, uint32(newStart), uint32(size),
 				string(pod.UID), instaslice.Name, "creating", discoveredGiprofile,
-				Ciprofileid, Ciengprofileid, pod.Namespace, pod.Name, gpuuuid, userCpuCoresCeil, userMemoryBytes)
+				Ciprofileid, Ciengprofileid, pod.Namespace, pod.Name, gpuuuid, resourceIdentifier, userCpuCoresCeil, userMemoryBytes)
 			return allocDetails, nil
 		}
 	}

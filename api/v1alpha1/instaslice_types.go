@@ -35,20 +35,18 @@ type Placement struct {
 
 // Define the struct for allocation details
 type AllocationDetails struct {
-	Profile          string `json:"profile"`
-	Start            uint32 `json:"start"`
-	Size             uint32 `json:"size"`
-	PodUUID          string `json:"podUUID"`
-	GPUUUID          string `json:"gpuUUID"`
-	Nodename         string `json:"nodename"`
-	Allocationstatus string `json:"allocationStatus"`
-	Giprofileid      int    `json:"giprofileid"`
-	CIProfileID      int    `json:"ciProfileid"`
-	CIEngProfileID   int    `json:"ciengprofileid"`
-	Namespace        string `json:"namespace"`
-	PodName          string `json:"podName"`
-	Cpu              int64  `json:"cpu"`
-	Memory           int64  `json:"memory"`
+	Profile            string `json:"profile"`
+	Start              uint32 `json:"start"`
+	Size               uint32 `json:"size"`
+	PodUUID            string `json:"podUUID"`
+	GPUUUID            string `json:"gpuUUID"`
+	Nodename           string `json:"nodename"`
+	Allocationstatus   string `json:"allocationStatus"`
+	Resourceidentifier string `json:"resourceIdentifier"`
+	Namespace          string `json:"namespace"`
+	PodName            string `json:"podName"`
+	Cpu                int64  `json:"cpu"`
+	Memory             int64  `json:"memory"`
 }
 
 // Define the struct for allocation details
@@ -65,14 +63,12 @@ type PreparedDetails struct {
 
 // InstasliceSpec defines the desired state of Instaslice
 type InstasliceSpec struct {
-	MigGPUUUID map[string]string `json:"MigGPUUUID,omitempty"`
-	// GPUID, Profile, start, podUUID
-	Allocations map[string]AllocationDetails `json:"allocations,omitempty"`
-	//Prepared :  GPUID, Profile, start
-	Prepared           map[string]PreparedDetails `json:"prepared,omitempty"`
-	Migplacement       []Mig                      `json:"migplacement,omitempty"`
-	CpuOnNodeAtBoot    int64                      `json:"cpuonnodeatboot,omitempty"`
-	MemoryOnNodeAtBoot int64                      `json:"memoryonnodeatboot,omitempty"`
+	MigGPUUUID         map[string]string            `json:"MigGPUUUID,omitempty"`
+	Allocations        map[string]AllocationDetails `json:"allocations,omitempty"`
+	Prepared           map[string]PreparedDetails   `json:"prepared,omitempty"`
+	Migplacement       []Mig                        `json:"migplacement,omitempty"`
+	CpuOnNodeAtBoot    int64                        `json:"cpuonnodeatboot,omitempty"`
+	MemoryOnNodeAtBoot int64                        `json:"memoryonnodeatboot,omitempty"`
 }
 
 // InstasliceStatus defines the observed state of Instaslice

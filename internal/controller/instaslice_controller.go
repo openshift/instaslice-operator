@@ -48,7 +48,7 @@ type InstasliceReconciler struct {
 // AllocationPolicy interface with a single method
 type AllocationPolicy interface {
 	SetAllocationDetails(profileName string, newStart, size uint32, podUUID string, nodename string, processed string,
-		discoveredGiprofile int, Ciprofileid int, Ciengprofileid int, namespace string, podName string, gpuUuid string,
+		discoveredGiprofile int, Ciprofileid int, Ciengprofileid int, namespace string, podName string, gpuUuid string, resourceIndetifier string,
 		cpumilli int64, memory int64) *inferencev1alpha1.AllocationDetails
 }
 
@@ -87,7 +87,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	isPodGated = checkIfPodGated(pod, isPodGated)
 
 	if !isPodGated && !controllerutil.ContainsFinalizer(pod, "org.instaslice/accelarator") {
-		log.FromContext(ctx).Info("Ignoring ", "pod", pod.Name)
+		//log.FromContext(ctx).Info("Ignoring ", "pod", pod.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -241,6 +241,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					pod := r.unGatePod(pod)
 					errForUngating := r.Update(ctx, pod)
 					if errForUngating != nil {
+						log.FromContext(ctx).Error(errForUngating, "failed to ungate pod")
 						return ctrl.Result{Requeue: true}, nil
 					}
 					allocations.Allocationstatus = "ungated"
@@ -250,8 +251,8 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						Name:      instaslice.Name,
 						Namespace: "default", // TODO: modify
 					}
-					err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
-					if err != nil {
+					errRetrievingInstaSlice := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
+					if errRetrievingInstaSlice != nil {
 						log.FromContext(ctx).Error(err, "error getting latest instaslice object")
 					}
 					if updateInstasliceObject.Spec.Allocations == nil {
@@ -405,22 +406,20 @@ func (r *InstasliceReconciler) unGatePod(podUpdate *v1.Pod) *v1.Pod {
 // Policy based allocation - FirstFit
 func (r *FirstFitPolicy) SetAllocationDetails(profileName string, newStart, size uint32, podUUID, nodename string,
 	processed string, discoveredGiprofile int, Ciprofileid int, Ciengprofileid int,
-	namespace string, podName string, gpuUuid string, cpuMilli int64, memory int64) *inferencev1alpha1.AllocationDetails {
+	namespace string, podName string, gpuUuid string, resourceIdentifier string, cpuMilli int64, memory int64) *inferencev1alpha1.AllocationDetails {
 	return &inferencev1alpha1.AllocationDetails{
-		Profile:          profileName,
-		Start:            uint32(newStart),
-		Size:             uint32(size),
-		PodUUID:          podUUID,
-		Nodename:         nodename,
-		Allocationstatus: processed,
-		Giprofileid:      discoveredGiprofile,
-		CIProfileID:      Ciprofileid,
-		CIEngProfileID:   Ciengprofileid,
-		Namespace:        namespace,
-		PodName:          podName,
-		GPUUUID:          gpuUuid,
-		Cpu:              cpuMilli,
-		Memory:           memory,
+		Profile:            profileName,
+		Start:              uint32(newStart),
+		Size:               uint32(size),
+		PodUUID:            podUUID,
+		Nodename:           nodename,
+		Allocationstatus:   processed,
+		Namespace:          namespace,
+		PodName:            podName,
+		GPUUUID:            gpuUuid,
+		Resourceidentifier: resourceIdentifier,
+		Cpu:                cpuMilli,
+		Memory:             memory,
 	}
 }
 

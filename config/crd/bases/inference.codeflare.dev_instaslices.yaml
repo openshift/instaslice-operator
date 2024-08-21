@@ -49,14 +49,8 @@ spec:
                   properties:
                     allocationStatus:
                       type: string
-                    ciProfileid:
-                      type: integer
-                    ciengprofileid:
-                      type: integer
                     cpu:
                       format: int64
-                      type: integer
-                    giprofileid:
                       type: integer
                     gpuUUID:
                       type: string
@@ -73,6 +67,8 @@ spec:
                       type: string
                     profile:
                       type: string
+                    resourceIdentifier:
+                      type: string
                     size:
                       format: int32
                       type: integer
@@ -81,10 +77,7 @@ spec:
                       type: integer
                   required:
                   - allocationStatus
-                  - ciProfileid
-                  - ciengprofileid
                   - cpu
-                  - giprofileid
                   - gpuUUID
                   - memory
                   - namespace
@@ -92,10 +85,10 @@ spec:
                   - podName
                   - podUUID
                   - profile
+                  - resourceIdentifier
                   - size
                   - start
                   type: object
-                description: GPUID, Profile, start, podUUID
                 type: object
               cpuonnodeatboot:
                 format: int64
@@ -164,7 +157,6 @@ spec:
                   - size
                   - start
                   type: object
-                description: 'Prepared :  GPUID, Profile, start'
                 type: object
             type: object
           status:

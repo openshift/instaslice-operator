@@ -117,12 +117,12 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		// delete first before creating new slice
 		if allocations.Allocationstatus == "deleting" {
 			log.FromContext(ctx).Info("Performing cleanup ", "pod", allocations.PodName)
-			if errDeletingCm := r.deleteConfigMap(ctx, allocations.PodName, allocations.Namespace); errDeletingCm != nil {
+			extendedResourceName := "org.instaslice/" + allocations.Resourceidentifier
+			if errDeletingCm := r.deleteConfigMap(ctx, allocations.Resourceidentifier, allocations.Namespace); errDeletingCm != nil {
 				log.FromContext(ctx).Error(errDeletingCm, "error deleting configmap for ", "pod", allocations.PodName)
 				return ctrl.Result{Requeue: true}, nil
 			}
-
-			if errDeletingInstaSliceResource := r.cleanUpInstaSliceResource(ctx, allocations.PodName); errDeletingInstaSliceResource != nil {
+			if errDeletingInstaSliceResource := r.cleanUpInstaSliceResource(ctx, extendedResourceName); errDeletingInstaSliceResource != nil {
 				log.FromContext(ctx).Error(errDeletingInstaSliceResource, "Error deleting InstaSlice resource object")
 				return ctrl.Result{Requeue: true}, nil
 			}
@@ -201,14 +201,14 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				log.FromContext(ctx).Error(ret, "Unable to get device count")
 			}
 
-			if errCreatingInstaSliceResource := r.createInstaSliceResource(ctx, nodeName, allocations.PodName); errCreatingInstaSliceResource != nil {
-				return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
-			}
-
-			deviceForMig, profileName, Giprofileid, Ciprofileid, CiEngProfileid, errGettingControllerAllocation := r.getAllocation(instaslice, allocations.PodUUID)
+			deviceForMig, profileName, resourceIdentifier, errGettingControllerAllocation := r.getAllocation(instaslice, allocations.PodUUID)
 			if errGettingControllerAllocation != nil {
 				log.FromContext(ctx).Error(errGettingControllerAllocation, "allocation was not found, retrying will not help")
 				return ctrl.Result{}, nil
+			}
+
+			if errCreatingInstaSliceResource := r.createInstaSliceResource(ctx, nodeName, resourceIdentifier); errCreatingInstaSliceResource != nil {
+				return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 			}
 			placement := nvml.GpuInstancePlacement{}
 			for i := 0; i < availableGpus; i++ {
@@ -242,7 +242,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 						log.FromContext(ctx).Error(ret, "error getting GPU device handle")
 					}
 
-					giProfileInfo, retCodeForGi := device.GetGpuInstanceProfileInfo(Giprofileid)
+					giProfileInfo, retCodeForGi := device.GetGpuInstanceProfileInfo(0)
 					if retCodeForGi != nvml.SUCCESS {
 						log.FromContext(ctx).Error(retCodeForGi, "error getting GPU instance profile info", "giProfileInfo", giProfileInfo, "retCodeForGi", retCodeForGi)
 					}
@@ -288,7 +288,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 					}
 					//TODO: figure out the compute slice scenario, I think Kubernetes does not support this use case yet
-					ciProfileInfo, retCodeForCiProfile := gi.GetComputeInstanceProfileInfo(Ciprofileid, CiEngProfileid)
+					ciProfileInfo, retCodeForCiProfile := gi.GetComputeInstanceProfileInfo(0, 0)
 					if retCodeForCiProfile != nvml.SUCCESS {
 						//TODO: clean up GI and then return or may be re-use since we have the logic
 						log.FromContext(ctx).Error(retCodeForGiWithPlacement, "error creating ci since gi might have failed for ", "pod", allocations.PodName)
@@ -313,8 +313,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				//log.FromContext(ctx).Info("The created cache details loaded are", "pod name", allocations.PodName, "slice details", createdSliceDetails)
 				//making sure that ci, gi and migUUID are not nil or dafault for the target pod.
 				if createdSliceDetails.miguuid != "" {
-
-					if errCreatingConfigMap := r.createConfigMap(ctx, createdSliceDetails.miguuid, existingAllocations.Namespace, existingAllocations.PodName); errCreatingConfigMap != nil {
+					if errCreatingConfigMap := r.createConfigMap(ctx, createdSliceDetails.miguuid, existingAllocations.Namespace, resourceIdentifier); errCreatingConfigMap != nil {
 						return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 					}
 
@@ -522,17 +521,16 @@ func (*InstaSliceDaemonsetReconciler) getCreatedSliceDetails(ctx context.Context
 
 // controller provides placement we do a read from allocation object.
 // TODO: see if this method can be removed to simplify code
-func (r *InstaSliceDaemonsetReconciler) getAllocation(instaslice inferencev1alpha1.Instaslice, podUuid string) (string, string, int, int, int, error) {
-	var gpuUUID, profile string
-	var giprofileid, ciProfileID, ciEngProfileID int
+func (r *InstaSliceDaemonsetReconciler) getAllocation(instaslice inferencev1alpha1.Instaslice, podUuid string) (string, string, string, error) {
+	var gpuUUID, profile, resourceIdentifier string
 
 	for _, v := range instaslice.Spec.Allocations {
 		if v.Allocationstatus == "creating" && v.PodUUID == podUuid {
-			return v.GPUUUID, v.Profile, v.Giprofileid, v.CIProfileID, v.CIEngProfileID, nil
+			return v.GPUUUID, v.Profile, v.Resourceidentifier, nil
 		}
 	}
 
-	return gpuUUID, profile, giprofileid, ciProfileID, ciEngProfileID, fmt.Errorf("allocation with PodUUID %s not found", podUuid)
+	return gpuUUID, profile, resourceIdentifier, fmt.Errorf("allocation with PodUUID %s not found", podUuid)
 }
 
 // deletes CI and GI in that order.
@@ -586,9 +584,9 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, podU
 }
 
 // delete custom extended resource when a pod is deleted.
-func (r *InstaSliceDaemonsetReconciler) cleanUpInstaSliceResource(ctx context.Context, podName string) error {
+func (r *InstaSliceDaemonsetReconciler) cleanUpInstaSliceResource(ctx context.Context, resourceIdentifierName string) error {
 	nodeName := os.Getenv("NODE_NAME")
-	deletePatch, err := deletePatchData(podName)
+	deletePatch, err := deletePatchData(resourceIdentifierName)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to create delete json patch data")
 		return err
@@ -600,10 +598,10 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpInstaSliceResource(ctx context.Co
 		log.FromContext(ctx).Error(err, "unable to fetch Node")
 		return err
 	}
-	resourceName := v1.ResourceName(fmt.Sprintf("org.instaslice/%s", podName))
+	resourceName := v1.ResourceName(resourceIdentifierName)
 	//&& val.String() == "1"
 	if _, ok := node.Status.Capacity[resourceName]; !ok {
-		log.FromContext(ctx).Info("skipping non-existent deletion of instaslice resource for ", "pod", podName)
+		log.FromContext(ctx).Info("skipping non-existent deletion of instaslice resource for ", "identifier", resourceIdentifierName)
 		return nil
 	}
 	if err := r.Status().Patch(ctx, node, client.RawPatch(types.JSONPatchType, deletePatch)); err != nil {
@@ -748,6 +746,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 		// should we fail here??
 		//os.Exit(1)
 	}
+	log.FromContext(context.TODO()).Info("classical resources obtained are ", "cpu", cpu, "memory", memory)
 	instaslice.Spec.CpuOnNodeAtBoot = cpu
 	instaslice.Spec.MemoryOnNodeAtBoot = memory
 	instaslice.Name = nodeName
@@ -1053,7 +1052,7 @@ func createPatchData(resourceName string, resourceValue string) ([]byte, error) 
 func deletePatchData(resourceName string) ([]byte, error) {
 	patch := []ResPatchOperation{
 		{Op: "remove",
-			Path: fmt.Sprintf("/status/capacity/%s", strings.ReplaceAll("org.instaslice/"+resourceName, "/", "~1")),
+			Path: fmt.Sprintf("/status/capacity/%s", strings.ReplaceAll(resourceName, "/", "~1")),
 		},
 	}
 	return json.Marshal(patch)
