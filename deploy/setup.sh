@@ -33,11 +33,11 @@ helm upgrade --install --wait gpu-operator -n gpu-operator --create-namespace nv
     --set migManager.enabled=false \
     --set migManager.config.default=""
 
-echo "> Waiting for container toolkit daemonset pod(s) to become ready"
-kubectl wait pod -n gpu-operator -l app=nvidia-container-toolkit-daemonset --for condition=Ready=true --timeout=360s
+echo "> Waiting for container toolkit daemonset to become ready"
+kubectl rollout status daemonset nvidia-container-toolkit-daemonset -n gpu-operator
 
-echo "> Waiting for device plugin daemonset pod(s) to become ready"
-kubectl wait pod -n gpu-operator -l app=nvidia-device-plugin-daemonset --for condition=Ready=true --timeout=360s
+echo "> Waiting for device plugin daemonset to become ready"
+kubectl rollout status daemonset nvidia-device-plugin-daemonset -n gpu-operator
 
 echo "> Labeling nodes to use custom device plugin configuration"
 kubectl label node --all nvidia.com/device-plugin.config=update-capacity
