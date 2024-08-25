@@ -115,7 +115,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 	}
 
 	emulatorMode := os.Getenv("EMULATOR_MODE")
-	//simulatorMode := "true"
 	log.FromContext(ctx).Info(" daemonset simulator mode ", "enabled", emulatorMode)
 
 	for _, allocations := range instaslice.Spec.Allocations {
@@ -672,7 +671,7 @@ func (r *InstaSliceDaemonsetReconciler) createPreparedEntry(ctx context.Context,
 // there is a possibility of double update, should that happen while we retry?
 // sometimes the device plugin pod needs to be manually bounced before a burst of short lived
 // pods are submitted for testing, this check could be part of installation.
-func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, nodeName string, profile string, simulatorMode string, allocationStatus string) error {
+func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, nodeName string, profile string, emulatorMode string, allocationStatus string) error {
 	node := &v1.Node{}
 	nodeNameObject := types.NamespacedName{Name: nodeName}
 	err := r.Get(ctx, nodeNameObject, node)
@@ -689,7 +688,8 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 	if value, exists := node.Labels["nvidia.com/device-plugin.config"]; exists && value == "update-capacity" {
 		node.Labels["nvidia.com/device-plugin.config"] = "update-capacity-1"
 	}
-	if simulatorMode == "true" {
+
+	if emulatorMode == "true" {
 		originalData, err := json.Marshal(originalNode)
 		if err != nil {
 			log.FromContext(ctx).Error(err, "failed to marshal original node")
@@ -698,29 +698,43 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 		if allocationStatus == "creating" {
 			// assume only one quantity can be requested for a profile
 			resourceName := "nvidia.com/mig-" + profile
+			// Count InstaSlice extended resources in Capacity
+			countCapacity := 0
+			prefix := "org.instaslice/"
+			for resourceName := range node.Status.Capacity {
+				if strings.HasPrefix(string(resourceName), prefix) {
+					countCapacity++
+				}
+			}
 			resourceQuantity := resource.NewQuantity(1, resource.DecimalSI)
+			extendedResQuantity := resource.NewQuantity(int64(countCapacity), resource.DecimalSI)
 			existingCapacity, capacityExists := node.Status.Capacity[v1.ResourceName(resourceName)]
 			existingAllocatable, allocatableExists := node.Status.Allocatable[v1.ResourceName(resourceName)]
-
 			if capacityExists {
-				if existingCapacity.Cmp(*resourceQuantity) == 0 {
-					log.FromContext(ctx).Info("Allocatable exists and is equal to 1")
-					return nil
+				if extendedResQuantity.Cmp(existingCapacity) == 1 {
+					existingCapacity.Add(*resourceQuantity)
+					log.FromContext(ctx).Info("simulator added capacity is ", "num", existingCapacity)
+					node.Status.Capacity[v1.ResourceName(resourceName)] = existingCapacity
 				}
-				existingCapacity.Add(*resourceQuantity)
-				node.Status.Capacity[v1.ResourceName(resourceName)] = existingCapacity
 			} else {
+				log.FromContext(ctx).Info("simulator added capacity is ", "num", existingCapacity)
 				node.Status.Capacity[v1.ResourceName(resourceName)] = *resourceQuantity
 			}
-			if allocatableExists {
-				if existingAllocatable.Cmp(*resourceQuantity) == 0 {
-					log.FromContext(ctx).Info("Allocatable exists and is equal to 1")
-					return nil
+			// Count InstaSlice extended resources in Capacity
+			countAllocatable := 0
+			for resourceName := range node.Status.Capacity {
+				if strings.HasPrefix(string(resourceName), prefix) {
+					countAllocatable++
 				}
-
-				existingAllocatable.Add(*resourceQuantity)
-				node.Status.Allocatable[v1.ResourceName(resourceName)] = existingAllocatable
+			}
+			if allocatableExists {
+				if extendedResQuantity.Cmp(existingCapacity) == 1 {
+					existingAllocatable.Add(*resourceQuantity)
+					log.FromContext(ctx).Info("simulator added allocatable is ", "num", existingCapacity)
+					node.Status.Allocatable[v1.ResourceName(resourceName)] = existingAllocatable
+				}
 			} else {
+				log.FromContext(ctx).Info("simulator added allocatable is ", "num", existingCapacity)
 				node.Status.Allocatable[v1.ResourceName(resourceName)] = *resourceQuantity
 			}
 		}
@@ -735,13 +749,18 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 
 			if capacityExists {
 				existingCapacity.Sub(*resourceQuantity)
-				log.FromContext(ctx).Info("reduced capacity is ", "num", existingCapacity)
-				node.Status.Capacity[v1.ResourceName(resourceName)] = existingCapacity
+				if existingCapacity.Sign() != -1 {
+					log.FromContext(ctx).Info("simulator reduced capacity is ", "num", existingCapacity)
+					node.Status.Capacity[v1.ResourceName(resourceName)] = existingCapacity
+				}
+
 			}
 			if allocatableExists {
 				existingAllocatable.Sub(*resourceQuantity)
-				log.FromContext(ctx).Info("reduced allocatable is ", "num", existingCapacity)
-				node.Status.Allocatable[v1.ResourceName(resourceName)] = existingAllocatable
+				if existingAllocatable.Sign() != -1 {
+					log.FromContext(ctx).Info("simulator reduced allocatable is ", "num", existingCapacity)
+					node.Status.Allocatable[v1.ResourceName(resourceName)] = existingAllocatable
+				}
 			}
 
 			log.FromContext(ctx).Info("done updating the capacity for ", "allocation", allocationStatus)
@@ -792,7 +811,7 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 	//make InstaSlice object when it does not exists
 	//if it got restarted then use the existing state.
 	nodeName := os.Getenv("NODE_NAME")
-
+	emulatorMode := os.Getenv("EMULATOR_MODE")
 	//Init InstaSlice obj as the first thing when cache is loaded.
 	//RunnableFunc is added to the manager.
 	//This function waits for the manager to be elected (<-mgr.Elected()) and then runs InstaSlice init code.
@@ -810,8 +829,8 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 			//TODO: should we do hard exit?
 			//os.Exit(1)
 		}
-		simulatorMode := "true"
-		if simulatorMode == "false" {
+
+		if emulatorMode == "false" {
 			if instaslice.Status.Processed != "true" || (instaslice.Name == "" && instaslice.Namespace == "") {
 				_, errForDiscoveringGpus := r.discoverMigEnabledGpuWithSlices()
 				if errForDiscoveringGpus != nil {
