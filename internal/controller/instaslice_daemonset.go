@@ -299,7 +299,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 								if err != nil {
 									log.FromContext(ctx).Error(err, "gi not found after searching not retrying")
 								} else {
-									log.FromContext(ctx).Info("found an gi that does not exists in prepared section yet with ", "value", gi)
+									log.FromContext(ctx).Info("found gi that does not exists in prepared section waiting for ci creation ", "value", gi)
 								}
 
 							} else {
