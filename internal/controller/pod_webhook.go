@@ -45,12 +45,6 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 		return admission.Errored(400, fmt.Errorf("could not decode pod: %v", err))
 	}
 
-	// Get the pod name from the request object
-	podName := pod.Name
-	if podName == "" {
-		return admission.Errored(400, fmt.Errorf("pod name should not be empty"))
-	}
-
 	if !hasMIGResource(pod) {
 		return admission.Allowed("No nvidia.com/mig-* resource found, skipping mutation.")
 	}
@@ -76,10 +70,10 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 
 	// Generate an extended resource name based on the pod name
 	uuidStr := uuid.New().String()
-	extendedResourceName := fmt.Sprintf("org.instaslice/%s-%s", podName, uuidStr)
+	extendedResourceName := fmt.Sprintf("org.instaslice/%s", uuidStr)
 
 	// Add envFrom with a unique ConfigMap name derived from the pod name
-	configMapName := fmt.Sprintf("%s-%s", podName, uuidStr)
+	configMapName := fmt.Sprintf("%s", uuidStr)
 	// Support for only one pod workloads
 	pod.Spec.Containers[0].EnvFrom = append(pod.Spec.Containers[0].EnvFrom, v1.EnvFromSource{
 		ConfigMapRef: &v1.ConfigMapEnvSource{
