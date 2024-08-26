@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sleep-job
+  labels:
+    app: sleep-job
+spec:
+  template:
+    metadata:
+      labels:
+        app: sleep-job
+    spec:
+      containers:
+      - name: sleep-container
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args: ["sleep 3600"]
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "16Mi"
+          limits:
+            cpu: "100m"
+            memory: "64Mi"
+      restartPolicy: Never
