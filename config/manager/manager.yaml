@@ -71,7 +71,7 @@ spec:
         args:
         - --leader-elect
         image: controller:latest
-        imagePullPolicy: IfNotPresent
+        #imagePullPolicy: IfNotPresent
         name: manager
         securityContext:
           allowPrivilegeEscalation: true
@@ -130,7 +130,7 @@ spec:
         - --leader-elect
         name: daemonset
         image: daemonset:latest
-        imagePullPolicy: IfNotPresent
+        #imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: true
           privileged: true
@@ -151,5 +151,7 @@ spec:
                 fieldPath: spec.nodeName
           - name: NVIDIA_MIG_CONFIG_DEVICES
             value: all
+          - name: EMULATOR_MODE
+            value: "false"
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
