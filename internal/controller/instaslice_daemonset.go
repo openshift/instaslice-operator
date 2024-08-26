@@ -289,6 +289,11 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 							// recreate MIG on the same index. this will cause slice to not get realized and
 							// workload would never run.
 
+							if retCodeForGiWithPlacement.Error() == "Insufficient Resources" {
+								log.FromContext(ctx).Error(err, "gi already exists not re-creating")
+								return ctrl.Result{}, nil
+							}
+
 							if retCodeForGiWithPlacement.Error() != "Insufficient Resources" {
 								gi, err := r.searchGi(ctx, device, instaslice)
 								if err != nil {
