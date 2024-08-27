@@ -39,6 +39,11 @@ type PodAnnotator struct {
 	Decoder *admission.Decoder
 }
 
+const (
+	NvidiaAcceleratorMemoryKey = "nvidia.com/accelerator-memory"
+	NvidiaMIGPrefix            = "nvidia.com/mig-"
+)
+
 func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	// Decode the incoming pod object
 	pod := &v1.Pod{}
@@ -112,13 +117,13 @@ func hasMIGResource(pod *v1.Pod) bool {
 	for _, container := range pod.Spec.Containers {
 		// Check resource limits
 		for resourceName := range container.Resources.Limits {
-			if strings.HasPrefix(string(resourceName), "nvidia.com/mig-") {
+			if strings.HasPrefix(string(resourceName), NvidiaMIGPrefix) {
 				return true
 			}
 		}
 		// Check resource requests
 		for resourceName := range container.Resources.Requests {
-			if strings.HasPrefix(string(resourceName), "nvidia.com/mig-") {
+			if strings.HasPrefix(string(resourceName), NvidiaMIGPrefix) {
 				return true
 			}
 		}
@@ -129,11 +134,13 @@ func hasMIGResource(pod *v1.Pod) bool {
 func performQuotaArithmetic(pod *v1.Pod, req admission.Request) admission.Response {
 	// assumption is that workloads will have 1 container where
 	// MIG is requested.
+	// TODO instead of only iterating over regular containers,
+	// we should also consider other types of containers (such as init containers) in future
 	for _, container := range pod.Spec.Containers {
 		// dont bother checking requests section. Nvidia supports only limits
 		// if requests is added by user, it should be equal to limits.
 		for resourceName, quantity := range container.Resources.Limits {
-			resourceParts := strings.Split(strings.TrimPrefix(string(resourceName), "nvidia.com/mig-"), ".")
+			resourceParts := strings.Split(strings.TrimPrefix(string(resourceName), NvidiaMIGPrefix), ".")
 
 			if len(resourceParts) == 2 {
 				//gpuPart := resourceParts[0]
@@ -144,7 +151,7 @@ func performQuotaArithmetic(pod *v1.Pod, req admission.Request) admission.Respon
 				}
 				acceleratorMemory := memoryValue * int(quantity.Value())
 				// assume 1 container workload
-				pod.Spec.Containers[0].Resources.Limits["nvidia.com/accelerator-memory"] = resource.MustParse(fmt.Sprintf("%dGi", acceleratorMemory))
+				pod.Spec.Containers[0].Resources.Limits[NvidiaAcceleratorMemoryKey] = resource.MustParse(fmt.Sprintf("%dGi", acceleratorMemory))
 			}
 		}
 	}
