@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sleep-statefulset
+  labels:
+    app: sleep-app
+spec:
+  #does not exist
+  serviceName: "sleep-service"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sleep-stateful
+  template:
+    metadata:
+      labels:
+        app: sleep-stateful
+    spec:
+      containers:
+      - name: sleep-container
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args: ["sleep 3600"]
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "16Mi"
+          limits:
+            cpu: "100m"
+            memory: "64Mi"

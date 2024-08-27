@@ -17,9 +17,11 @@ limitations under the License.
 package e2e
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -263,6 +265,138 @@ var _ = Describe("controller", Ordered, func() {
 				allocations, _ := spec["allocations"].(map[string]interface{})
 				_, notCreated := findPodName(allocations, "cuda-vectoradd-large-cpu")
 				Expect(notCreated).To(BeTrue(), "Spec.Allocations found in Instaslice object")
+
+			} else {
+				Fail("No Instaslice objects found")
+			}
+		})
+
+		It("should apply the deployment YAML and check if pod exists", func() {
+			ctx := context.TODO()
+			//deploymentName := "sleep-deployment"
+			namespace := "default"
+			labelSelector := "app=sleep-app"
+			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-sleep-deployment.yaml")
+			outputPod, err := cmdPod.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
+
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
+			output, err := cmd.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
+
+			// Parse the JSON output
+			var result struct {
+				Items []map[string]interface{} `json:"items"`
+			}
+			err = json.Unmarshal(output, &result)
+			Expect(err).NotTo(HaveOccurred(), "Failed to parse JSON output")
+
+			// Assume we want to check the first Instaslice object if it exists
+			if len(result.Items) > 0 {
+				instaslice := result.Items[0]
+				_, found := instaslice["spec"].(map[string]interface{})
+				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
+
+				Eventually(func() bool {
+					cmd := exec.CommandContext(ctx, "kubectl", "get", "pods", "-n", namespace, "-l", labelSelector, "--no-headers")
+					output, err := cmd.CombinedOutput()
+					if err != nil {
+						fmt.Printf("Failed to execute kubectl: %v\n", err)
+						return false
+					}
+
+					outputStr := string(output)
+					podLines := strings.Split(strings.TrimSpace(outputStr), "\n")
+					return len(podLines) > 0 && podLines[0] != ""
+				}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "No pods spawned by the deployment")
+
+			} else {
+				Fail("No Instaslice objects found")
+			}
+		})
+
+		It("should apply the statefulset YAML and check if pod exists", func() {
+			ctx := context.TODO()
+			//statefulSetName := "sleep-statefulset"
+			namespace := "default"
+			labelSelector := "app=sleep-statefulset"
+			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-sleep-statefulset.yaml")
+			outputPod, err := cmdPod.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
+
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
+			output, err := cmd.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
+
+			// Parse the JSON output
+			var result struct {
+				Items []map[string]interface{} `json:"items"`
+			}
+			err = json.Unmarshal(output, &result)
+			Expect(err).NotTo(HaveOccurred(), "Failed to parse JSON output")
+
+			// Assume we want to check the first Instaslice object if it exists
+			if len(result.Items) > 0 {
+				instaslice := result.Items[0]
+				_, found := instaslice["spec"].(map[string]interface{})
+				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
+
+				Eventually(func() bool {
+					cmd := exec.CommandContext(ctx, "kubectl", "get", "pods", "-n", namespace, "-l", labelSelector, "--no-headers")
+					output, err := cmd.CombinedOutput()
+					if err != nil {
+						fmt.Printf("Failed to execute kubectl: %v\n", err)
+						return false
+					}
+
+					outputStr := string(output)
+					podLines := strings.Split(strings.TrimSpace(outputStr), "\n")
+					return len(podLines) > 0 && podLines[0] != ""
+				}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "No pods spawned by the statefulset")
+
+			} else {
+				Fail("No Instaslice objects found")
+			}
+		})
+
+		It("should apply the job YAML and check if pod exists", func() {
+			ctx := context.TODO()
+			//statefulSetName := "sleep-statefulset"
+			namespace := "default"
+			labelSelector := "app=sleep-job"
+			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-sleep-job.yaml")
+			outputPod, err := cmdPod.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
+
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
+			output, err := cmd.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
+
+			// Parse the JSON output
+			var result struct {
+				Items []map[string]interface{} `json:"items"`
+			}
+			err = json.Unmarshal(output, &result)
+			Expect(err).NotTo(HaveOccurred(), "Failed to parse JSON output")
+
+			// Assume we want to check the first Instaslice object if it exists
+			if len(result.Items) > 0 {
+				instaslice := result.Items[0]
+				_, found := instaslice["spec"].(map[string]interface{})
+				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
+
+				Eventually(func() bool {
+					cmd := exec.CommandContext(ctx, "kubectl", "get", "pods", "-n", namespace, "-l", labelSelector, "--no-headers")
+					output, err := cmd.CombinedOutput()
+					if err != nil {
+						fmt.Printf("Failed to execute kubectl: %v\n", err)
+						return false
+					}
+
+					outputStr := string(output)
+					podLines := strings.Split(strings.TrimSpace(outputStr), "\n")
+					return len(podLines) > 0 && podLines[0] != ""
+				}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "No pods spawned by the job")
 
 			} else {
 				Fail("No Instaslice objects found")

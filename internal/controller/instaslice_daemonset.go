@@ -102,6 +102,10 @@ type preparedMig struct {
 // TODO: remove once we figure out NVML calls that does CI and GI discovery
 var cachedPreparedMig = make(map[string]preparedMig)
 
+const (
+	OrgInstaslicePrefix = "org.instaslice/"
+)
+
 func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
 	nodeName := os.Getenv("NODE_NAME")
@@ -124,7 +128,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		// delete first before creating new slice
 		if allocations.Allocationstatus == "deleting" {
 			log.FromContext(ctx).Info("Performing cleanup ", "pod", allocations.PodName)
-			extendedResourceName := "org.instaslice/" + allocations.Resourceidentifier
+			extendedResourceName := OrgInstaslicePrefix + allocations.Resourceidentifier
 			if errDeletingCm := r.deleteConfigMap(ctx, allocations.Resourceidentifier, allocations.Namespace); errDeletingCm != nil {
 				log.FromContext(ctx).Error(errDeletingCm, "error deleting configmap for ", "pod", allocations.PodName)
 				return ctrl.Result{Requeue: true}, nil
@@ -265,8 +269,14 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 						if retCodeForDevice != nvml.SUCCESS {
 							log.FromContext(ctx).Error(ret, "error getting GPU device handle")
 						}
-
-						giProfileInfo, retCodeForGi := device.GetGpuInstanceProfileInfo(0)
+						var giProfileId, ciProfileId int
+						for _, item := range instaslice.Spec.Migplacement {
+							if item.Profile == profileName {
+								giProfileId = item.Giprofileid
+								ciProfileId = item.Giprofileid
+							}
+						}
+						giProfileInfo, retCodeForGi := device.GetGpuInstanceProfileInfo(giProfileId)
 						if retCodeForGi != nvml.SUCCESS {
 							log.FromContext(ctx).Error(retCodeForGi, "error getting GPU instance profile info", "giProfileInfo", giProfileInfo, "retCodeForGi", retCodeForGi)
 						}
@@ -317,7 +327,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 						}
 						//TODO: figure out the compute slice scenario, I think Kubernetes does not support this use case yet
-						ciProfileInfo, retCodeForCiProfile := gi.GetComputeInstanceProfileInfo(0, 0)
+						ciProfileInfo, retCodeForCiProfile := gi.GetComputeInstanceProfileInfo(ciProfileId, 0)
 						if retCodeForCiProfile != nvml.SUCCESS {
 							//TODO: clean up GI and then return or may be re-use since we have the logic
 							log.FromContext(ctx).Error(retCodeForGiWithPlacement, "error creating ci since gi might have failed for ", "pod", allocations.PodName)
@@ -445,19 +455,19 @@ func (r *InstaSliceDaemonsetReconciler) searchGi(ctx context.Context, device nvm
 }
 
 // this method creates an extended resource to help scheduler place pod on the controller selected node.
-func (r *InstaSliceDaemonsetReconciler) createInstaSliceResource(ctx context.Context, nodeName string, podName string) error {
+func (r *InstaSliceDaemonsetReconciler) createInstaSliceResource(ctx context.Context, nodeName string, resourceIdentifier string) error {
 	node := &v1.Node{}
 	if err := r.Get(ctx, types.NamespacedName{Name: nodeName}, node); err != nil {
 		log.FromContext(ctx).Error(err, "unable to fetch Node")
 		return err
 	}
-	capacityKey := "org.instaslice/" + podName
+	capacityKey := OrgInstaslicePrefix + resourceIdentifier
 	//desiredCapacity := resource.MustParse("1")
 	if _, exists := node.Status.Capacity[v1.ResourceName(capacityKey)]; exists {
 		log.FromContext(ctx).Info("Node already patched with ", "capacity", capacityKey)
 		return nil
 	}
-	patchData, err := createPatchData("org.instaslice/"+podName, "1")
+	patchData, err := createPatchData(OrgInstaslicePrefix+resourceIdentifier, "1")
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to create correct json for patching node")
 		return err
@@ -705,9 +715,8 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 			resourceName := "nvidia.com/mig-" + profile
 			// Count InstaSlice extended resources in Capacity
 			countCapacity := 0
-			prefix := "org.instaslice/"
 			for resourceName := range node.Status.Capacity {
-				if strings.HasPrefix(string(resourceName), prefix) {
+				if strings.HasPrefix(string(resourceName), OrgInstaslicePrefix) {
 					countCapacity++
 				}
 			}
@@ -728,7 +737,7 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 			// Count InstaSlice extended resources in Capacity
 			countAllocatable := 0
 			for resourceName := range node.Status.Capacity {
-				if strings.HasPrefix(string(resourceName), prefix) {
+				if strings.HasPrefix(string(resourceName), OrgInstaslicePrefix) {
 					countAllocatable++
 				}
 			}
@@ -796,6 +805,7 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 		log.FromContext(ctx).Error(err, "unable to update Node")
 		return err
 	}
+	log.FromContext(ctx).Info("done updating the capacity")
 	return nil
 }
 
@@ -1124,14 +1134,14 @@ func (m MigProfile) Attributes() []string {
 }
 
 // Create configmap which is used by Pods to consume MIG device
-func (r *InstaSliceDaemonsetReconciler) createConfigMap(ctx context.Context, migGPUUUID string, namespace string, podName string) error {
+func (r *InstaSliceDaemonsetReconciler) createConfigMap(ctx context.Context, migGPUUUID string, namespace string, resourceIdentifier string) error {
 	var configMap v1.ConfigMap
-	err := r.Get(ctx, types.NamespacedName{Name: podName, Namespace: namespace}, &configMap)
+	err := r.Get(ctx, types.NamespacedName{Name: resourceIdentifier, Namespace: namespace}, &configMap)
 	if err != nil {
-		log.FromContext(ctx).Info("ConfigMap not found, creating for ", "pod", podName, "migGPUUUID", migGPUUUID)
+		log.FromContext(ctx).Info("ConfigMap not found, creating for ", "pod", resourceIdentifier, "migGPUUUID", migGPUUUID)
 		configMapToCreate := &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      podName,
+				Name:      resourceIdentifier,
 				Namespace: namespace,
 			},
 			Data: map[string]string{

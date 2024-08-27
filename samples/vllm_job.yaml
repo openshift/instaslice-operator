@@ -1,0 +1,76 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vllm-job
+  labels:
+    app: vllm
+spec:
+  completions: 1  
+  parallelism: 1  
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      containers:
+      - name: vllm-container
+        image: quay.io/chenw615/vllm_dra
+        command:
+        - "python"
+        - "-m"
+        - "vllm.entrypoints.openai.api_server"
+        - "--model"
+        - "facebook/opt-125m"
+        ports:
+        - containerPort: 8000
+        env:
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-secret
+              key: HF_TOKEN
+        - name: MODEL_NAME
+          value: "facebook/opt-125m"
+        - name: TRANSFORMERS_CACHE
+          value: "/workspace/huggingface/"
+        - name: HF_HOME
+          value: "/workspace/huggingface/"
+        - name: NUMBA_DISABLE_JIT
+          value: "1"
+        - name: NUMBA_CACHE_DIR
+          value: "/workspace/huggingface/"
+        resources:
+          limits:
+            nvidia.com/mig-3g.20gb: 1
+        volumeMounts:
+        - name: workspace-storage
+          mountPath: /workspace/huggingface/
+      restartPolicy: OnFailure
+      volumes:
+      - name: workspace-storage
+        persistentVolumeClaim:
+          claimName: workspace-storage
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+  selector:
+    app: vllm
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: workspace-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

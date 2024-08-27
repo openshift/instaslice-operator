@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  labels:
+    app: vllm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      containers:
+      - name: vllm-container
+        image: quay.io/chenw615/vllm_dra
+        # command: ["/bin/sh", "-c"]
+        # #changes below command to run vLLM workload.
+        # args: ["sleep 99999"]
+        command:
+        - "python"
+        - "-m"
+        - "vllm.entrypoints.openai.api_server"
+        - "--model"
+        - "facebook/opt-125m"
+        ports:
+        - containerPort: 8000
+        env:
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-secret
+              key: HF_TOKEN
+        - name: MODEL_NAME
+          value: "facebook/opt-125m"
+        - name: TRANSFORMERS_CACHE
+          value: "/workspace/huggingface/"
+        - name: HF_HOME
+          value: "/workspace/huggingface/"
+        - name: NUMBA_DISABLE_JIT
+          value: "1"
+        - name: NUMBA_CACHE_DIR
+          value: "/workspace/huggingface/"
+        resources:
+          limits:
+            nvidia.com/mig-3g.20gb: 1 
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+  selector:
+    app: vllm
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: huggingface-secret
+type: Opaque
+data:
+  HF_TOKEN: <YOUR_TOKEN> # Base64-encoded value of 'your_huggingface_secret_token'
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: huggingface-cache-pvc
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: manual
+  hostPath:
+    path: /data/huggingface-cache
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: huggingface-cache-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: manual
