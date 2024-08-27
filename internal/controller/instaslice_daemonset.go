@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -865,6 +866,23 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 		return returnValue, errorDiscoveringProfiles
 	}
 
+	totalMemoryGB := 0
+
+	// Iterate over the map and extract the memory values
+	for _, gpuInfo := range gpuModelMap {
+		// Check if the GPU info contains "40GB"
+		if strings.Contains(gpuInfo, "40GB") {
+			// Extract the numeric part (40) and convert it to an integer
+			memoryGB, err := strconv.Atoi(strings.TrimSuffix("40GB", "GB"))
+			if err != nil {
+				fmt.Printf("Error parsing memory value: %v\n", err)
+				continue
+			}
+			// Sum up the memory values
+			totalMemoryGB += memoryGB
+		}
+	}
+
 	err := r.discoverDanglingSlices(instaslice)
 
 	if err != nil {
@@ -872,7 +890,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 	}
 
 	nodeName := os.Getenv("NODE_NAME")
-	cpu, memory, err := r.classicalResourcesOnNode(context.TODO(), nodeName)
+	cpu, memory, err := r.classicalResourcesAndGPUMemOnNode(context.TODO(), nodeName, strconv.Itoa(totalMemoryGB))
 	if err != nil {
 		log.FromContext(context.TODO()).Error(err, "unable to get classical resources")
 		// should we fail here??
@@ -901,11 +919,22 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 	return discoveredGpusOnHost, nil
 }
 
-func (r *InstaSliceDaemonsetReconciler) classicalResourcesOnNode(ctx context.Context, nodeName string) (int64, int64, error) {
+func (r *InstaSliceDaemonsetReconciler) classicalResourcesAndGPUMemOnNode(ctx context.Context, nodeName string, totalGPUMemory string) (int64, int64, error) {
 	node := &v1.Node{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: nodeName}, node); err != nil {
 		log.FromContext(ctx).Error(err, "unable to retrieve cpu and memory resource on the node")
 	}
+
+	newResourceQuantity := resource.MustParse(totalGPUMemory + "Gi")
+	node.Status.Capacity["nvidia.com/accelerator-memory"] = newResourceQuantity
+
+	// Step 3: Patch the Node object with the updated status
+	if err := r.Status().Update(ctx, node); err != nil {
+		log.FromContext(ctx).Error(err, "unable to patch the node with new resource")
+		return 0, 0, err
+	}
+
+	log.FromContext(ctx).Info("Successfully patched the node with new resource", "node", nodeName)
 	// Allocatable = Capacity - System Reserved - Kube Reserved - eviction hard
 	cpu := node.Status.Allocatable[v1.ResourceCPU]
 	memory := node.Status.Allocatable[v1.ResourceMemory]

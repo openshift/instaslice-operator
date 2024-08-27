@@ -21,7 +21,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	jsonpatch "github.com/evanphx/json-patch"
+	. "github.com/onsi/gomega"
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -43,30 +44,11 @@ func TestHandle(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		pod       *v1.Pod
-		expectMut bool
+		name          string
+		pod           *v1.Pod
+		expectMut     bool
+		expectedLimit string
 	}{
-		{
-			name: "Pod with nvidia.com/mig-* resource",
-			pod: &v1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "pod-with-mig-resource",
-				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
-						{
-							Resources: v1.ResourceRequirements{
-								Limits: v1.ResourceList{
-									"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
-								},
-							},
-						},
-					},
-				},
-			},
-			expectMut: true,
-		},
 		{
 			name: "Pod without nvidia.com/mig-* resource",
 			pod: &v1.Pod{
@@ -85,12 +67,35 @@ func TestHandle(t *testing.T) {
 					},
 				},
 			},
-			expectMut: false,
+			expectMut:     false,
+			expectedLimit: "",
+		},
+		{
+			name: "Pod with nvidia.com/mig-1g.5gb resource",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "pod-with-mig-resource",
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Resources: v1.ResourceRequirements{
+								Limits: v1.ResourceList{
+									"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectMut:     true,
+			expectedLimit: "5Gi",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
 			rawPod, _ := json.Marshal(tt.pod)
 			req := admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
@@ -102,13 +107,32 @@ func TestHandle(t *testing.T) {
 
 			resp := annotator.Handle(context.TODO(), req)
 
-			// Check if mutation occurred based on the expected behavior
 			if tt.expectMut {
-				assert.True(t, resp.Allowed, "Expected mutation but none occurred")
-				assert.NotEmpty(t, resp.Patches, "Expected patches but none were found")
+				g.Expect(resp.Allowed).To(BeTrue(), "Expected mutation but none occurred")
+				g.Expect(resp.Patches).NotTo(BeEmpty(), "Expected patches but none were found")
+
+				patchBytes, err := json.Marshal(resp.Patches)
+				g.Expect(err).NotTo(HaveOccurred(), "Failed to marshal patches")
+
+				originalPodBytes, err := json.Marshal(tt.pod)
+				g.Expect(err).NotTo(HaveOccurred(), "Failed to marshal original pod")
+
+				patch, err := jsonpatch.DecodePatch(patchBytes)
+				g.Expect(err).NotTo(HaveOccurred(), "Failed to decode patch")
+
+				patchedPodBytes, err := patch.Apply(originalPodBytes)
+				g.Expect(err).NotTo(HaveOccurred(), "Failed to apply patches")
+
+				modifiedPod := &v1.Pod{}
+				g.Expect(json.Unmarshal(patchedPodBytes, modifiedPod)).To(Succeed(), "Failed to unmarshal patched pod")
+
+				actualMemory, found := modifiedPod.Spec.Containers[0].Resources.Limits["nvidia.com/accelerator-memory"]
+				g.Expect(found).To(BeTrue(), "nvidia.com/accelerator-memory limit not found in the modified pod")
+				expectedMemory := resource.MustParse(tt.expectedLimit)
+				g.Expect(actualMemory.Cmp(expectedMemory)).To(Equal(0), "Expected nvidia.com/accelerator-memory to be %s", tt.expectedLimit)
 			} else {
-				assert.True(t, resp.Allowed, "Expected request to be allowed without mutation")
-				assert.Empty(t, resp.Patches, "Expected no patches but found some")
+				g.Expect(resp.Allowed).To(BeTrue(), "Expected request to be allowed without mutation")
+				g.Expect(resp.Patches).To(BeEmpty(), "Expected no patches but found some")
 			}
 		})
 	}
