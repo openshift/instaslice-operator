@@ -56,7 +56,7 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 	if !hasMIGResource(pod) {
 		return admission.Allowed("No nvidia.com/mig-* resource found, skipping mutation.")
 	} else {
-		performQuotaAirthmetic(pod, req)
+		performQuotaArithmetic(pod, req)
 	}
 
 	// Add finalizer
@@ -126,7 +126,7 @@ func hasMIGResource(pod *v1.Pod) bool {
 	return false
 }
 
-func performQuotaAirthmetic(pod *v1.Pod, req admission.Request) admission.Response {
+func performQuotaArithmetic(pod *v1.Pod, req admission.Request) admission.Response {
 	// assumption is that workloads will have 1 container where
 	// MIG is requested.
 	for _, container := range pod.Spec.Containers {
