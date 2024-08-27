@@ -874,7 +874,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 		if len(matches) == 3 {
 			memoryGB, err := strconv.Atoi(matches[1])
 			if err != nil {
-				fmt.Printf("Error parsing memory value: %v\n", err)
+				log.FromContext(context.TODO()).Error(err, "unable to parse gpu memory value")
 				continue
 			}
 			totalMemoryGB += memoryGB
