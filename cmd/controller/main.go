@@ -36,8 +36,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	inferencev1alpha1 "codeflare.dev/instaslice/api/v1alpha1"
-	"codeflare.dev/instaslice/internal/controller"
+	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
+	"github.com/openshift/instaslice-operator/internal/controller"
 	//+kubebuilder:scaffold:imports
 )
 

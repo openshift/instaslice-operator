@@ -1,4 +1,4 @@
-module codeflare.dev/instaslice
+module github.com/openshift/instaslice-operator
 
 go 1.22.0
 

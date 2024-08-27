@@ -27,7 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"codeflare.dev/instaslice/test/utils"
+	"github.com/openshift/instaslice-operator/test/utils"
 )
 
 //TODO: add more test cases -

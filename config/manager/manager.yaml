@@ -6,8 +6,8 @@ metadata:
     app.kubernetes.io/name: namespace
     app.kubernetes.io/instance: system
     app.kubernetes.io/component: manager
-    app.kubernetes.io/created-by: instaslicev2
-    app.kubernetes.io/part-of: instaslicev2
+    app.kubernetes.io/created-by: instaslice-operator
+    app.kubernetes.io/part-of: instaslice-operator
     app.kubernetes.io/managed-by: kustomize
   name: system
 ---
@@ -21,8 +21,8 @@ metadata:
     app.kubernetes.io/name: deployment
     app.kubernetes.io/instance: controller-manager
     app.kubernetes.io/component: manager
-    app.kubernetes.io/created-by: instaslicev2
-    app.kubernetes.io/part-of: instaslicev2
+    app.kubernetes.io/created-by: instaslice-operator
+    app.kubernetes.io/part-of: instaslice-operator
     app.kubernetes.io/managed-by: kustomize
 spec:
   selector:
@@ -57,7 +57,7 @@ spec:
       #             values:
       #               - linux
       securityContext:
-        runAsNonRoot: false
+        runAsNonRoot: true
         # TODO(user): For common cases that do not require escalating privileges
         # it is recommended to ensure that all your Pods/Containers are restrictive.
         # More info: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
@@ -71,11 +71,9 @@ spec:
         args:
         - --leader-elect
         image: controller:latest
-        #imagePullPolicy: IfNotPresent
         name: manager
         securityContext:
-          allowPrivilegeEscalation: true
-          privileged: true
+          allowPrivilegeEscalation: false
           capabilities:
             drop:
             - "ALL"
@@ -100,58 +98,5 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
-      serviceAccountName: controller-manager
-      terminationGracePeriodSeconds: 10
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: controller-daemonset
-  namespace: system
-  labels:
-    app: controller-daemonset
-spec:
-  selector:
-    matchLabels:
-      app: controller-daemonset
-  template:
-    metadata:
-      annotations:
-        kubectl.kubernetes.io/default-container: daemonset
-      labels:
-        app: controller-daemonset
-    spec:
-      securityContext:
-        runAsNonRoot: false
-      containers:
-      - command:
-        - /daemonset
-        args:
-        - --leader-elect
-        name: daemonset
-        image: daemonset:latest
-        #imagePullPolicy: IfNotPresent
-        securityContext:
-          allowPrivilegeEscalation: true
-          privileged: true
-          capabilities:
-            add:
-            - "ALL"
-        resources:
-          limits:
-            cpu: 500m
-            memory: 128Mi
-          requests:
-            cpu: 10m
-            memory: 64Mi
-        env:
-          - name: NODE_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: spec.nodeName
-          - name: NVIDIA_MIG_CONFIG_DEVICES
-            value: all
-          - name: EMULATOR_MODE
-            value: "false"
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
