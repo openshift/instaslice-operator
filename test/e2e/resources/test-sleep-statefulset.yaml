@@ -5,7 +5,7 @@ metadata:
   labels:
     app: sleep-app
 spec:
-  #does not exists
+  #does not exist
   serviceName: "sleep-service"
   replicas: 1
   selector:

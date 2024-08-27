@@ -102,6 +102,10 @@ type preparedMig struct {
 // TODO: remove once we figure out NVML calls that does CI and GI discovery
 var cachedPreparedMig = make(map[string]preparedMig)
 
+const (
+	OrgInstaslicePrefix = "org.instaslice/"
+)
+
 func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
 	nodeName := os.Getenv("NODE_NAME")
@@ -124,7 +128,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		// delete first before creating new slice
 		if allocations.Allocationstatus == "deleting" {
 			log.FromContext(ctx).Info("Performing cleanup ", "pod", allocations.PodName)
-			extendedResourceName := "org.instaslice/" + allocations.Resourceidentifier
+			extendedResourceName := OrgInstaslicePrefix + allocations.Resourceidentifier
 			if errDeletingCm := r.deleteConfigMap(ctx, allocations.Resourceidentifier, allocations.Namespace); errDeletingCm != nil {
 				log.FromContext(ctx).Error(errDeletingCm, "error deleting configmap for ", "pod", allocations.PodName)
 				return ctrl.Result{Requeue: true}, nil
@@ -457,13 +461,13 @@ func (r *InstaSliceDaemonsetReconciler) createInstaSliceResource(ctx context.Con
 		log.FromContext(ctx).Error(err, "unable to fetch Node")
 		return err
 	}
-	capacityKey := "org.instaslice/" + resourceIdentifier
+	capacityKey := OrgInstaslicePrefix + resourceIdentifier
 	//desiredCapacity := resource.MustParse("1")
 	if _, exists := node.Status.Capacity[v1.ResourceName(capacityKey)]; exists {
 		log.FromContext(ctx).Info("Node already patched with ", "capacity", capacityKey)
 		return nil
 	}
-	patchData, err := createPatchData("org.instaslice/"+resourceIdentifier, "1")
+	patchData, err := createPatchData(OrgInstaslicePrefix+resourceIdentifier, "1")
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to create correct json for patching node")
 		return err
@@ -711,9 +715,8 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 			resourceName := "nvidia.com/mig-" + profile
 			// Count InstaSlice extended resources in Capacity
 			countCapacity := 0
-			prefix := "org.instaslice/"
 			for resourceName := range node.Status.Capacity {
-				if strings.HasPrefix(string(resourceName), prefix) {
+				if strings.HasPrefix(string(resourceName), OrgInstaslicePrefix) {
 					countCapacity++
 				}
 			}
@@ -734,7 +737,7 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 			// Count InstaSlice extended resources in Capacity
 			countAllocatable := 0
 			for resourceName := range node.Status.Capacity {
-				if strings.HasPrefix(string(resourceName), prefix) {
+				if strings.HasPrefix(string(resourceName), OrgInstaslicePrefix) {
 					countAllocatable++
 				}
 			}
