@@ -42,6 +42,7 @@ var _ = Describe("controller", Ordered, func() {
 	BeforeAll(func() {
 		fmt.Println("Setting up Kind cluster")
 		cmd := exec.Command("kind", "create", "cluster")
+		cmd.Env = append(cmd.Env, fmt.Sprintf("KIND_EXPERIMENTAL_PROVIDER=%s", utils.GetContainerTool()))
 		output, err := cmd.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create Kind cluster: %s", output))
 
@@ -72,7 +73,7 @@ var _ = Describe("controller", Ordered, func() {
 			var projectimage = "quay.io/amalvank/instaslicev2-controller:latest"
 
 			By("building the manager(Operator) image")
-			cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectimage))
+			cmd := exec.Command("make", "image-build", fmt.Sprintf("IMG=%s", projectimage))
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 

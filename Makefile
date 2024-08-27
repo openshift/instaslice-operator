@@ -13,9 +13,6 @@ GOBIN=$(shell go env GOBIN)
 endif
 
 # CONTAINER_TOOL defines the container tool to be used for building images.
-# Be aware that the target commands are only tested with Docker which is
-# scaffolded by default. However, you might want to replace it to use other
-# tools. (i.e. podman)
 CONTAINER_TOOL ?= docker
 
 ifeq ($(CONTAINER_TOOL),podman)
@@ -110,13 +107,13 @@ run-daemonset: manifests generate fmt vet ## Run a controller from your host.
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
-.PHONY: docker-build
-docker-build: ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build -t ${IMG} -f Dockerfile.controller .
-	$(CONTAINER_TOOL) build -t ${IMG_DMST} -f Dockerfile.daemonset .
+.PHONY: image-build
+image-build: ## Build container images.
+	$(CONTAINER_TOOL) build -t ${IMG} -f Containerfile.controller .
+	$(CONTAINER_TOOL) build -t ${IMG_DMST} -f Containerfile.daemonset .
 
-.PHONY: docker-push
-docker-push: ## Push docker image with the manager.
+.PHONY: image-push
+image-push: ## Push container images.
 	$(CONTAINER_TOOL) push ${IMG}
 	$(CONTAINER_TOOL) push ${IMG_DMST}
 
@@ -124,16 +121,16 @@ docker-push: ## Push docker image with the manager.
 # architectures. Make sure that base image in the Dockerfile/Containerfile is itself multi-platform, and includes
 # the requested plaforms. Unlike "docker buildx", for multi-platform images podman requires creating a manifest.
 PLATFORMS ?= linux/arm64,linux/amd64
-.PHONY: docker-buildx
-docker-buildx: ## Build and push docker images with multi-platform support
+.PHONY: image-buildx
+image-buildx: ## Build and push container images with multi-platform support
 	if [ "$(CONTAINER_TOOL)" == "podman" ]; then \
 	  $(CONTAINER_TOOL) manifest rm ${IMG} || true; \
 	  $(CONTAINER_TOOL) manifest create ${IMG}; \
 	  $(CONTAINER_TOOL) manifest rm ${IMG_DMST} || true; \
 	  $(CONTAINER_TOOL) manifest create ${IMG_DMST}; \
 	fi
-	DOCKER_BUILDKIT=1 $(CONTAINER_TOOL) buildx build --platform=$(PLATFORMS) $(MULTI_ARCH_OPTION) ${IMG} -f Dockerfile.controller .
-	DOCKER_BUILDKIT=1 $(CONTAINER_TOOL) buildx build --platform=$(PLATFORMS) $(MULTI_ARCH_OPTION) ${IMG_DMST} -f Dockerfile.daemonset .
+	DOCKER_BUILDKIT=1 $(CONTAINER_TOOL) buildx build --platform=$(PLATFORMS) $(MULTI_ARCH_OPTION) ${IMG} -f Containerfile.controller .
+	DOCKER_BUILDKIT=1 $(CONTAINER_TOOL) buildx build --platform=$(PLATFORMS) $(MULTI_ARCH_OPTION) ${IMG_DMST} -f Containerfile.daemonset .
 	if [ "$(CONTAINER_TOOL)" == "podman" ]; then \
 	  $(CONTAINER_TOOL) manifest push ${IMG}; \
 	  $(CONTAINER_TOOL) manifest push ${IMG_DMST}; \

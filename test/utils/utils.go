@@ -32,6 +32,10 @@ const (
 
 	certmanagerVersion = "v1.5.3"
 	certmanagerURLTmpl = "https://github.com/jetstack/cert-manager/releases/download/%s/cert-manager.yaml"
+
+	containerToolEnv     = "CONTAINER_TOOL"
+	defaultContainerTool = "docker"
+	tempImageArchive     = "/var/tmp/temp_image.tar"
 )
 
 func warnError(err error) {
@@ -44,6 +48,13 @@ func InstallPrometheusOperator() error {
 	cmd := exec.Command("kubectl", "create", "-f", url)
 	_, err := Run(cmd)
 	return err
+}
+
+func GetContainerTool() string {
+	if t := os.Getenv(containerToolEnv); t != "" {
+		return t
+	}
+	return defaultContainerTool
 }
 
 // Run executes the provided command within this context
@@ -103,15 +114,29 @@ func InstallCertManager() error {
 	return err
 }
 
-// LoadImageToKindCluster loads a local docker image to the kind cluster
+// LoadImageToKindCluster loads a local container image to the kind cluster
 func LoadImageToKindClusterWithName(name string) error {
 	cluster := "kind"
 	if v, ok := os.LookupEnv("KIND_CLUSTER"); ok {
 		cluster = v
 	}
-	kindOptions := []string{"load", "docker-image", name, "--name", cluster}
-	cmd := exec.Command("kind", kindOptions...)
-	_, err := Run(cmd)
+
+	saveOptions := []string{"save", "-o", tempImageArchive, name}
+	saveCmd := exec.Command(GetContainerTool(), saveOptions...)
+	if _, err := Run(saveCmd); err != nil {
+		return err
+	}
+
+	defer func() {
+		if err := os.Remove(tempImageArchive); err != nil {
+			warnError(err)
+		}
+	}()
+
+	// `load image-archive` this works with both Docker and Podman
+	kindOptions := []string{"load", "image-archive", tempImageArchive, "--name", cluster}
+	loadCmd := exec.Command("kind", kindOptions...)
+	_, err := Run(loadCmd)
 	return err
 }
 

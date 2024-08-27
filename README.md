@@ -23,11 +23,11 @@ InstaSlice will help if
 
 ### Prerequisites
 - [Go](https://go.dev/doc/install) v1.22.0+
-- [Docker](https://docs.docker.com/get-docker/) v17.03+
+- [Docker](https://docs.docker.com/get-docker/) v17.03+ with [buildx plugin](https://github.com/docker/buildx) for building cross-platform images,
+  or [Podman v4.9+](https://podman.io/docs/installation)
 - [KinD](https://kind.sigs.k8s.io/docs/user/quick-start/) v0.23.0+
 - [Helm](https://helm.sh/docs/intro/install/) v3.0.0+
-- [Docker buildx plugin](https://github.com/docker/buildx) for building cross-platform images.
-- [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl) v1.11.3+.
+- [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl) v1.11.3+
 
 ### Install and configure required NVIDIA software on the host
 
@@ -35,22 +35,42 @@ InstaSlice will help if
 
 2. Install the [NVIDIA Container Toolkit (CTK)](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
 
-3. Configure the NVIDIA Container Runtime as the default Docker runtime:
+3. Set up the NVIDIA Container Runtime:
+
+    **Note**: The following steps depend on whether you are using Docker or Podman.
+
+  **On Docker**
+
+  - Configure the NVIDIA Container Runtime as the default Docker runtime:
+
+    ```console
+    sudo nvidia-ctk runtime configure --runtime=docker --set-as-default
+    ```
+
+  - Restart Docker to apply the changes:
+
+    ```console
+    sudo systemctl restart docker
+    ```
+
+  **On Podman**
+
+  - Generate the [CDI specification file](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/cdi-support.html#generating-a-cdi-specification):
+
+    ```console
+    sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+    ```
+
+  - Set [NVIDIA container runtime mode](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/cdi-support.html#setting-the-cdi-mode-explicitly) to `cdi`:
+
+    ```console
+    sudo nvidia-ctk config --in-place --set nvidia-container-runtime.mode=cdi
+    ```
+
+4. Configure the NVIDIA Container Runtime to use volume mounts to select devices to inject into a container:
 
   ```console
-  # sudo nvidia-ctk runtime configure --runtime=docker --set-as-default
-  ```
-
-4. Restart Docker to apply the changes:
-
-  ```console
-  # sudo systemctl restart docker
-  ```
-
-5. Configure the NVIDIA Container Runtime to use volume mounts to select devices to inject into a container:
-
-  ```console
-  # sudo nvidia-ctk config --set accept-nvidia-visible-devices-as-volume-mounts=true --in-place
+  sudo nvidia-ctk config --set accept-nvidia-visible-devices-as-volume-mounts=true --in-place
   ```
 
   This sets `accept-nvidia-visible-devices-as-volume-mounts=true` in the `/etc/nvidia-container-runtime/config.toml` file.
@@ -96,13 +116,13 @@ Sun Aug 18 09:41:46 2024
 - If MIG is disabled, enabled it by running:
 
 ```console
-# nvidia-smi -i <gpu-id> -mig 1
+nvidia-smi -i <gpu-id> -mig 1
 ```
 
 Example:
 
 ```console
-# nvidia-smi -i 0 -mig 1
+nvidia-smi -i 0 -mig 1
 ```
 
 **Note**: You may need to reboot the node for the changes to take effect. An asterisk beside MIG status (e.g. `Enabled*`)
@@ -113,7 +133,7 @@ means the changes are pending and will be applied after a reboot.
 Create a Kind cluster and install the NVIDIA GPU Operator:
 
 ```console
-# ./deploy/setup.sh
+./deploy/setup.sh
 ```
 
 **Note**: The validator pods `nvidia-cuda-validator-*` and `nvidia-operator-validator-*` of the GPU operator are expected to
@@ -139,22 +159,23 @@ nvidia-operator-validator-h7ngh                               0/1     Init:2/4  
 1. Optionally, build and push custom, up-to-date controller and daemonset images from source:
 
 ```console
-# IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> make docker-build docker-push
+IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> make image-build image-push
 ```
 
 Example:
-```
-# IMG=quay.io/example/instaslice2-controller:l.0 IMG_DMST=quay.io/example/instaslice2-daemonset:1.0 make docker-build docker-push
+
+```console
+IMG=quay.io/example/instaslice2-controller:l.0 IMG_DMST=quay.io/example/instaslice2-daemonset:1.0 make image-build image-push
 ```
 
 **Note**: You can use Podman instead of Docker to build images, just set `CONTAINER_TOOL=podman` before the image-related make targets.
 
-Cross-platform or multi-arch images can be built and pushed using `make docker-buildx`. When using Docker as your container tool, make
+Cross-platform or multi-arch images can be built and pushed using `make image-buildx`. When using Docker as your container tool, make
 sure to create a builder instance. Refer to [Multi-platform images](https://docs.docker.com/build/building/multi-platform/)
 for documentation on building mutli-platform images with Docker. You can change the destination platform(s) by setting `PLATFORMS`, e.g.:
 
 ```console
-# PLATFORMS=linux/arm64,linux/amd64 make docker-buildx
+PLATFORMS=linux/arm64,linux/amd64 make image-buildx
 ```
 
 2. Deploy the cert manager
@@ -166,25 +187,25 @@ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/
 3. Deploy the controller and daemonset with the default images. All required CRDs will be installed by this command:
 
 ```console
-# make deploy
+make deploy
 ```
 
 or with custom-build images:
 
 ```console
-# IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> make deploy
+IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> make deploy
 ```
 
 The all-in-one command for building and deploying InstaSlice:
 
 ```console
-# make docker-build docker-push deploy
+make image-build image-push deploy
 ```
 
 Or with custom images:
 
 ```console
-# IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> make docker-build docker-push deploy
+IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> make image-build image-push deploy
 ```
 
 4. Verify that the InstaSlice pods are successfully running:
@@ -262,7 +283,7 @@ Sun Aug 18 11:48:20 2024
 3. Delete the sample pod and see its MIG slice automatically deleted.
 
 ```console
-# kubectl delete -f ./samples/test-pod.yaml
+kubectl delete -f ./samples/test-pod.yaml
 ```
 
 ```
@@ -296,7 +317,7 @@ Sun Aug 18 13:34:55 2024
 You can apply the samples (examples) from the `sample` directory:
 
 ```console
-# kubectl apply -k samples/
+kubectl apply -k samples/
 ```
 
 **NOTE**: Ensure that the samples use the default values to test it out.
@@ -306,25 +327,25 @@ You can apply the samples (examples) from the `sample` directory:
 1. Delete all running samples from the cluster:
 
 ```console
-# kubectl delete -k samples/
+kubectl delete -k samples/
 ```
 
 2. Delete the CRDs:
 
 ```console
-# make uninstall
+make uninstall
 ```
 
 3. Undeploy InstaSlice:
 
 ```console
-# make undeploy
+make undeploy
 ```
 
 4. To delete the Kind cluster, just run:
 
 ```console
-# kind delete cluster
+kind delete cluster
 ```
 
 ## License

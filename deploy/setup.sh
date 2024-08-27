@@ -3,8 +3,10 @@
 set -e
 set -o pipefail
 
+CONTAINER_TOOL=${CONTAINER_TOOL:-"docker"}
+
 echo "> Creating Kind cluster"
-kind create cluster --config - <<EOF
+KIND_EXPERIMENTAL_PROVIDER=${CONTAINER_TOOL} kind create cluster --config - <<EOF
 apiVersion: kind.x-k8s.io/v1alpha4
 kind: Cluster
 nodes:
@@ -17,10 +19,10 @@ nodes:
 EOF
 
 echo "> Creating symlink in the control-plane container"
-docker exec -ti kind-control-plane ln -s /sbin/ldconfig /sbin/ldconfig.real
+${CONTAINER_TOOL} exec -ti kind-control-plane ln -s /sbin/ldconfig /sbin/ldconfig.real
 
 echo "> Unmounting the nvidia devices in the control-plane container"
-docker exec -ti kind-control-plane umount -R /proc/driver/nvidia
+${CONTAINER_TOOL} exec -ti kind-control-plane umount -R /proc/driver/nvidia
 
 # According to https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/getting-started.html
 echo "> Adding/updateding the NVIDIA Helm repository"
