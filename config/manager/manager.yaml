@@ -133,7 +133,7 @@ spec:
         #imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
-          privileged: true
+          privileged: false
           capabilities:
             add:
             - "ALL"
