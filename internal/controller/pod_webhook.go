@@ -20,7 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -37,6 +39,11 @@ type PodAnnotator struct {
 	Decoder *admission.Decoder
 }
 
+const (
+	NvidiaAcceleratorMemoryKey = "nvidia.com/accelerator-memory"
+	NvidiaMIGPrefix            = "nvidia.com/mig-"
+)
+
 func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	// Decode the incoming pod object
 	pod := &v1.Pod{}
@@ -47,6 +54,8 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 
 	if !hasMIGResource(pod) {
 		return admission.Allowed("No nvidia.com/mig-* resource found, skipping mutation.")
+	} else {
+		performQuotaArithmetic(pod, req)
 	}
 
 	// Add finalizer
@@ -102,16 +111,48 @@ func hasMIGResource(pod *v1.Pod) bool {
 	for _, container := range pod.Spec.Containers {
 		// Check resource limits
 		for resourceName := range container.Resources.Limits {
-			if strings.HasPrefix(string(resourceName), "nvidia.com/mig-") {
+			if strings.HasPrefix(string(resourceName), NvidiaMIGPrefix) {
 				return true
 			}
 		}
 		// Check resource requests
 		for resourceName := range container.Resources.Requests {
-			if strings.HasPrefix(string(resourceName), "nvidia.com/mig-") {
+			if strings.HasPrefix(string(resourceName), NvidiaMIGPrefix) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+func performQuotaArithmetic(pod *v1.Pod, req admission.Request) admission.Response {
+	// assumption is that workloads will have 1 container where
+	// MIG is requested.
+	// TODO instead of only iterating over regular containers,
+	// we should also consider other types of containers (such as init containers) in future
+	for _, container := range pod.Spec.Containers {
+		// dont bother checking requests section. Nvidia supports only limits
+		// if requests is added by user, it should be equal to limits.
+		for resourceName, quantity := range container.Resources.Limits {
+			resourceParts := strings.Split(strings.TrimPrefix(string(resourceName), NvidiaMIGPrefix), ".")
+
+			if len(resourceParts) == 2 {
+				//gpuPart := resourceParts[0]
+				memoryPart := resourceParts[1]
+				memoryValue, err := strconv.Atoi(strings.TrimSuffix(memoryPart, "gb"))
+				if err != nil {
+					return admission.Errored(http.StatusInternalServerError, fmt.Errorf("failed to parse memory value: %v", err))
+				}
+				acceleratorMemory := memoryValue * int(quantity.Value())
+				// assume 1 container workload
+				pod.Spec.Containers[0].Resources.Limits[NvidiaAcceleratorMemoryKey] = resource.MustParse(fmt.Sprintf("%dGi", acceleratorMemory))
+			}
+		}
+	}
+	// Return the modified pod spec
+	marshaledPod, err := json.Marshal(pod)
+	if err != nil {
+		return admission.Errored(http.StatusInternalServerError, err)
+	}
+	return admission.PatchResponseFromRaw(req.Object.Raw, marshaledPod)
 }
