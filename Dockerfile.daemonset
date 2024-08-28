@@ -63,6 +63,7 @@ RUN if [ -n "${CVE_UPDATES}" ]; then \
     fi
 
 
-USER 65532:65532
+# non-root user
+# USER 65532:65532
 
 ENTRYPOINT ["/daemonset"]

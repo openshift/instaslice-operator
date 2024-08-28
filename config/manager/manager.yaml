@@ -57,7 +57,7 @@ spec:
       #             values:
       #               - linux
       securityContext:
-        runAsNonRoot: true
+        runAsNonRoot: false
         # TODO(user): For common cases that do not require escalating privileges
         # it is recommended to ensure that all your Pods/Containers are restrictive.
         # More info: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
@@ -74,7 +74,7 @@ spec:
         imagePullPolicy: Always
         name: manager
         securityContext:
-          allowPrivilegeEscalation: false
+          allowPrivilegeEscalation: true
           capabilities:
             drop:
             - "ALL"
@@ -121,7 +121,7 @@ spec:
         app: controller-daemonset
     spec:
       securityContext:
-        runAsNonRoot: true
+        runAsNonRoot: false
       containers:
       - command:
         - /daemonset
@@ -132,8 +132,8 @@ spec:
         imagePullPolicy: Always
         #imagePullPolicy: IfNotPresent
         securityContext:
-          allowPrivilegeEscalation: false
-          privileged: false
+          allowPrivilegeEscalation: true
+          privileged: true
           capabilities:
             add:
             - "ALL"
