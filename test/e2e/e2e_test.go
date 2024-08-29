@@ -39,7 +39,7 @@ import (
 // in state deleting
 
 var _ = Describe("controller", Ordered, func() {
-	var namespace string = "instaslicev2-system"
+	var namespace string = "instaslice-operator-system"
 
 	BeforeAll(func() {
 		fmt.Println("Setting up Kind cluster")
