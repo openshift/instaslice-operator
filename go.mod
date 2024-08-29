@@ -1,4 +1,4 @@
-module codeflare.dev/instaslice
+module github.com/openshift/instaslice-operator
 
 go 1.22.0
 
@@ -6,7 +6,7 @@ toolchain go1.22.2
 
 require (
 	github.com/onsi/ginkgo/v2 v2.15.0
-	github.com/onsi/gomega v1.31.0 
+	github.com/onsi/gomega v1.31.0
 	github.com/stretchr/testify v1.9.0
 	k8s.io/apimachinery v0.30.0
 	k8s.io/client-go v0.29.2
@@ -40,7 +40,7 @@ require (
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1 // indirect
-	github.com/google/uuid v1.6.0 // indirect
+	github.com/google/uuid v1.6.0
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect

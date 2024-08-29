@@ -1,0 +1,50 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: instaslice-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: Instaslice is the Schema for the instaslices API
+      displayName: Instaslice
+      kind: Instaslice
+      name: instaslice.inference.codeflare.dev
+      version: v1alpha1
+  description: InstaSlice works with GPU operator to create mig slices on demand.
+  displayName: Instaslice
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - GPU
+  - MIG
+  links:
+  - name: Instaslice Operator
+    url: https://instaslice-operator.domain
+  maintainers:
+  - email: amalvank@redhat.com
+    name: Abhishek Malvankar
+  - email: mmunirab@redhat.com
+    name: Mohammed Abdi
+  maturity: alpha
+  provider:
+    name: Codeflare
+  version: 0.0.0

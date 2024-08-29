@@ -35,8 +35,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	inferencev1alpha1 "codeflare.dev/instaslice/api/v1alpha1"
-	"codeflare.dev/instaslice/internal/controller"
+	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
+	"github.com/openshift/instaslice-operator/internal/controller"
 	//+kubebuilder:scaffold:imports
 )
 

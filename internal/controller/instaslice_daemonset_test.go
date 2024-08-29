@@ -30,7 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	inferencev1alpha1 "codeflare.dev/instaslice/api/v1alpha1"
+	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	runtimefake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 

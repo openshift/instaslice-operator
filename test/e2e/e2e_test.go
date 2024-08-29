@@ -27,7 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"codeflare.dev/instaslice/test/utils"
+	"github.com/openshift/instaslice-operator/test/utils"
 )
 
 //TODO: add more test cases -
@@ -39,7 +39,7 @@ import (
 // in state deleting
 
 var _ = Describe("controller", Ordered, func() {
-	var namespace string = "instaslicev2-system"
+	var namespace string = "instaslice-operator-system"
 
 	BeforeAll(func() {
 		fmt.Println("Setting up Kind cluster")

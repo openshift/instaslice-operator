@@ -1,0 +1,12 @@
+apiVersion: inference.codeflare.dev/v1alpha1
+kind: Instaslice
+metadata:
+  labels:
+    app.kubernetes.io/name: instaslice
+    app.kubernetes.io/instance: instaslice-sample
+    app.kubernetes.io/part-of: instaslice-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: instaslice-operator
+  name: instaslice-sample
+spec:
+  # TODO(user): Add fields here
