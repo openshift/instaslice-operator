@@ -21,9 +21,14 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-08-28T16:19:03Z"
+    categories: Drivers and plugins
+    containerImage: quay.io/amalvank/instaslicev2-controller:latest
+    createdAt: "2024-09-03T18:44:37Z"
+    description: InstaSlice works with GPU operator to create mig slices on demand
     operators.operatorframework.io/builder: operator-sdk-v1.34.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
+    repository: https://github.com/openshift/instaslice-operator
+    support: https://github.com/openshift/instaslice-operator/issues
   name: instaslice-operator.v0.0.0
   namespace: placeholder
 spec:
@@ -33,7 +38,30 @@ spec:
     - kind: Instaslice
       name: instaslices.inference.codeflare.dev
       version: v1alpha1
-  description: InstaSlice works with GPU operator to create mig slices on demand.
+  description: |-
+    ### Introduction
+    InstaSlice works with GPU operator to create mig slices on demand.
+
+    ### API Backward Compatibility
+    **NOTE:**  Until Operator supports **seamless upgrades**, a new version of
+    the operator may introduce a change that is **NOT** backwards compatible with
+    the previous version. Thus, to upgrade the operator, uninstall the already
+    installed version completely (including CRDs) and install the new version.
+    For example to upgrade from 0.1.0 to 0.2.0, you must uninstall `0.1.0` by
+    following [uninstall operator section](https://github.com/openshift/instaslice-operator)
+    and install the new version.
+
+    Changes to patch version (major.minor.patch) indicates that no breaking changes
+    are introduced, thus upgrade can be done without uninstalling and reinstalling
+    the operator.
+
+    ### Documentation
+    Documentation and installation guide can be found below:
+      * [Installation Guide](https://github.com/openshift/instaslice-operator)
+      * [Kepler Operator](https://github.com/openshift/instaslice-operator/blob/main/README.md)
+
+    ### License
+    instaslice-operator is licensed under the Apache 2.0 license
   displayName: Instaslice
   icon:
   - base64data: ""
@@ -182,7 +210,7 @@ spec:
                     cpu: 10m
                     memory: 64Mi
                 securityContext:
-                  allowPrivilegeEscalation: false
+                  allowPrivilegeEscalation: true
                   capabilities:
                     drop:
                     - ALL
@@ -214,13 +242,44 @@ spec:
                     drop:
                     - ALL
               securityContext:
-                runAsNonRoot: true
+                runAsNonRoot: false
               serviceAccountName: instaslice-operator-controller-manager
               terminationGracePeriodSeconds: 10
               volumes:
               - name: cert
                 secret:
                   secretName: webhook-server-cert
+      daemonsets:          # Add the daemonset section
+      - name: instaslice-operator-daemonset
+      spec:
+        selector:
+          matchLabels:
+            app: controller-daemonset
+        template:
+          metadata:
+            labels:
+              app: controller-daemonset
+          spec:
+            containers:
+            - name: daemonset
+              image: quay.io/amalvank/instaslicev2-daemonset:latest
+              ports:
+              - containerPort: 8443
+                name: https
+                protocol: TCP
+              resources:
+                limits:
+                  cpu: 500m
+                  memory: 128Mi
+                requests:
+                  cpu: 5m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: true
+                privileged: true
+                capabilities:
+                  add:
+                  - "ALL"            
       permissions:
       - rules:
         - apiGroups:
@@ -270,22 +329,24 @@ spec:
   - MIG
   links:
   - name: Instaslice Operator
-    url: https://instaslice-operator.domain
+    url: https://github.com/openshift/instaslice-operator
   maintainers:
   - email: amalvank@redhat.com
     name: Abhishek Malvankar
   - email: mmunirab@redhat.com
     name: Mohammed Abdi
   maturity: alpha
+  minKubeVersion: 1.16.0
   provider:
     name: Codeflare
+    url: https://github.com/openshift/instaslice-operator
   version: 0.0.0
   webhookdefinitions:
   - admissionReviewVersions:
     - v1
     containerPort: 443
     deploymentName: instaslice-operator-controller-manager
-    failurePolicy: Fail
+    failurePolicy: Ignore
     generateName: instaslice.codeflare.dev
     rules:
     - apiGroups:
