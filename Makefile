@@ -79,6 +79,12 @@ else
 MULTI_ARCH_OPTION=--push --provenance=false --tag
 endif
 
+ifeq ($(EMULATOR), true)
+KUSTOMIZE_DEPLOYMENT=emulator
+else
+KUSTOMIZE_DEPLOYMENT=default
+endif
+
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
 SHELL = /usr/bin/env bash -o pipefail
@@ -138,7 +144,7 @@ test: manifests generate fmt vet envtest ## Run tests.
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up.
 test-e2e:
 	go test ./test/e2e/ -v -ginkgo.v
-	
+
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.54.2
 golangci-lint:
@@ -206,7 +212,7 @@ docker-buildx: ## Build and push docker images with multi-platform support
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
 	mkdir -p dist
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default > dist/install.yaml
+	$(KUSTOMIZE) build config/$(KUSTOMIZE_DEPLOYMENT) > dist/install.yaml
 
 ##@ Deployment
 
@@ -225,7 +231,7 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG} daemonset=${IMG_DMST}
-	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
+	$(KUSTOMIZE) build config/$(KUSTOMIZE_DEPLOYMENT) | $(KUBECTL) apply -f -
 
 # .PHONY: deploy-daemonset
 # deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
@@ -234,7 +240,7 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 
 .PHONY: undeploy
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+	$(KUSTOMIZE) build config/$(KUSTOMIZE_DEPLOYMENT) | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Build Dependencies
 
