@@ -3,6 +3,8 @@
 set -e
 set -o pipefail
 
+GPU_OPERATOR_NS=gpu-operator
+
 echo "> Creating Kind cluster"
 kind create cluster --config - <<EOF
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -27,17 +29,23 @@ echo "> Adding/updateding the NVIDIA Helm repository"
 helm repo add nvidia https://helm.ngc.nvidia.com/nvidia && helm repo update
 
 echo "> Installing the GPU Operator Helm chart"
-helm upgrade --install --wait gpu-operator -n gpu-operator --create-namespace nvidia/gpu-operator \
+helm upgrade --install --wait gpu-operator -n ${GPU_OPERATOR_NS} --create-namespace nvidia/gpu-operator \
     --set mig.strategy=mixed \
     --set cdi.enabled=true \
     --set migManager.enabled=false \
     --set migManager.config.default=""
 
+echo "> Waiting for container toolkit daemonset to be created"
+timeout 60s bash -c "until kubectl get daemonset nvidia-container-toolkit-daemonset -o name -n ${GPU_OPERATOR_NS}; do sleep 10; done"
+
 echo "> Waiting for container toolkit daemonset to become ready"
-kubectl rollout status daemonset nvidia-container-toolkit-daemonset -n gpu-operator
+kubectl rollout status daemonset nvidia-container-toolkit-daemonset -n ${GPU_OPERATOR_NS}
+
+echo "> Waiting for device plugin daemonset to be created"
+timeout 60s bash -c "until kubectl get daemonset nvidia-device-plugin-daemonset -o name -n ${GPU_OPERATOR_NS}; do sleep 10; done"
 
 echo "> Waiting for device plugin daemonset to become ready"
-kubectl rollout status daemonset nvidia-device-plugin-daemonset -n gpu-operator
+kubectl rollout status daemonset nvidia-device-plugin-daemonset -n ${GPU_OPERATOR_NS}
 
 echo "> Labeling nodes to use custom device plugin configuration"
 kubectl label node --all nvidia.com/device-plugin.config=update-capacity
@@ -46,5 +54,5 @@ echo "> Adding custom device plugin configuration"
 kubectl apply -f ./deploy/custom-configmapwithprofiles.yaml
 
 echo "> Triggering GPU capacity update"
-kubectl patch clusterpolicies.nvidia.com/cluster-policy -n gpu-operator \
+kubectl patch clusterpolicies.nvidia.com/cluster-policy -n ${GPU_OPERATOR_NS} \
     --type merge -p '{"spec": {"devicePlugin": {"config": {"name": "capacity-update-trigger"}}}}'
