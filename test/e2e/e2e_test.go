@@ -53,7 +53,7 @@ var _ = Describe("controller", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create namespace: %s", outputNs))
 
 		By("installing cert manager")
-		cmdCm := exec.Command("kubectl", "apply", "-f", "https://github.com/cert-manager/cert-manager/releases/download/v1.14.3/cert-manager.yaml")
+		cmdCm := exec.Command("kubectl", "apply", "-f", "https://github.com/cert-manager/cert-manager/releases/download/v1.15.3/cert-manager.yaml")
 		outputCm, err := cmdCm.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to deploy cert manager: %s", outputCm))
 

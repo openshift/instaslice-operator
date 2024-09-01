@@ -11,7 +11,7 @@ apiVersion: kind.x-k8s.io/v1alpha4
 kind: Cluster
 nodes:
 - role: control-plane
-  image: kindest/node:v1.27.3@sha256:3966ac761ae0136263ffdb6cfd4db23ef8a83cba8a463690e98317add2c9ba72
+  image: kindest/node:v1.30.0@sha256:047357ac0cfea04663786a612ba1eaba9702bef25227a794b52890dd8bcd692e
   # required for GPU workaround
   extraMounts:
     - hostPath: /dev/null
@@ -23,6 +23,9 @@ docker exec -ti kind-control-plane ln -s /sbin/ldconfig /sbin/ldconfig.real
 
 echo "> Unmounting the nvidia devices in the control-plane container"
 docker exec -ti kind-control-plane umount -R /proc/driver/nvidia
+
+echo "> Deploying cert manager"
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.3/cert-manager.yaml
 
 # According to https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/getting-started.html
 echo "> Adding/updateding the NVIDIA Helm repository"

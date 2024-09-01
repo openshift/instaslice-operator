@@ -157,13 +157,7 @@ for documentation on building mutli-platform images with Docker. You can change 
 # PLATFORMS=linux/arm64,linux/amd64 make docker-buildx
 ```
 
-2. Deploy the cert manager
-
-```console
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.3/cert-manager.yaml
-```
-
-3. Deploy the controller and daemonset with the default images. All required CRDs will be installed by this command:
+2. Deploy the controller and daemonset with the default images. All required CRDs will be installed by this command:
 
 ```console
 # make deploy
@@ -187,13 +181,13 @@ Or with custom images:
 # IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> make docker-build docker-push deploy
 ```
 
-4. Verify that the InstaSlice pods are successfully running:
+3. Verify that the InstaSlice pods are successfully running:
 
 ```console
-# kubectl get pod -n instaslicev2-system
+# kubectl get pod -n instaslice-operator-system
 NAME                                               READY   STATUS    RESTARTS   AGE
-instaslicev2-controller-daemonset-5lbqg            1/1     Running   0          101s
-instaslicev2-controller-manager-57b549784c-wkqq2   2/2     Running   0          101s
+instaslice-operator-controller-daemonset-7vm6n            1/1     Running   0          39s
+instaslice-operator-controller-manager-55d7c495d4-g27gl   2/2     Running   0          39s
 ```
 
 **Note**: If you encounter RBAC errors, you may need to grant yourself cluster-admin privileges or be logged in as admin.
