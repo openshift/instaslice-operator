@@ -9,7 +9,7 @@ We use Kustomize to enabled emulator mode.
 - Deploy the controller using command
 
 ```console
-EMULATOR=true make deploy
+make deploy-emulated
 ```
 - Add GPU capacity to the cluster using command
 
@@ -32,3 +32,9 @@ kubectl apply -f samples/emulator-pod.yaml
 - Check allocations section and prepared sections of the InstaSlice object.
     - Allocation section shows placement decisions made by InstaSlice using firstfit algorithm
     - Prepared section is a mock, as no real GPU exists CI and GI for any pod submissions are always 0
+
+- Undeploy using command
+
+```console
+make undeploy-emulated
+```
