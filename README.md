@@ -321,6 +321,18 @@ You can apply the samples (examples) from the `sample` directory:
 # kind delete cluster
 ```
 
+### Run InstaSlice in simulator mode
+Users(mainly developers) can leverage running the instaslice operator using the emulator mode as described [here](https://github.com/openshift/instaslice-operator/blob/138e5a74c6e5174ae7c597bfe5db1c99ccbecba9/docs/emulator.md)
+This has been tested on a single node cluster as of now.
+
+### Running e2e tests
+To run the e2e tests locally, run the following command:
+```console
+make test-e2e
+```
+These e2e tests would be performed by creating a `kind` cluster locally
+
+
 ## License
 
 Copyright 2024.

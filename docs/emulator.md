@@ -6,6 +6,10 @@ Finding MIGable GPUs with cloud provider is expensive and hard especially for de
 
 We use Kustomize to enabled emulator mode.
 
+- Ensure the cert-manager is deployed
+```console
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.3/cert-manager.yaml
+```
 - Deploy the controller using command
 
 ```console
