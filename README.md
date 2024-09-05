@@ -332,6 +332,29 @@ make test-e2e
 ```
 These e2e tests would be performed by creating a `kind` cluster locally
 
+### Roadmap
+
+High level overview of the main priorities for 2024:
+
+- Allocate MIG slices on Nvidia GPUs on demand
+- Configire allocated slices on GPUs and bind containers to slices
+- Release and unconfigure slices when pods are completed or deleted
+- Ability to graceful termination of slices
+- Account for node classical resources when selecting a node
+- Schedule pods in average of 10 seconds when resources are available
+- Kubernetes quota system integration
+- Konflux onboarding
+- Operator SDK integration
+
+Future tasks:
+- Stable integration with project Kueue
+- Stable integration with provisioning request CRD to support autoscaling
+- Handle pods requesting multiple slices
+- Manage slices on heterogenous GPU types in the cluster
+- Improved fault tolerance
+- Leverage DRA implementation
+
+
 
 ## License
 
