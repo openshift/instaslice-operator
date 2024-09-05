@@ -340,7 +340,7 @@ High level overview of the main priorities for 2024:
 - Configire allocated slices on GPUs and bind containers to slices
 - Release and unconfigure slices when pods are completed or deleted
 - Ability to graceful termination of slices
-- Account ofr node classical resources when selecting a node
+- Account for node classical resources when selecting a node
 - Schedule pods in average of 10 seconds when resources are available
 - Kubernetes quota system integration
 - Konflux onboarding
