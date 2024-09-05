@@ -21,12 +21,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/NVIDIA/go-nvml/pkg/nvml"
-	"github.com/NVIDIA/go-nvml/pkg/nvml/mock/dgxa100"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -35,41 +34,17 @@ import (
 )
 
 func TestCleanUp(t *testing.T) {
-	// Set up the mock server
-	server := dgxa100.New()
-
-	// Mock the NVML functions
-	nvml.Init = func() nvml.Return {
-		return nvml.SUCCESS
-	}
-	nvml.Shutdown = func() nvml.Return {
-		return nvml.SUCCESS
-	}
-	nvml.DeviceGetHandleByUUID = func(uuid string) (nvml.Device, nvml.Return) {
-		for _, dev := range server.Devices {
-			device := dev.(*dgxa100.Device)
-			if device.UUID == uuid {
-				return device, nvml.SUCCESS
-			}
-		}
-		return nil, nvml.ERROR_NOT_FOUND
-	}
 
 	// Create a fake Kubernetes client
 	s := scheme.Scheme
 	_ = inferencev1alpha1.AddToScheme(s)
 	fakeClient := runtimefake.NewClientBuilder().WithScheme(s).Build()
 
-	// Create a fake kubernetes clientset
-
-	//fakeKubeClient := fake.NewSimpleClientset()
-
-	// Create an InstaSliceDaemonsetReconciler
 	reconciler := &InstaSliceDaemonsetReconciler{
 		Client: fakeClient,
 		Scheme: s,
 	}
-	// Create a fake Instaslice resource
+
 	instaslice := &inferencev1alpha1.Instaslice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node-1",
@@ -92,28 +67,50 @@ func TestCleanUp(t *testing.T) {
 			},
 		},
 	}
-	fakeClient.Create(context.Background(), instaslice)
+	errCreatingInstaSlice := fakeClient.Create(context.Background(), instaslice)
+	assert.NoError(t, errCreatingInstaSlice)
+
+	// Create a fake Node resource
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "node-1",
+		},
+		Status: v1.NodeStatus{
+			//TODO: add test cases for other resources
+			Capacity: v1.ResourceList{
+				"org.instaslice/uid-1": resource.MustParse("1"),
+			},
+		},
+	}
+	errCreatingNode := fakeClient.Create(context.Background(), node)
+	assert.NoError(t, errCreatingNode)
 
 	// Set the NODE_NAME environment variable
 	os.Setenv("NODE_NAME", "node-1")
 	defer os.Unsetenv("NODE_NAME")
 
+	// Keeping it around as it may be needed later
 	// Create a fake Pod resource
-	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			UID:       "pod-uid-1",
-			Name:      "pod-name-1",
-			Namespace: "default",
-		},
-	}
+	// pod := &v1.Pod{
+	//  ObjectMeta: metav1.ObjectMeta{
+	//      UID:       "pod-uid-1",
+	//      Name:      "pod-name-1",
+	//      Namespace: "default",
+	//  },
+	// }
 
-	// Call the cleanUp function
-	reconciler.cleanUpCiAndGi(context.Background(), string(pod.UID), *instaslice)
-
-	// Verify the Instaslice resource was updated
 	var updatedInstaslice inferencev1alpha1.Instaslice
 	err := fakeClient.Get(context.Background(), types.NamespacedName{Name: "node-1"}, &updatedInstaslice)
 	assert.NoError(t, err)
-	assert.Empty(t, updatedInstaslice.Spec.Prepared)
-	assert.Empty(t, updatedInstaslice.Spec.Allocations)
+
+	errDeletingInstaSlice := reconciler.cleanUpInstaSliceResource(context.Background(), "org.instaslice/uid-1")
+	assert.NoError(t, errDeletingInstaSlice)
+
+	var updatedNode v1.Node
+	errVerifyingInstaSliceResource := fakeClient.Get(context.Background(), types.NamespacedName{Name: "node-1"}, &updatedNode)
+	assert.NoError(t, errVerifyingInstaSliceResource)
+
+	_, exists := updatedNode.Status.Capacity["org.instaslice/uid-1"]
+	assert.False(t, exists, "resource 'org.instaslice/uid-1' should be deleted from the node's capacity")
+
 }
