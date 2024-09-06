@@ -15,6 +15,14 @@ InstaSlice will help if
  - user does not want to learn or use new API to request accelerators  slices
  - user prefers to use stable device plugins APIs for creating partitions
 
+# Features overview
+
+- Integration with Kubernetes [quota management](https://github.com/openshift/instaslice-operator/blob/main/docs/instaslice_kube_quota_int.md). 
+
+- [Emulator](https://github.com/openshift/instaslice-operator/blob/main/docs/emulator.md) mode to run test InstaSlice firstfit placement strategy.
+
+- Integration with vLLM, Kserve, [Deployments](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_deployment.yaml), [Jobs](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_job.yaml), and [Statefulsets](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_statefulset.yaml) 
+
 # Demo
 
 [InstaSlice demo](samples/demo_script/demo_video/instaslice.mp4)
