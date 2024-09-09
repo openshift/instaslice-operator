@@ -46,19 +46,19 @@ InstaSlice will help if
 3. Configure the NVIDIA Container Runtime as the default Docker runtime:
 
   ```console
-  # sudo nvidia-ctk runtime configure --runtime=docker --set-as-default
+  sudo nvidia-ctk runtime configure --runtime=docker --set-as-default
   ```
 
 4. Restart Docker to apply the changes:
 
   ```console
-  # sudo systemctl restart docker
+  sudo systemctl restart docker
   ```
 
 5. Configure the NVIDIA Container Runtime to use volume mounts to select devices to inject into a container:
 
   ```console
-  # sudo nvidia-ctk config --set accept-nvidia-visible-devices-as-volume-mounts=true --in-place
+  sudo nvidia-ctk config --set accept-nvidia-visible-devices-as-volume-mounts=true --in-place
   ```
 
   This sets `accept-nvidia-visible-devices-as-volume-mounts=true` in the `/etc/nvidia-container-runtime/config.toml` file.
@@ -68,7 +68,10 @@ InstaSlice will help if
 - Check if MIG is enabled on the host GPU - look for `Enabled` in the third row of the table:
 
 ```console
-# nvidia-smi
+nvidia-smi
+```
+
+```
 Sun Aug 18 09:41:46 2024
 +-----------------------------------------------------------------------------------------+
 | NVIDIA-SMI 560.28.03              Driver Version: 560.28.03      CUDA Version: 12.6     |
@@ -104,13 +107,13 @@ Sun Aug 18 09:41:46 2024
 - If MIG is disabled, enabled it by running:
 
 ```console
-# nvidia-smi -i <gpu-id> -mig 1
+nvidia-smi -i <gpu-id> -mig 1
 ```
 
 Example:
 
 ```console
-# nvidia-smi -i 0 -mig 1
+nvidia-smi -i 0 -mig 1
 ```
 
 **Note**: You may need to reboot the node for the changes to take effect. An asterisk beside MIG status (e.g. `Enabled*`)
@@ -121,14 +124,17 @@ means the changes are pending and will be applied after a reboot.
 Create a Kind cluster and install the NVIDIA GPU Operator:
 
 ```console
-# ./deploy/setup.sh
+bash ./deploy/setup.sh
 ```
 
 **Note**: The validator pods `nvidia-cuda-validator-*` and `nvidia-operator-validator-*` of the GPU operator are expected to
 fail to initialize. This is because with MIG enabled, but without a MIG partition they effectively have no GPU to run on.
 
 ```console
-# kubectl get pod -n gpu-operator
+kubectl get pod -n gpu-operator
+```
+
+```
 NAME                                                          READY   STATUS                  RESTARTS       AGE
 gpu-feature-discovery-lzcpv                                   2/2     Running                 0              5m48s
 gpu-operator-7b5587d878-vq2gw                                 1/1     Running                 0              6m59s
@@ -147,12 +153,12 @@ nvidia-operator-validator-h7ngh                               0/1     Init:2/4  
 1. Optionally, build and push custom, up-to-date controller and daemonset images from source:
 
 ```console
-# IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> make docker-build docker-push
+IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> make docker-build docker-push
 ```
 
 Example:
-```
-# IMG=quay.io/example/instaslice2-controller:l.0 IMG_DMST=quay.io/example/instaslice2-daemonset:1.0 make docker-build docker-push
+```console
+IMG=quay.io/example/instaslice2-controller:1.0 IMG_DMST=quay.io/example/instaslice2-daemonset:1.0 make docker-build docker-push
 ```
 
 **Note**: You can use Podman instead of Docker to build images, just set `CONTAINER_TOOL=podman` before the image-related make targets.
@@ -162,19 +168,24 @@ sure to create a builder instance. Refer to [Multi-platform images](https://docs
 for documentation on building mutli-platform images with Docker. You can change the destination platform(s) by setting `PLATFORMS`, e.g.:
 
 ```console
-# PLATFORMS=linux/arm64,linux/amd64 make docker-buildx
+PLATFORMS=linux/arm64,linux/amd64 make docker-buildx
 ```
 
 2. Deploy the controller and daemonset with the default images. All required CRDs will be installed by this command:
 
 ```console
-# make deploy
+make deploy
 ```
 
 or with custom-build images:
 
 ```console
-# IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> make deploy
+IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> make deploy
+```
+
+Example:
+```console
+IMG=quay.io/example/instaslice2-controller:1.0 IMG_DMST=quay.io/example/instaslice2-daemonset:1.0 make deploy
 ```
 
 The all-in-one command for building and deploying InstaSlice:
@@ -186,16 +197,24 @@ The all-in-one command for building and deploying InstaSlice:
 Or with custom images:
 
 ```console
-# IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> make docker-build docker-push deploy
+IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> make docker-build docker-push deploy
+```
+
+Example:
+```console
+IMG=quay.io/example/instaslice2-controller:1.0 IMG_DMST=quay.io/example/instaslice2-daemonset:1.0 make docker-build docker-push deploy
 ```
 
 3. Verify that the InstaSlice pods are successfully running:
 
 ```console
-# kubectl get pod -n instaslice-operator-system
+kubectl get pod -n instaslice-operator-system
+```
+
+```
 NAME                                               READY   STATUS    RESTARTS   AGE
-instaslice-operator-controller-daemonset-7vm6n            1/1     Running   0          39s
-instaslice-operator-controller-manager-55d7c495d4-g27gl   2/2     Running   0          39s
+instaslice-operator-controller-daemonset-5lbqg            1/1     Running   0          101s
+instaslice-operator-controller-manager-57b549784c-wkqq2   2/2     Running   0          101s
 ```
 
 **Note**: If you encounter RBAC errors, you may need to grant yourself cluster-admin privileges or be logged in as admin.
@@ -205,14 +224,17 @@ instaslice-operator-controller-manager-55d7c495d4-g27gl   2/2     Running   0   
 1. Submit a sample workload:
 
 ```console
-# kubectl apply -f ./samples/test-pod.yaml
+kubectl apply -f ./samples/test-pod.yaml
 pod/cuda-vectoradd-1 created
 ```
 
 2. check the status of the workload using commands
 
 ```console
-# kubectl get pods
+kubectl get pods
+```
+
+```
 NAME               READY   STATUS    RESTARTS   AGE
 cuda-vectoradd-1   1/1     Running   0          15s
 ```
@@ -220,7 +242,10 @@ cuda-vectoradd-1   1/1     Running   0          15s
 and
 
 ```console
-# kubectl logs cuda-vectoradd-1
+kubectl logs cuda-vectoradd-1
+```
+
+```
 GPU 0: NVIDIA A100-PCIE-40GB (UUID: GPU-1785aa6b-6edf-f58e-2e29-f6ccd30f306f)
   MIG 1g.5gb      Device  0: (UUID: MIG-2cc7f78c-04eb-5a3c-92c7-f423e3572bb8)
 [Vector addition of 50000 elements]
@@ -234,7 +259,10 @@ Done
 While the pod is running, you can observe the MIG slice created for it automatically:
 
 ```console
-# nvidia-smi
+nvidia-smi
+```
+
+```
 Sun Aug 18 11:48:20 2024
 +-----------------------------------------------------------------------------------------+
 | NVIDIA-SMI 560.28.03              Driver Version: 560.28.03      CUDA Version: 12.6     |
@@ -264,11 +292,14 @@ Sun Aug 18 11:48:20 2024
 3. Delete the sample pod and see its MIG slice automatically deleted.
 
 ```console
-# kubectl delete -f ./samples/test-pod.yaml
+kubectl delete -f ./samples/test-pod.yaml
 ```
 
 ```
-# nvidia-smi
+nvidia-smi
+```
+
+```
 Sun Aug 18 13:34:55 2024
 +-----------------------------------------------------------------------------------------+
 | NVIDIA-SMI 560.28.03              Driver Version: 560.28.03      CUDA Version: 12.6     |
@@ -298,7 +329,7 @@ Sun Aug 18 13:34:55 2024
 You can apply the samples (examples) from the `sample` directory:
 
 ```console
-# kubectl apply -k samples/
+kubectl apply -k samples/
 ```
 
 **NOTE**: Ensure that the samples use the default values to test it out.
@@ -308,25 +339,25 @@ You can apply the samples (examples) from the `sample` directory:
 1. Delete all running samples from the cluster:
 
 ```console
-# kubectl delete -k samples/
+kubectl delete -k samples/
 ```
 
 2. Delete the CRDs:
 
 ```console
-# make uninstall
+make uninstall
 ```
 
 3. Undeploy InstaSlice:
 
 ```console
-# make undeploy
+make undeploy
 ```
 
 4. To delete the Kind cluster, just run:
 
 ```console
-# kind delete cluster
+kind delete cluster
 ```
 
 ### Run InstaSlice in simulator mode

@@ -4,6 +4,11 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
+    categories: Drivers and plugins
+    containerImage: <IMG>
+    description: InstaSlice works with GPU operator to create mig slices on demand
+    repository: https://github.com/openshift/instaslice-operator
+    support: https://github.com/openshift/instaslice-operator/issues
   name: instaslice-operator.v0.0.0
   namespace: placeholder
 spec:
@@ -15,7 +20,30 @@ spec:
       kind: Instaslice
       name: instaslice.inference.codeflare.dev
       version: v1alpha1
-  description: InstaSlice works with GPU operator to create mig slices on demand.
+  description: |-
+    ### Introduction
+    InstaSlice works with GPU operator to create mig slices on demand.
+
+    ### API Backward Compatibility
+    **NOTE:**  Until Operator supports **seamless upgrades**, a new version of
+    the operator may introduce a change that is **NOT** backwards compatible with
+    the previous version. Thus, to upgrade the operator, uninstall the already
+    installed version completely (including CRDs) and install the new version.
+    For example to upgrade from 0.1.0 to 0.2.0, you must uninstall `0.1.0` by
+    following [uninstall operator section](https://github.com/openshift/instaslice-operator)
+    and install the new version.
+
+    Changes to patch version (major.minor.patch) indicates that no breaking changes
+    are introduced, thus upgrade can be done without uninstalling and reinstalling
+    the operator.
+
+    ### Documentation
+    Documentation and installation guide can be found below:
+      * [Installation Guide](https://github.com/openshift/instaslice-operator)
+      * [Kepler Operator](https://github.com/openshift/instaslice-operator/blob/main/README.md)
+
+    ### License
+    instaslice-operator is licensed under the Apache 2.0 license
   displayName: Instaslice
   icon:
   - base64data: ""
@@ -38,13 +66,15 @@ spec:
   - MIG
   links:
   - name: Instaslice Operator
-    url: https://instaslice-operator.domain
+    url: https://github.com/openshift/instaslice-operator
   maintainers:
   - email: amalvank@redhat.com
     name: Abhishek Malvankar
   - email: mmunirab@redhat.com
     name: Mohammed Abdi
   maturity: alpha
+  minKubeVersion: 1.16.0
   provider:
     name: Codeflare
+    url: https://github.com/openshift/instaslice-operator
   version: 0.0.0
