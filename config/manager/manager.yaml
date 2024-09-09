@@ -70,7 +70,7 @@ spec:
         - /manager
         args:
         - --leader-elect
-        image: $IMG
+        image: controller:latest
         imagePullPolicy: Always
         name: manager
         securityContext:
@@ -128,7 +128,7 @@ spec:
         args:
         - --leader-elect
         name: daemonset
-        image: $IMG_DMST
+        image: daemonset:latest
         imagePullPolicy: Always
         #imagePullPolicy: IfNotPresent
         securityContext:
