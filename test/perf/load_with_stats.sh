@@ -8,7 +8,7 @@
 ORIGINAL_NAME="cuda-vectoradd-1"
 
 # Specify how many new names to generate
-NUM_NEW_NAMES=50
+NUM_NEW_NAMES=24
 
 # Read the original YAML content into a variable
 YAML_CONTENT=$(cat <<EOF
@@ -28,10 +28,10 @@ spec:
     resources:
       limits:
         nvidia.com/mig-1g.5gb: 1
-        org.instaslice/$ORIGINAL_NAME: 1
-    envFrom:
-      - configMapRef:
-          name: $ORIGINAL_NAME
+    command:
+      - sh
+      - -c
+      -  "sleep infinity"
 EOF
 )
 
@@ -48,7 +48,7 @@ for i in $(seq 1 $NUM_NEW_NAMES); do
   
   # Apply the modified YAML
   echo "$MODIFIED_YAML" | kubectl apply -f -
-  #sleep 1
+  #sleep 3
 done
 
 # Periodically check the status of the pods
