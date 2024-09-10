@@ -249,14 +249,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocations := range instaslice.Spec.Allocations {
 				if allocations.Allocationstatus == "created" && allocations.PodUUID == string(pod.UID) {
-					pod := r.unGatePod(pod)
-					errForUngating := r.Update(ctx, pod)
-					if errForUngating != nil {
-						log.FromContext(ctx).Error(errForUngating, "failed to ungate pod")
-						return ctrl.Result{Requeue: true}, nil
-					}
-					allocations.Allocationstatus = "ungated"
-					instaslice.Spec.Allocations[podUuid] = allocations
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,
@@ -265,13 +257,35 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					errRetrievingInstaSlice := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 					if errRetrievingInstaSlice != nil {
 						log.FromContext(ctx).Error(err, "error getting latest instaslice object")
+						// In some cases the pod gets ungated but the InstaSlice object does not have the
+						// correct allocation status. It could be because we were unable to get the latest InstaSlice object
+						// hence we retry if we fail to get the latest object
+						return ctrl.Result{Requeue: true}, nil
 					}
+					allocations.Allocationstatus = "ungated"
+					instaslice.Spec.Allocations[podUuid] = allocations
 					if updateInstasliceObject.Spec.Allocations == nil {
 						updateInstasliceObject.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
 					}
 					updateInstasliceObject.Spec.Allocations[podUuid] = allocations
 					if err := r.Update(ctx, &updateInstasliceObject); err != nil {
 						log.FromContext(ctx).Error(err, "Error updating instaslice allocations")
+						return ctrl.Result{Requeue: true}, nil
+					}
+					pod := r.unGatePod(pod)
+					errForUngating := r.Update(ctx, pod)
+					if errForUngating != nil {
+						log.FromContext(ctx).Error(errForUngating, "failed to ungate pod")
+						return ctrl.Result{Requeue: true}, nil
+					}
+				}
+				// InstaSlice object got updated with ungated status but the controller failed
+				// ungating the pod.
+				if allocations.Allocationstatus == "ungated" && allocations.PodUUID == string(pod.UID) {
+					pod := r.unGatePod(pod)
+					errForUngating := r.Update(ctx, pod)
+					if errForUngating != nil {
+						log.FromContext(ctx).Error(errForUngating, "failed to ungate pod")
 						return ctrl.Result{Requeue: true}, nil
 					}
 				}
@@ -335,7 +349,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 func (*InstasliceReconciler) extractProfileName(limits v1.ResourceList) string {
 	profileName := ""
 	for k, _ := range limits {
-		if strings.Contains(k.String(), "nvidia") {
+		if strings.Contains(k.String(), "mig-") {
 
 			re := regexp.MustCompile(`(\d+g\.\d+gb)`)
 			match := re.FindStringSubmatch(k.String())
