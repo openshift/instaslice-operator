@@ -216,6 +216,8 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			existingAllocations := instaslice.Spec.Allocations[podUUID]
 
 			if emulatorMode == "true" {
+				// Emulating cost to create CI and GI on a GPU
+				time.Sleep(1 * time.Second)
 				cachedPreparedMig[allocations.PodName] = preparedMig{gid: 0, miguuid: allocations.PodUUID, cid: 0}
 
 			}
