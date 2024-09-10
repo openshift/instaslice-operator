@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Set the number of worker nodes here
-num_workers=30
+num_workers=10
 namespace_instaslice="instaslice-operator-system"
 
 # Create the kind configuration file
