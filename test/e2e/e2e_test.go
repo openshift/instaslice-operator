@@ -57,6 +57,8 @@ var _ = Describe("controller", Ordered, func() {
 		outputCm, err := cmdCm.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to deploy cert manager: %s", outputCm))
 
+		By("validating the cert-manager-webhook pod to be ready as expected")
+		EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("pod", "app=webhook", "cert-manager").Should(BeTrue())
 	})
 
 	AfterAll(func() {
@@ -68,7 +70,6 @@ var _ = Describe("controller", Ordered, func() {
 
 	Context("Operator", func() {
 		It("should run successfully", func() {
-			var controllerPodName string
 			var err error
 
 			var projectimage = "quay.io/amalvank/instaslicev2-controller:latest"
@@ -93,37 +94,16 @@ var _ = Describe("controller", Ordered, func() {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("validating that the controller-manager pod is running as expected")
-			verifyControllerUp := func() error {
-				cmd = exec.Command("kubectl", "get",
-					"pods", "-l", "control-plane=controller-manager",
-					"-o", "go-template={{ range .items }}"+
-						"{{ if not .metadata.deletionTimestamp }}"+
-						"{{ .metadata.name }}"+
-						"{{ \"\\n\" }}{{ end }}{{ end }}",
-					"-n", namespace,
-				)
-
-				podOutput, err := utils.Run(cmd)
-				ExpectWithOffset(2, err).NotTo(HaveOccurred())
-				podNames := utils.GetNonEmptyLines(string(podOutput))
-				if len(podNames) != 1 {
-					return fmt.Errorf("expect 1 controller pods running, but got %d", len(podNames))
-				}
-				controllerPodName = podNames[0]
-				ExpectWithOffset(2, controllerPodName).Should(ContainSubstring("controller-manager"))
-
-				cmd = exec.Command("kubectl", "get",
-					"pods", controllerPodName, "-o", "jsonpath={.status.phase}",
-					"-n", namespace,
-				)
-				status, err := utils.Run(cmd)
-				ExpectWithOffset(2, err).NotTo(HaveOccurred())
-				if string(status) != "Running" {
-					return fmt.Errorf("controller pod in %s status", status)
-				}
-				return nil
-			}
-			EventuallyWithOffset(1, verifyControllerUp, time.Minute, time.Second).Should(Succeed())
+			EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("pod", "control-plane=controller-manager", namespace).Should(BeTrue())
+			// We don't have a reliable source to depend on to verify if the service is up and ready
+			// Issue Ref: https://github.com/kubernetes/kubernetes/issues/80828
+			// (TODO) Wait for the instaslice-operator-webhook-service to be available and Ready
+			/*
+				By("verifying that the instaslice-operator-webhook service to be ready as expected")
+				EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("service", "app.kubernetes.io/component=webhook", namespace).Should(BeTrue())
+			*/
+			// Until then, adding a sleep of 1 Minute should mitigate the intermittent failures running the e2e tests.
+			time.Sleep(time.Minute)
 		})
 
 		It("should apply the YAML and check if that instaslice resource exists", func() {
@@ -420,4 +400,27 @@ func findPodName(allocationMap map[string]interface{}, targetPodName string) (st
 		}
 	}
 	return "", true
+}
+
+func isResourceReady(resource, label, namespace string) bool {
+	var cmd = new(exec.Cmd)
+	switch resource {
+	case "pod", "pods", "po":
+		cmd = exec.Command("kubectl", "wait", "--for=condition=ready", resource, "-l", label,
+			"-n", namespace, "--timeout=2m",
+		)
+	case "service", "svc", "services":
+		cmd = exec.Command("kubectl", "wait", "--for=jsonpath=spec.type=ClusterIP", resource, "-l", label,
+			"-n", namespace, "--timeout=2m",
+		)
+	default:
+		fmt.Errorf("unsupported resource : %s\n", resource)
+		return false
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Waiting for the %s to be ready, err: %s\noutput: %s\nRetrying...\n", resource, err, output)
+		return false
+	}
+	return true
 }
