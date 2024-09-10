@@ -8,7 +8,7 @@
 ORIGINAL_NAME="cuda-vectoradd-1"
 
 # Specify how many new names to generate
-NUM_NEW_NAMES=24
+NUM_NEW_NAMES=80
 
 # Read the original YAML content into a variable
 YAML_CONTENT=$(cat <<EOF
