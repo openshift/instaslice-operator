@@ -24,12 +24,9 @@ echo "kind-config.yaml file generated with $num_workers worker nodes."
 # Create the Kind cluster
 kind create cluster --config kind-config.yaml
 
-# Function to wait until all nodes are ready
 wait_for_nodes_ready() {
   echo "Waiting for all nodes to be in 'Ready' state..."
-  # Loop until all nodes show 'Ready' status
   while true; do
-    # Check if all nodes are ready
     not_ready_nodes=$(kubectl get nodes --no-headers | grep -v ' Ready' | wc -l)
     if [ "$not_ready_nodes" -eq 0 ]; then
       echo "All nodes are ready!"
@@ -51,16 +48,12 @@ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/
 namespace="cert-manager"
 label_selector="app=webhook"
 
-# Function to check if all pods are running
 check__cert_manager_pods_running() {
-  # Get the status of all pods with the given label in the specified namespace
   pod_statuses=$(kubectl get pods -l "$label_selector" -n "$namespace" \
     -o go-template='{{ range .items }}{{ if not .metadata.deletionTimestamp }}{{ .status.phase }}{{ "\n" }}{{ end }}{{ end }}')
 
-  # Check if there are any pods that are not in the "Running" state
   not_running_pods=$(echo "$pod_statuses" | grep -v "Running")
 
-  # Return 0 (success) if all pods are running, otherwise 1 (failure)
   if [ -z "$not_running_pods" ]; then
     return 0
   else
@@ -68,7 +61,6 @@ check__cert_manager_pods_running() {
   fi
 }
 
-# Loop until all pods are running
 echo "Waiting for all pods in namespace '$namespace' with label '$label_selector' to be in 'Running' state..."
 while true; do
   if check__cert_manager_pods_running; then
@@ -104,7 +96,6 @@ wait_for_pods_running() {
 namespace=$namespace_instaslice
 wait_for_pods_running
 
-# Create a function to update the name in the fake-capacity.yaml file
 generate_fake_capacity() {
   local worker_name=$1
 
@@ -235,7 +226,6 @@ kind: List
 EOF
 }
 
-# Apply the fake capacity manifest for each worker
 for i in $(seq 1 $num_workers); do
   if [ "$i" -eq 1 ]; then
     worker_name="kind-worker" 
@@ -254,7 +244,6 @@ check_daemonset_logs() {
   while true; do
     all_pods_ready=true
 
-    # Get all DaemonSet pods in the namespace, and filter for those with 'InstaSlice' in their names
     daemonset_pods=$(kubectl get pods -n $namespace -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep 'InstaSlice')
 
     for pod in $daemonset_pods; do
@@ -268,16 +257,13 @@ check_daemonset_logs() {
       fi
     done
 
-    # If all pods have the log line, break the loop
     if [ "$all_pods_ready" = true ]; then
       echo "All DaemonSet pods with 'InstaSlice' in their names have the 'daemonset simulator mode' log line."
       break
     else
-      # Wait for a few seconds before checking again
       sleep 5
     fi
   done
 }
 
-# Check DaemonSet logs for all nodes after applying fake capacity
 check_daemonset_logs
