@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Set the number of worker nodes here
-num_workers=10
+num_workers="${NUM_WORKERS:-10}"
 namespace_instaslice="instaslice-operator-system"
 
 # Create the kind configuration file
@@ -45,41 +45,43 @@ echo "deploying cert manager"
 
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.3/cert-manager.yaml
 
+sleep 10 
+
 namespace="cert-manager"
 label_selector="app=webhook"
 
-check__cert_manager_pods_running() {
-  pod_statuses=$(kubectl get pods -l "$label_selector" -n "$namespace" \
-    -o go-template='{{ range .items }}{{ if not .metadata.deletionTimestamp }}{{ .status.phase }}{{ "\n" }}{{ end }}{{ end }}')
-
-  not_running_pods=$(echo "$pod_statuses" | grep -v "Running")
-
-  if [ -z "$not_running_pods" ]; then
-    return 0
-  else
-    return 1
-  fi
-}
-
-echo "Waiting for all pods in namespace '$namespace' with label '$label_selector' to be in 'Running' state..."
+echo "Waiting for all pods in namespace 'cert-manager' with label 'app=webhook' to be in 'Ready' state..."
 while true; do
-  if check__cert_manager_pods_running; then
+  kubectl wait --for=condition=ready pod -l app=webhook -n cert-manager --timeout=30s
+  if [ $? -eq 0 ]; then
     echo "All pods are now running!"
     break
   else
-    echo "Some pods are not yet running. Checking again in 5 seconds..."
+    echo "Some pods are not yet ready. Checking again in 5 seconds..."
     sleep 5
   fi
 done
-
-sleep 30
 
 echo "deploying InstaSlice"
 
 make deploy-emulated
 
+echo "Waiting for instaslice-operator-webhook-service to be available in namespace 'instaslice-operator-system'..."
+
+while true; do
+  kubectl get svc instaslice-operator-webhook-service -n instaslice-operator-system > /dev/null 2>&1
+  if [ $? -eq 0 ]; then
+    echo "instaslice-operator-webhook-service is now available!"
+    break
+  else
+    echo "instaslice-operator-webhook-service is not available yet. Checking again in 5 seconds..."
+    sleep 5
+  fi
+done
+
 wait_for_pods_running() {
-  echo "Waiting for all pods in namespace '$namespace' to be in 'Running' state..."
+  local namespace=$1
+  echo "Waiting for all InstaSlice pods in namespace '$namespace' to be in 'Running' state..."
   while true; do
     not_running_pods=$(kubectl get pods -n $namespace --no-headers | grep -v ' Running' | wc -l)
     if [ "$not_running_pods" -eq 0 ]; then
@@ -93,8 +95,7 @@ wait_for_pods_running() {
 }
 
 # Wait for all instaslice controller pods to be running before applying fake capacity
-namespace=$namespace_instaslice
-wait_for_pods_running
+wait_for_pods_running "$namespace_instaslice"
 
 generate_fake_capacity() {
   local worker_name=$1
