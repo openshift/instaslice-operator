@@ -84,6 +84,12 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
+	// Pods with scheduling gates other than the InstaSlice gate are not ready to be scheduled and should be ignored
+	if IsPodGatedByOthers(pod) {
+		//log.FromContext(ctx).Info("Ignoring gated pod", "pod", pod.Name)
+		return ctrl.Result{}, nil
+	}
+
 	isPodGated = checkIfPodGated(pod, isPodGated)
 
 	if !isPodGated && !controllerutil.ContainsFinalizer(pod, "org.instaslice/accelarator") {
@@ -363,6 +369,16 @@ func checkIfPodGated(pod *v1.Pod, isPodGated bool) bool {
 		}
 	}
 	return isPodGated
+}
+
+// IsPodGatedByOthers looks for scheduling gates distinct from the InstaSlice gate
+func IsPodGatedByOthers(pod *v1.Pod) bool {
+	for _, gate := range pod.Spec.SchedulingGates {
+		if gate.Name != "org.instaslice/accelarator" {
+			return true
+		}
+	}
+	return false
 }
 
 // podMapFunc maps pods to instaslice created allocations
