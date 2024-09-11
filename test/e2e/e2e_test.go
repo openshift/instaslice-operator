@@ -40,6 +40,7 @@ import (
 
 var _ = Describe("controller", Ordered, func() {
 	var namespace string = "instaslice-operator-system"
+	var defaultNamespace string = "default"
 
 	BeforeAll(func() {
 		fmt.Println("Setting up Kind cluster")
@@ -112,7 +113,7 @@ var _ = Describe("controller", Ordered, func() {
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", output))
 
-			checkCmd := exec.Command("kubectl", "describe", "instaslice", "-n", "default")
+			checkCmd := exec.Command("kubectl", "describe", "instaslice", "-n", defaultNamespace)
 			output, err = checkCmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Resource not found: %s", output))
 		})
@@ -132,7 +133,7 @@ var _ = Describe("controller", Ordered, func() {
 
 			finalizers, found := podObj["metadata"].(map[string]interface{})["finalizers"].([]interface{})
 			Expect(found).To(BeTrue(), "Pod does not have finalizers")
-			Expect(finalizers).To(ContainElement("org.instaslice/accelarator"), "Finalizer org.instaslice/accelarator not found on pod")
+			Expect(finalizers).To(ContainElement("org.instaslice/accelerator"), "Finalizer org.instaslice/accelerator not found on pod")
 		})
 
 		It("should apply the pod YAML with no requests and check the allocation in instaslice object", func() {
@@ -140,7 +141,7 @@ var _ = Describe("controller", Ordered, func() {
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -162,7 +163,7 @@ var _ = Describe("controller", Ordered, func() {
 					if allocation, ok := data.(map[string]interface{}); ok {
 						if status, ok := allocation["allocationStatus"].(string); ok {
 							Expect(ok).To(BeTrue(), "allocationStatus not found in Instaslice object")
-							Expect(status).To(Equal("creating"), "Spec.Allocations not found in Instaslice object")
+							Expect(status).To(Equal("Creating"), "Spec.Allocations not found in Instaslice object")
 						}
 					}
 				}
@@ -177,7 +178,7 @@ var _ = Describe("controller", Ordered, func() {
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -199,7 +200,7 @@ var _ = Describe("controller", Ordered, func() {
 					if allocation, ok := data.(map[string]interface{}); ok {
 						if status, ok := allocation["allocationStatus"].(string); ok {
 							Expect(ok).To(BeTrue(), "allocationStatus not found in Instaslice object")
-							Expect(status).To(Equal("creating"), "Spec.Allocations not found in Instaslice object")
+							Expect(status).To(Equal("Creating"), "Spec.Allocations not found in Instaslice object")
 						}
 					}
 				}
@@ -214,7 +215,7 @@ var _ = Describe("controller", Ordered, func() {
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -231,7 +232,7 @@ var _ = Describe("controller", Ordered, func() {
 				spec, found := instaslice["spec"].(map[string]interface{})
 				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
 				allocations, _ := spec["allocations"].(map[string]interface{})
-				_, notCreated := findPodName(allocations, "cuda-vectoradd-large-memory")
+				notCreated := findPodName(allocations, "cuda-vectoradd-large-memory")
 				Expect(notCreated).To(BeTrue(), "Spec.Allocations found in Instaslice object")
 
 			} else {
@@ -244,7 +245,7 @@ var _ = Describe("controller", Ordered, func() {
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -261,7 +262,7 @@ var _ = Describe("controller", Ordered, func() {
 				spec, found := instaslice["spec"].(map[string]interface{})
 				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
 				allocations, _ := spec["allocations"].(map[string]interface{})
-				_, notCreated := findPodName(allocations, "cuda-vectoradd-large-cpu")
+				notCreated := findPodName(allocations, "cuda-vectoradd-large-cpu")
 				Expect(notCreated).To(BeTrue(), "Spec.Allocations found in Instaslice object")
 
 			} else {
@@ -272,13 +273,12 @@ var _ = Describe("controller", Ordered, func() {
 		It("should apply the deployment YAML and check if pod exists", func() {
 			ctx := context.TODO()
 			//deploymentName := "sleep-deployment"
-			namespace := "default"
 			labelSelector := "app=sleep-app"
 			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-sleep-deployment.yaml")
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -316,13 +316,12 @@ var _ = Describe("controller", Ordered, func() {
 		It("should apply the statefulset YAML and check if pod exists", func() {
 			ctx := context.TODO()
 			//statefulSetName := "sleep-statefulset"
-			namespace := "default"
 			labelSelector := "app=sleep-statefulset"
 			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-sleep-statefulset.yaml")
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -359,14 +358,12 @@ var _ = Describe("controller", Ordered, func() {
 
 		It("should apply the job YAML and check if pod exists", func() {
 			ctx := context.TODO()
-			//statefulSetName := "sleep-statefulset"
-			namespace := "default"
 			labelSelector := "app=sleep-job"
 			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-sleep-job.yaml")
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -403,9 +400,9 @@ var _ = Describe("controller", Ordered, func() {
 	})
 })
 
-func findPodName(allocationMap map[string]interface{}, targetPodName string) (string, bool) {
+func findPodName(allocationMap map[string]interface{}, targetPodName string) bool {
 	// Iterate over the outer map
-	for uuid, allocationData := range allocationMap {
+	for _, allocationData := range allocationMap {
 		// Assert that the allocationData is of type map[string]interface{}
 		allocation, ok := allocationData.(map[string]interface{})
 		if !ok {
@@ -413,11 +410,11 @@ func findPodName(allocationMap map[string]interface{}, targetPodName string) (st
 		}
 		if podName, exists := allocation["podName"]; exists {
 			if podNameStr, ok := podName.(string); ok && podNameStr == targetPodName {
-				return uuid, false
+				return false
 			}
 		}
 	}
-	return "", true
+	return true
 }
 
 func isResourceReady(resource, label, namespace string) bool {
@@ -432,7 +429,10 @@ func isResourceReady(resource, label, namespace string) bool {
 			"-n", namespace, "--timeout=2m",
 		)
 	default:
-		fmt.Errorf("unsupported resource : %s\n", resource)
+		err := fmt.Errorf("unsupported resource : %s\n", resource)
+		if err != nil {
+			fmt.Printf("error printing %s", err)
+		}
 		return false
 	}
 	output, err := cmd.CombinedOutput()

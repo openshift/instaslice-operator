@@ -58,7 +58,7 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 	}
 
 	// Add scheduling
-	schedulingGateName := "org.instaslice/accelarator"
+	schedulingGateName := finalizerOrGateName
 	found := false
 	for _, gate := range pod.Spec.SchedulingGates {
 		if gate.Name == schedulingGateName {
@@ -75,7 +75,7 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 	extendedResourceName := fmt.Sprintf("org.instaslice/%s", uuidStr)
 
 	// Add envFrom with a unique ConfigMap name derived from the pod name
-	configMapName := fmt.Sprintf("%s", uuidStr)
+	configMapName := uuidStr
 	// Support for only one pod workloads
 	pod.Spec.Containers[0].EnvFrom = append(pod.Spec.Containers[0].EnvFrom, v1.EnvFromSource{
 		ConfigMapRef: &v1.ConfigMapEnvSource{

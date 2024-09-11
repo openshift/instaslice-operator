@@ -14,21 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package e2e
+package controller
 
-import (
-	"fmt"
-	"testing"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+const (
+	finalizerOrGateName string = "org.instaslice/accelerator"
+	emulatorModeFalse   string = "false"
+	emulatorModeTrue    string = "true"
+	orgInstaslicePrefix        = "org.instaslice/"
 )
-
-// Run e2e tests using the Ginkgo runner.
-func TestE2E(t *testing.T) {
-	RegisterFailHandler(Fail)
-	if _, err := fmt.Fprintf(GinkgoWriter, "Starting instaslice-operator suite\n"); err != nil {
-		panic(err)
-	}
-	RunSpecs(t, "e2e suite")
-}

@@ -61,8 +61,6 @@ type LeftToRightPolicy struct{}
 // first fit policy is implemented at the moment
 type FirstFitPolicy struct{}
 
-const finalizerOrGateName = "org.instaslice/accelarator"
-
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/finalizers,verbs=update
@@ -71,8 +69,7 @@ const finalizerOrGateName = "org.instaslice/accelarator"
 
 func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
-	var policy AllocationPolicy
-	policy = &FirstFitPolicy{}
+	policy := &FirstFitPolicy{}
 	pod := &v1.Pod{}
 	err := r.Get(ctx, req.NamespacedName, pod)
 	if err != nil {
@@ -120,7 +117,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			for podUuid, allocation := range instaslice.Spec.Allocations {
 				if podUuid == string(pod.UID) {
 					log.FromContext(ctx).Info("deleting allocation for completed ", "pod", allocation.PodName)
-					allocation.Allocationstatus = "deleting"
+					allocation.Allocationstatus = inferencev1alpha1.AllocationStatusDeleting
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,
@@ -163,8 +160,8 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		// allocation can be in creating or created while the user deletes the pod.
 		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocation := range instaslice.Spec.Allocations {
-				if podUuid == string(pod.UID) && (allocation.Allocationstatus == "creating" || allocation.Allocationstatus == "created") {
-					allocation.Allocationstatus = "deleting"
+				if podUuid == string(pod.UID) && (allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreating || allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreated) {
+					allocation.Allocationstatus = inferencev1alpha1.AllocationStatusDeleting
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,
@@ -204,7 +201,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					if podUuid == string(pod.UID) {
 						elapsed := time.Since(pod.DeletionTimestamp.Time)
 						if elapsed > 30*time.Second {
-							allocation.Allocationstatus = "deleting"
+							allocation.Allocationstatus = inferencev1alpha1.AllocationStatusDeleting
 							var updateInstasliceObject inferencev1alpha1.Instaslice
 							typeNamespacedName := types.NamespacedName{
 								Name:      instaslice.Name,
@@ -265,7 +262,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocations := range instaslice.Spec.Allocations {
-				if allocations.Allocationstatus == "created" && allocations.PodUUID == string(pod.UID) {
+				if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusCreated && allocations.PodUUID == string(pod.UID) {
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,
@@ -279,7 +276,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						// hence we retry if we fail to get the latest object
 						return ctrl.Result{Requeue: true}, nil
 					}
-					allocations.Allocationstatus = "ungated"
+					allocations.Allocationstatus = inferencev1alpha1.AllocationStatusUngated
 					instaslice.Spec.Allocations[podUuid] = allocations
 					if updateInstasliceObject.Spec.Allocations == nil {
 						updateInstasliceObject.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
@@ -298,7 +295,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				}
 				// InstaSlice object got updated with ungated status but the controller failed
 				// ungating the pod.
-				if allocations.Allocationstatus == "ungated" && allocations.PodUUID == string(pod.UID) {
+				if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusUngated && allocations.PodUUID == string(pod.UID) {
 					pod := r.unGatePod(pod)
 					errForUngating := r.Update(ctx, pod)
 					if errForUngating != nil {
@@ -339,6 +336,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						updateInstasliceObject.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
 					}
 					updateInstasliceObject.Spec.Allocations[string(pod.UID)] = *allocDetails
+					log.FromContext(ctx).Info("allocation details for ", "allocDetails", *allocDetails)
 					if err := r.Update(ctx, &updateInstasliceObject); err != nil {
 						log.FromContext(ctx).Error(err, "Error updating instaslice allocations")
 						return ctrl.Result{Requeue: true}, nil
@@ -365,7 +363,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 // Extract profile name from the container limits spec
 func (*InstasliceReconciler) extractProfileName(limits v1.ResourceList) string {
 	profileName := ""
-	for k, _ := range limits {
+	for k := range limits {
 		if strings.Contains(k.String(), "mig-") {
 
 			re := regexp.MustCompile(`(\d+g\.\d+gb)`)
@@ -425,7 +423,7 @@ func isPodGatedByOthers(pod *v1.Pod) bool {
 func (r *InstasliceReconciler) podMapFunc(ctx context.Context, obj client.Object) []reconcile.Request {
 	instaslice := obj.(*inferencev1alpha1.Instaslice)
 	for _, allocation := range instaslice.Spec.Allocations {
-		if allocation.Allocationstatus == "created" || allocation.Allocationstatus == "deleted" {
+		if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreated || allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
 			return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: allocation.Namespace, Name: allocation.PodName}}}
 		}
 	}
@@ -465,11 +463,11 @@ func (r *FirstFitPolicy) SetAllocationDetails(profileName string, newStart, size
 	namespace string, podName string, gpuUuid string, resourceIdentifier string, cpuMilli int64, memory int64) *inferencev1alpha1.AllocationDetails {
 	return &inferencev1alpha1.AllocationDetails{
 		Profile:            profileName,
-		Start:              uint32(newStart),
-		Size:               uint32(size),
+		Start:              newStart,
+		Size:               size,
 		PodUUID:            podUUID,
 		Nodename:           nodename,
-		Allocationstatus:   processed,
+		Allocationstatus:   inferencev1alpha1.AllocationStatus(processed),
 		Namespace:          namespace,
 		PodName:            podName,
 		GPUUUID:            gpuUuid,

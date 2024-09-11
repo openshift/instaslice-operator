@@ -86,8 +86,12 @@ func TestCleanUp(t *testing.T) {
 	assert.NoError(t, errCreatingNode)
 
 	// Set the NODE_NAME environment variable
-	os.Setenv("NODE_NAME", "node-1")
-	defer os.Unsetenv("NODE_NAME")
+	setEnvErr := os.Setenv("NODE_NAME", "node-1")
+	assert.NoError(t, setEnvErr, "error setting setenv")
+	defer func() {
+		err := os.Unsetenv("NODE_NAME")
+		assert.NoError(t, err)
+	}()
 
 	// Keeping it around as it may be needed later
 	// Create a fake Pod resource

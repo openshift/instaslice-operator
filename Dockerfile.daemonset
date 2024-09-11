@@ -32,6 +32,7 @@ RUN go mod download
 COPY cmd/daemonset/main.go cmd/daemonset/main.go
 COPY api/ api/
 COPY internal/controller/instaslice_daemonset.go internal/controller/instaslice_daemonset.go
+COPY internal/controller/constants.go internal/controller/constants.go
 
 # Build
 # the GOARCH has not a default value to allow the binary be built according to the host where the command
