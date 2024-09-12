@@ -1,0 +1,178 @@
+/*
+Copyright 2024.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package e2e_emulator
+
+import (
+	"encoding/json"
+	"fmt"
+	"os/exec"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/openshift/instaslice-operator/test/utils"
+)
+
+//TODO: add more test cases -
+// 1. delete instaslice object, fill the object with dangling slices ie no capacity available and
+// verify that allocation should not exists in instaslice object.
+// 2. check size and index value based on different mig slice profiles requested.
+// 3. submit 3 pods with 3g.20gb slice and verify that two allocations exists in instaslice object.
+// 4. submit a test pod with 1g.20gb slice and later delete it. verify the allocation status to be
+// in state deleting
+
+var _ = Describe("controller", Ordered, func() {
+	var namespace string = "instaslice-operator-system"
+
+	BeforeAll(func() {
+		fmt.Println("Setting up Kind cluster")
+		cmd := exec.Command("kind", "create", "cluster")
+		output, err := cmd.CombinedOutput()
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create Kind cluster: %s", output))
+
+		By("creating manager namespace")
+		cmdNamespace := exec.Command("kubectl", "create", "ns", namespace)
+		outputNs, err := cmdNamespace.CombinedOutput()
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create namespace: %s", outputNs))
+
+		By("installing cert manager")
+		cmdCm := exec.Command("kubectl", "apply", "-f", "https://github.com/cert-manager/cert-manager/releases/download/v1.15.3/cert-manager.yaml")
+		outputCm, err := cmdCm.CombinedOutput()
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to deploy cert manager: %s", outputCm))
+
+		By("validating the cert-manager-webhook pod to be ready as expected")
+		EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("pod", "app=webhook", "cert-manager").Should(BeTrue())
+	})
+
+	AfterAll(func() {
+		fmt.Println("Deleting the cluster")
+		cmd := exec.Command("kind", "delete", "cluster")
+		output, err := cmd.CombinedOutput()
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create Kind cluster: %s", output))
+	})
+
+	Context("Operator", func() {
+		It("should run successfully", func() {
+			var err error
+
+			var projectimage = "quay.io/amalvank/instaslicev2-controller:latest"
+
+			By("building the manager(Operator) image")
+			cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectimage))
+			_, err = utils.Run(cmd, "test/e2e_emulator")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			By("loading the manager(Operator) image on Kind")
+			err = utils.LoadImageToKindClusterWithName(projectimage, "test/e2e_emulator")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			By("installing CRDs")
+			cmd = exec.Command("make", "install")
+			_, err = utils.Run(cmd, "test/e2e_emulator")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			By("deploying the controller-manager")
+			cmd = exec.Command("make", "deploy-emulated", fmt.Sprintf("IMG=%s", projectimage))
+			_, err = utils.Run(cmd, "test/e2e_emulator")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			By("validating that the controller-manager pod is running as expected")
+			EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("pod", "control-plane=controller-manager", namespace).Should(BeTrue())
+			// We don't have a reliable source to depend on to verify if the service is up and ready
+			// Issue Ref: https://github.com/kubernetes/kubernetes/issues/80828
+			// (TODO) Wait for the instaslice-operator-webhook-service to be available and Ready
+			/*
+				By("verifying that the instaslice-operator-webhook service to be ready as expected")
+				EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("service", "app.kubernetes.io/component=webhook", namespace).Should(BeTrue())
+			*/
+			// Until then, adding a sleep of 1 Minute should mitigate the intermittent failures running the e2e tests.
+			time.Sleep(time.Minute)
+		})
+
+		It("should apply the YAML and check if that instaslice resource exists", func() {
+
+			cmd := exec.Command("kubectl", "apply", "-f", "test/e2e_emulator/resources/instaslice-fake-capacity.yaml")
+			output, err := cmd.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", output))
+
+			checkCmd := exec.Command("kubectl", "describe", "instaslice", "-n", "default")
+			output, err = checkCmd.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Resource not found: %s", output))
+		})
+
+		It("should apply the pod YAML with no requests and check the allocation in instaslice object", func() {
+			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e_emulator/resources/emulator-pod.yaml")
+			outputPod, err := cmdPod.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
+
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
+			output, err := cmd.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
+
+			// Parse the JSON output
+			var result struct {
+				Items []map[string]interface{} `json:"items"`
+			}
+			err = json.Unmarshal(output, &result)
+			Expect(err).NotTo(HaveOccurred(), "Failed to parse JSON output")
+
+			// Assume we want to check the first Instaslice object if it exists
+			if len(result.Items) > 0 {
+				instaslice := result.Items[0]
+				spec, found := instaslice["spec"].(map[string]interface{})
+				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
+				allocations, found := spec["allocations"].(map[string]interface{})
+				Expect(found).To(BeTrue(), "Spec.Allocations not found in Instaslice object")
+				for _, data := range allocations {
+					if allocation, ok := data.(map[string]interface{}); ok {
+						if status, ok := allocation["allocationStatus"].(string); ok {
+							Expect(ok).To(BeTrue(), "allocationStatus not found in Instaslice object")
+							Expect(status).To(Equal("creating"), "Spec.Allocations not found in Instaslice object")
+						}
+					}
+				}
+
+			} else {
+				Fail("No Instaslice objects found")
+			}
+		})
+	})
+})
+
+func isResourceReady(resource, label, namespace string) bool {
+	var cmd = new(exec.Cmd)
+	switch resource {
+	case "pod", "pods", "po":
+		cmd = exec.Command("kubectl", "wait", "--for=condition=ready", resource, "-l", label,
+			"-n", namespace, "--timeout=2m",
+		)
+	case "service", "svc", "services":
+		cmd = exec.Command("kubectl", "wait", "--for=jsonpath=spec.type=ClusterIP", resource, "-l", label,
+			"-n", namespace, "--timeout=2m",
+		)
+	default:
+		fmt.Errorf("unsupported resource : %s\n", resource)
+		return false
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Waiting for the %s to be ready, err: %s\noutput: %s\nRetrying...\n", resource, err, output)
+		return false
+	}
+	return true
+}

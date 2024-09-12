@@ -76,21 +76,21 @@ var _ = Describe("controller", Ordered, func() {
 
 			By("building the manager(Operator) image")
 			cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectimage))
-			_, err = utils.Run(cmd)
+			_, err = utils.Run(cmd, "test/e2e")
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("loading the manager(Operator) image on Kind")
-			err = utils.LoadImageToKindClusterWithName(projectimage)
+			err = utils.LoadImageToKindClusterWithName(projectimage, "test/e2e")
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("installing CRDs")
 			cmd = exec.Command("make", "install")
-			_, err = utils.Run(cmd)
+			_, err = utils.Run(cmd, "test/e2e")
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("deploying the controller-manager")
 			cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectimage))
-			_, err = utils.Run(cmd)
+			_, err = utils.Run(cmd, "test/e2e")
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("validating that the controller-manager pod is running as expected")

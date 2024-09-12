@@ -1,0 +1,119 @@
+apiVersion: v1
+items:
+- apiVersion: inference.codeflare.dev/v1alpha1
+  kind: Instaslice
+  metadata:
+    name: kind-control-plane
+    namespace: default
+  spec:
+    cpuonnodeatboot: 72
+    memoryonnodeatboot: 1000000000
+    MigGPUUUID:
+      GPU-8d042338-e67f-9c48-92b4-5b55c7e5133c: NVIDIA A100-PCIE-40GB
+      GPU-31cfe05c-ed13-cd17-d7aa-c63db5108c24: NVIDIA A100-PCIE-40GB
+    migplacement:
+    - ciProfileid: 0
+      ciengprofileid: 0
+      giprofileid: 0
+      placements:
+      - size: 1
+        start: 0
+      - size: 1
+        start: 1
+      - size: 1
+        start: 2
+      - size: 1
+        start: 3
+      - size: 1
+        start: 4
+      - size: 1
+        start: 5
+      - size: 1
+        start: 6
+      profile: 1g.5gb
+    - ciProfileid: 1
+      ciengprofileid: 0
+      giprofileid: 1
+      placements:
+      - size: 2
+        start: 0
+      - size: 2
+        start: 2
+      - size: 2
+        start: 4
+      profile: 2g.10gb
+    - ciProfileid: 2
+      ciengprofileid: 0
+      giprofileid: 2
+      placements:
+      - size: 4
+        start: 0
+      - size: 4
+        start: 4
+      profile: 3g.20gb
+    - ciProfileid: 3
+      ciengprofileid: 0
+      giprofileid: 3
+      placements:
+      - size: 4
+        start: 0
+      profile: 4g.20gb
+    - ciProfileid: 4
+      ciengprofileid: 0
+      giprofileid: 4
+      placements:
+      - size: 8
+        start: 0
+      profile: 7g.40gb
+    - ciProfileid: 7
+      ciengprofileid: 0
+      giprofileid: 7
+      placements:
+      - size: 1
+        start: 0
+      - size: 1
+        start: 1
+      - size: 1
+        start: 2
+      - size: 1
+        start: 3
+      - size: 1
+        start: 4
+      - size: 1
+        start: 5
+      - size: 1
+        start: 6
+      profile: 1g.5gb+me
+    - ciProfileid: 9
+      ciengprofileid: 0
+      giprofileid: 9
+      placements:
+      - size: 2
+        start: 0
+      - size: 2
+        start: 2
+      - size: 2
+        start: 4
+      - size: 2
+        start: 6
+      profile: 1g.10gb
+    prepared:
+      MIG-0f1cecc2-27a4-5452-85f2-ad9c3a15f1de:
+        ciinfo: 0
+        giinfo: 2
+        parent: GPU-31cfe05c-ed13-cd17-d7aa-c63db5108c24
+        podUUID: ""
+        profile: 3g.20gb
+        size: 4
+        start: 4
+      MIG-3dc2c68a-45e6-5acb-b043-caef296e6038:
+        ciinfo: 0
+        giinfo: 2
+        parent: GPU-8d042338-e67f-9c48-92b4-5b55c7e5133c
+        podUUID: ""
+        profile: 3g.20gb
+        size: 4
+        start: 4
+  status:
+    processed: "true"
+kind: List

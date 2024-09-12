@@ -42,13 +42,13 @@ func warnError(err error) {
 func InstallPrometheusOperator() error {
 	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
 	cmd := exec.Command("kubectl", "create", "-f", url)
-	_, err := Run(cmd)
+	_, err := Run(cmd, "test/e2e")
 	return err
 }
 
 // Run executes the provided command within this context
-func Run(cmd *exec.Cmd) ([]byte, error) {
-	dir, _ := GetProjectDir()
+func Run(cmd *exec.Cmd, pathToReplace string) ([]byte, error) {
+	dir, _ := GetProjectDir(pathToReplace)
 	cmd.Dir = dir
 
 	if err := os.Chdir(cmd.Dir); err != nil {
@@ -70,7 +70,7 @@ func Run(cmd *exec.Cmd) ([]byte, error) {
 func UninstallPrometheusOperator() {
 	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
 	cmd := exec.Command("kubectl", "delete", "-f", url)
-	if _, err := Run(cmd); err != nil {
+	if _, err := Run(cmd, "test/e2e"); err != nil {
 		warnError(err)
 	}
 }
@@ -79,7 +79,7 @@ func UninstallPrometheusOperator() {
 func UninstallCertManager() {
 	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
 	cmd := exec.Command("kubectl", "delete", "-f", url)
-	if _, err := Run(cmd); err != nil {
+	if _, err := Run(cmd, "test/e2e"); err != nil {
 		warnError(err)
 	}
 }
@@ -88,7 +88,7 @@ func UninstallCertManager() {
 func InstallCertManager() error {
 	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
 	cmd := exec.Command("kubectl", "apply", "-f", url)
-	if _, err := Run(cmd); err != nil {
+	if _, err := Run(cmd, "test/e2e"); err != nil {
 		return err
 	}
 	// Wait for cert-manager-webhook to be ready, which can take time if cert-manager
@@ -99,19 +99,19 @@ func InstallCertManager() error {
 		"--timeout", "5m",
 	)
 
-	_, err := Run(cmd)
+	_, err := Run(cmd, "test/e2e")
 	return err
 }
 
 // LoadImageToKindCluster loads a local docker image to the kind cluster
-func LoadImageToKindClusterWithName(name string) error {
+func LoadImageToKindClusterWithName(name string, path string) error {
 	cluster := "kind"
 	if v, ok := os.LookupEnv("KIND_CLUSTER"); ok {
 		cluster = v
 	}
 	kindOptions := []string{"load", "docker-image", name, "--name", cluster}
 	cmd := exec.Command("kind", kindOptions...)
-	_, err := Run(cmd)
+	_, err := Run(cmd, path)
 	return err
 }
 
@@ -130,11 +130,11 @@ func GetNonEmptyLines(output string) []string {
 }
 
 // GetProjectDir will return the directory where the project is
-func GetProjectDir() (string, error) {
+func GetProjectDir(pathToReplace string) (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return wd, err
 	}
-	wd = strings.Replace(wd, "/test/e2e", "", -1)
+	wd = strings.Replace(wd, pathToReplace, "", -1)
 	return wd, nil
 }
