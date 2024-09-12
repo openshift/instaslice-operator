@@ -126,7 +126,7 @@ spec:
       - command:
         - /daemonset
         args:
-        - --leader-elect
+        - --leader-elect=false
         name: daemonset
         image: daemonset:latest
         imagePullPolicy: Always

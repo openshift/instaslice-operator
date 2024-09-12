@@ -128,7 +128,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		// if user deletes abruptly, cm, instaslice resource, ci and gi may not exists
 		// handle such scenario's.
 		// delete first before creating new slice
-		if allocations.Allocationstatus == "deleting" {
+		if allocations.Allocationstatus == "deleting" && allocations.Nodename == nodeName {
 			log.FromContext(ctx).Info("Performing cleanup ", "pod", allocations.PodName)
 			extendedResourceName := OrgInstaslicePrefix + allocations.Resourceidentifier
 			if errDeletingCm := r.deleteConfigMap(ctx, allocations.Resourceidentifier, allocations.Namespace); errDeletingCm != nil {
@@ -200,7 +200,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			}
 		}
 		// create new slice by obeying controller allocation
-		if allocations.Allocationstatus == "creating" {
+		if allocations.Allocationstatus == "creating" && allocations.Nodename == nodeName {
 			//Assume pod only has one container with one GPU request
 			log.FromContext(ctx).Info("creating allocation for ", "pod", allocations.PodName)
 			var podUUID = allocations.PodUUID
@@ -216,6 +216,8 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			existingAllocations := instaslice.Spec.Allocations[podUUID]
 
 			if emulatorMode == "true" {
+				// Emulating cost to create CI and GI on a GPU
+				time.Sleep(1 * time.Second)
 				cachedPreparedMig[allocations.PodName] = preparedMig{gid: 0, miguuid: allocations.PodUUID, cid: 0}
 
 			}
@@ -398,7 +400,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		}
 
 		// delete slice
-		if allocations.Allocationstatus == "deleted" {
+		if allocations.Allocationstatus == "deleted" && allocations.Nodename == nodeName {
 			var updateInstasliceObject inferencev1alpha1.Instaslice
 			typeNamespacedName := types.NamespacedName{
 				Name:      instaslice.Name,

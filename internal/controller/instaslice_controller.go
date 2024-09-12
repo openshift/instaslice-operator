@@ -235,17 +235,20 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 		limits := pod.Spec.Containers[0].Resources.Limits
 		profileName := r.extractProfileName(limits)
+		podHasNodeAllocation := false
+		// search if pod has allocation in any of the instaslice object in the cluster
+		//TODO: allocations may get slower as the cluster size increases
+		for _, instaslice := range instasliceList.Items {
+			for _, allocations := range instaslice.Spec.Allocations {
+				// no matter the state if allocations exists for a pod skip such a pod
+				if allocations.PodUUID == string(pod.UID) {
+					podHasNodeAllocation = true
+				}
+			}
+		}
 		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocations := range instaslice.Spec.Allocations {
 				if allocations.Allocationstatus == "created" && allocations.PodUUID == string(pod.UID) {
-					pod := r.unGatePod(pod)
-					errForUngating := r.Update(ctx, pod)
-					if errForUngating != nil {
-						log.FromContext(ctx).Error(errForUngating, "failed to ungate pod")
-						return ctrl.Result{Requeue: true}, nil
-					}
-					allocations.Allocationstatus = "ungated"
-					instaslice.Spec.Allocations[podUuid] = allocations
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,
@@ -254,7 +257,13 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					errRetrievingInstaSlice := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 					if errRetrievingInstaSlice != nil {
 						log.FromContext(ctx).Error(err, "error getting latest instaslice object")
+						// In some cases the pod gets ungated but the InstaSlice object does not have the
+						// correct allocation status. It could be because we were unable to get the latest InstaSlice object
+						// hence we retry if we fail to get the latest object
+						return ctrl.Result{Requeue: true}, nil
 					}
+					allocations.Allocationstatus = "ungated"
+					instaslice.Spec.Allocations[podUuid] = allocations
 					if updateInstasliceObject.Spec.Allocations == nil {
 						updateInstasliceObject.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
 					}
@@ -263,46 +272,66 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						log.FromContext(ctx).Error(err, "Error updating instaslice allocations")
 						return ctrl.Result{Requeue: true}, nil
 					}
+					pod := r.unGatePod(pod)
+					errForUngating := r.Update(ctx, pod)
+					if errForUngating != nil {
+						log.FromContext(ctx).Error(errForUngating, "failed to ungate pod")
+						return ctrl.Result{Requeue: true}, nil
+					}
+				}
+				// InstaSlice object got updated with ungated status but the controller failed
+				// ungating the pod.
+				if allocations.Allocationstatus == "ungated" && allocations.PodUUID == string(pod.UID) {
+					pod := r.unGatePod(pod)
+					errForUngating := r.Update(ctx, pod)
+					if errForUngating != nil {
+						log.FromContext(ctx).Error(errForUngating, "failed to ungate pod")
+						return ctrl.Result{Requeue: true}, nil
+					}
 				}
 			}
 		}
 		// pod does not have an allocation yet, make allocation
 		// find the node
-		podHasNodeAllocation := false
-		for _, instaslice := range instasliceList.Items {
-			// find the GPU on the node and the GPU index where the slice can be created
-			allocDetails, err := r.findNodeAndDeviceForASlice(ctx, &instaslice, profileName, policy, pod)
-			if err != nil {
-				continue
-			}
-			podHasNodeAllocation = true
-			for _, item := range instaslice.Spec.Prepared {
-				if item.Parent == allocDetails.GPUUUID && item.Size == allocDetails.Size && item.Start == allocDetails.Start {
-					log.FromContext(ctx).Info("prepared allocation is yet to be deleted, retrying new allocation")
-					return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
-				}
-			}
-			if podHasNodeAllocation {
-				var updateInstasliceObject inferencev1alpha1.Instaslice
-				typeNamespacedName := types.NamespacedName{
-					Name:      instaslice.Name,
-					Namespace: "default", // TODO: modify
-				}
-				err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
+		if !podHasNodeAllocation {
+			for _, instaslice := range instasliceList.Items {
+				// find the GPU on the node and the GPU index where the slice can be created
+				allocDetails, err := r.findNodeAndDeviceForASlice(ctx, &instaslice, profileName, policy, pod)
 				if err != nil {
-					log.FromContext(ctx).Error(err, "error getting latest instaslice object")
+					continue
 				}
-				log.FromContext(ctx).Info("allocation obtained for ", "pod", allocDetails.PodName)
-				if updateInstasliceObject.Spec.Allocations == nil {
-					updateInstasliceObject.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
+				podHasNodeAllocation = true
+				for _, item := range instaslice.Spec.Prepared {
+					if item.Parent == allocDetails.GPUUUID && item.Size == allocDetails.Size && item.Start == allocDetails.Start {
+						log.FromContext(ctx).Info("prepared allocation is yet to be deleted, retrying new allocation")
+						return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
+					}
 				}
-				updateInstasliceObject.Spec.Allocations[string(pod.UID)] = *allocDetails
-				if err := r.Update(ctx, &updateInstasliceObject); err != nil {
-					log.FromContext(ctx).Error(err, "Error updating instaslice allocations")
-					return ctrl.Result{Requeue: true}, nil
+				if podHasNodeAllocation {
+					var updateInstasliceObject inferencev1alpha1.Instaslice
+					typeNamespacedName := types.NamespacedName{
+						Name:      instaslice.Name,
+						Namespace: "default", // TODO: modify
+					}
+					err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
+					if err != nil {
+						log.FromContext(ctx).Error(err, "error getting latest instaslice object")
+					}
+					log.FromContext(ctx).Info("allocation obtained for ", "pod", allocDetails.PodName)
+					if updateInstasliceObject.Spec.Allocations == nil {
+						updateInstasliceObject.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
+					}
+					updateInstasliceObject.Spec.Allocations[string(pod.UID)] = *allocDetails
+					if err := r.Update(ctx, &updateInstasliceObject); err != nil {
+						log.FromContext(ctx).Error(err, "Error updating instaslice allocations")
+						return ctrl.Result{Requeue: true}, nil
+					}
+					//allocation was successful
+					return ctrl.Result{}, nil
 				}
 			}
 		}
+
 		//if the cluster does not have suitable node, requeue request
 		if !podHasNodeAllocation {
 			log.FromContext(ctx).Info("no suitable node found in cluster for ", "pod", pod.Name)
@@ -320,7 +349,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 func (*InstasliceReconciler) extractProfileName(limits v1.ResourceList) string {
 	profileName := ""
 	for k, _ := range limits {
-		if strings.Contains(k.String(), "nvidia") {
+		if strings.Contains(k.String(), "mig-") {
 
 			re := regexp.MustCompile(`(\d+g\.\d+gb)`)
 			match := re.FindStringSubmatch(k.String())
