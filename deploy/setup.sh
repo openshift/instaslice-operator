@@ -59,3 +59,7 @@ kubectl apply -f ./deploy/custom-configmapwithprofiles.yaml
 echo "> Triggering GPU capacity update"
 kubectl patch clusterpolicies.nvidia.com/cluster-policy -n ${GPU_OPERATOR_NS} \
     --type merge -p '{"spec": {"devicePlugin": {"config": {"name": "capacity-update-trigger"}}}}'
+
+echo "> Patching node memory capacity"
+kubectl patch node kind-control-plane --subresource=status --type=json \
+    -p='[{"op":"add","path":"/status/capacity/nvidia.com~1accelerator-memory","value":"80Gi"}]'
