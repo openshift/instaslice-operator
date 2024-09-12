@@ -72,7 +72,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	var policy AllocationPolicy
 	policy = &FirstFitPolicy{}
 	pod := &v1.Pod{}
-	var isPodGated = false
 	err := r.Get(ctx, req.NamespacedName, pod)
 	if err != nil {
 		// Error fetching the Pod
@@ -90,7 +89,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
-	isPodGated = checkIfPodGated(pod, isPodGated)
+	isPodGated := checkIfPodGatedByInstaSlice(pod)
 
 	if !isPodGated && !controllerutil.ContainsFinalizer(pod, "org.instaslice/accelarator") {
 		//log.FromContext(ctx).Info("Ignoring ", "pod", pod.Name)
@@ -389,15 +388,15 @@ func (*InstasliceReconciler) extractGpuProfile(instaslice *inferencev1alpha1.Ins
 	return size, discoveredGiprofile, Ciprofileid, Ciengprofileid
 }
 
-func checkIfPodGated(pod *v1.Pod, isPodGated bool) bool {
+func checkIfPodGatedByInstaSlice(pod *v1.Pod) bool {
 	for _, gate := range pod.Spec.SchedulingGates {
 		if gate.Name == "org.instaslice/accelarator" {
 			if pod.Status.Phase == v1.PodPending && strings.Contains(pod.Status.Conditions[0].Message, "blocked") {
-				isPodGated = true
+				return true
 			}
 		}
 	}
-	return isPodGated
+	return false
 }
 
 // isPodGatedByOthers looks for scheduling gates distinct from the InstaSlice gate
