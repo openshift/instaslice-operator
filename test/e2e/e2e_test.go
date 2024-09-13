@@ -117,6 +117,24 @@ var _ = Describe("controller", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Resource not found: %s", output))
 		})
 
+		It("should apply the pod YAML with no requests and check if finalizer exists", func() {
+			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-pod-no-requests.yaml")
+			outputPod, err := cmdPod.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
+
+			cmdGetPod := exec.Command("kubectl", "get", "pod", "vectoradd-no-req", "-o", "json")
+			outputGetPod, err := cmdGetPod.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to get pod: %s", outputGetPod))
+
+			var podObj map[string]interface{}
+			err = json.Unmarshal(outputGetPod, &podObj)
+			Expect(err).NotTo(HaveOccurred(), "Failed to parse pod JSON")
+
+			finalizers, found := podObj["metadata"].(map[string]interface{})["finalizers"].([]interface{})
+			Expect(found).To(BeTrue(), "Pod does not have finalizers")
+			Expect(finalizers).To(ContainElement("org.instaslice/accelarator"), "Finalizer org.instaslice/accelarator not found on pod")
+		})
+
 		It("should apply the pod YAML with no requests and check the allocation in instaslice object", func() {
 			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-pod-no-requests.yaml")
 			outputPod, err := cmdPod.CombinedOutput()

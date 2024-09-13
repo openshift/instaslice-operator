@@ -61,6 +61,8 @@ type LeftToRightPolicy struct{}
 // first fit policy is implemented at the moment
 type FirstFitPolicy struct{}
 
+const finalizerOrGateName = "org.instaslice/accelarator"
+
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/finalizers,verbs=update
@@ -91,9 +93,19 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	isPodGated := checkIfPodGatedByInstaSlice(pod)
 
-	if !isPodGated && !controllerutil.ContainsFinalizer(pod, "org.instaslice/accelarator") {
+	if !isPodGated && !controllerutil.ContainsFinalizer(pod, finalizerOrGateName) {
 		//log.FromContext(ctx).Info("Ignoring ", "pod", pod.Name)
 		return ctrl.Result{}, nil
+	}
+
+	// Add finalizer to the pod gated by InstaSlice
+	if isPodGated && !controllerutil.ContainsFinalizer(pod, finalizerOrGateName) {
+		pod.Finalizers = append(pod.Finalizers, finalizerOrGateName)
+		errAddingFinalizer := r.Update(ctx, pod)
+		if errAddingFinalizer != nil {
+			log.FromContext(ctx).Error(errAddingFinalizer, "failed to add finalizer to pod")
+			return ctrl.Result{Requeue: true}, nil
+		}
 	}
 
 	var instasliceList inferencev1alpha1.InstasliceList
@@ -103,7 +115,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// pod is completed move allocation to deleting state and return
-	if pod.Status.Phase == v1.PodSucceeded && controllerutil.ContainsFinalizer(pod, "org.instaslice/accelarator") {
+	if pod.Status.Phase == v1.PodSucceeded && controllerutil.ContainsFinalizer(pod, finalizerOrGateName) {
 		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocation := range instaslice.Spec.Allocations {
 				if podUuid == string(pod.UID) {
@@ -131,7 +143,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						//TODO: should we retry?
 						log.FromContext(ctx).Error(errGettingPod, "error getting latest copy of pod")
 					}
-					errRemovingFinalizer := controllerutil.RemoveFinalizer(latestPod, "org.instaslice/accelarator")
+					errRemovingFinalizer := controllerutil.RemoveFinalizer(latestPod, finalizerOrGateName)
 					if !errRemovingFinalizer {
 						log.FromContext(ctx).Info("finalizer not deleted for ", "pod", pod.Name)
 					}
@@ -173,7 +185,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 		// allocation is updated to deleting that will trigger daemonset to cleanup
 		// remove the finalizer
-		if controllerutil.RemoveFinalizer(pod, "org.instaslice/accelarator") {
+		if controllerutil.RemoveFinalizer(pod, finalizerOrGateName) {
 			if err := r.Update(ctx, pod); err != nil {
 				log.FromContext(ctx).Error(err, "unable to update removal of finalizer, retrying")
 				// requeing immediately as the finalizer removal gets lost
@@ -186,7 +198,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// handle graceful termination of pods, wait for about 30 seconds from the time deletiontimestamp is set on the pod
 	if !pod.DeletionTimestamp.IsZero() {
 		log.FromContext(ctx).Info("set status to deleting for ", "pod", pod.Name)
-		if controllerutil.ContainsFinalizer(pod, "org.instaslice/accelarator") {
+		if controllerutil.ContainsFinalizer(pod, finalizerOrGateName) {
 			for _, instaslice := range instasliceList.Items {
 				for podUuid, allocation := range instaslice.Spec.Allocations {
 					if podUuid == string(pod.UID) {
@@ -209,7 +221,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 								return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 							}
 							// remove finalizer after switching to deleting status where daemonset can trigger cleanup
-							if controllerutil.RemoveFinalizer(pod, "org.instaslice/accelarator") {
+							if controllerutil.RemoveFinalizer(pod, finalizerOrGateName) {
 								if err := r.Update(ctx, pod); err != nil {
 									log.FromContext(ctx).Info("unable to update removal of finalizer, retrying")
 									return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
@@ -390,7 +402,7 @@ func (*InstasliceReconciler) extractGpuProfile(instaslice *inferencev1alpha1.Ins
 
 func checkIfPodGatedByInstaSlice(pod *v1.Pod) bool {
 	for _, gate := range pod.Spec.SchedulingGates {
-		if gate.Name == "org.instaslice/accelarator" {
+		if gate.Name == finalizerOrGateName {
 			if pod.Status.Phase == v1.PodPending && strings.Contains(pod.Status.Conditions[0].Message, "blocked") {
 				return true
 			}
@@ -402,7 +414,7 @@ func checkIfPodGatedByInstaSlice(pod *v1.Pod) bool {
 // isPodGatedByOthers looks for scheduling gates distinct from the InstaSlice gate
 func isPodGatedByOthers(pod *v1.Pod) bool {
 	for _, gate := range pod.Spec.SchedulingGates {
-		if gate.Name != "org.instaslice/accelarator" {
+		if gate.Name != finalizerOrGateName {
 			return true
 		}
 	}
@@ -440,7 +452,7 @@ func (r *InstasliceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *InstasliceReconciler) unGatePod(podUpdate *v1.Pod) *v1.Pod {
 	for i, gate := range podUpdate.Spec.SchedulingGates {
-		if gate.Name == "org.instaslice/accelarator" {
+		if gate.Name == finalizerOrGateName {
 			podUpdate.Spec.SchedulingGates = append(podUpdate.Spec.SchedulingGates[:i], podUpdate.Spec.SchedulingGates[i+1:]...)
 		}
 	}
