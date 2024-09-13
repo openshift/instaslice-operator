@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -56,12 +55,6 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 		return admission.Allowed("No nvidia.com/mig-* resource found, skipping mutation.")
 	} else {
 		performQuotaArithmetic(pod, req)
-	}
-
-	// Add finalizer
-	finalizerName := "org.instaslice/accelarator"
-	if !slices.Contains(pod.Finalizers, finalizerName) {
-		pod.Finalizers = append(pod.Finalizers, finalizerName)
 	}
 
 	// Add scheduling
