@@ -30,12 +30,13 @@ kubectl apply -f test/e2e/resources/instaslice-fake-capacity.yaml
 kubectl patch node kind-control-plane --subresource=status --type=json -p='[{"op":"add","path":"/status/capacity/nvidia.com~1accelerator-memory","value":"80Gi"}]'
 ```
 
-Deploy Kueue:
+Deploy Kueue v0.8.1:
 ```sh
-kubectl apply --server-side -f docs/kueue/manifests.yaml
+kubectl apply --server-side -f https://github.com/kubernetes-sigs/kueue/releases/download/v0.8.1/manifests.yaml
+kubectl patch cm -n kueue-system kueue-manager-config --patch-file docs/kueue/kueue-manager-config.yaml
+kubectl rollout restart -n kueue-system deployment kueue-controller-manager
 ```
-The provided [manifests.yaml](../docs/kueue/manifests.yaml) deploys Kueue
-[v0.8.1](https://github.com/kubernetes-sigs/kueue/releases/tag/v0.8.1). It
+The provided [kueue-manager-config.yaml](../docs/kueue/kueue-manager-config.yaml)
 enables the optional, opt-in [pod
 integration](https://kueue.sigs.k8s.io/docs/tasks/run/plain_pods/) and adds
 `org.instaslice/` and `nvidia.com/accelerator-memory` to Kueue's
