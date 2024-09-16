@@ -730,7 +730,7 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 			extendedResCapacityQuantity := resource.NewQuantity(int64(countCapacity), resource.DecimalSI)
 			existingCapacity, capacityExists := node.Status.Capacity[v1.ResourceName(resourceName)]
 			if capacityExists {
-				if extendedResCapacityQuantity.Cmp(existingCapacity) == 1 {
+				if existingCapacity.Cmp(*extendedResCapacityQuantity) == -1 {
 					log.FromContext(ctx).Info("Adding resource ", "name", resourceName, "pod", allocation.PodName)
 					existingCapacity.Add(*resourceQuantity)
 					log.FromContext(ctx).Info("simulator added capacity is ", "num", existingCapacity)
