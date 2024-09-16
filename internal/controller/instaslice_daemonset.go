@@ -721,10 +721,11 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 			countCapacity := 0
 			for resourceName := range node.Status.Capacity {
 				if strings.HasPrefix(string(resourceName), OrgInstaslicePrefix) {
+					//resourceIdentifierInCapacity := strings.TrimPrefix(string(resourceName), OrgInstaslicePrefix)
 					countCapacity++
 				}
 			}
-			log.FromContext(ctx).Info("capacity", "count", countCapacity)
+			log.FromContext(ctx).Info("capacity while creating", "count", countCapacity)
 			resourceQuantity := resource.NewQuantity(1, resource.DecimalSI)
 			extendedResCapacityQuantity := resource.NewQuantity(int64(countCapacity), resource.DecimalSI)
 			existingCapacity, capacityExists := node.Status.Capacity[v1.ResourceName(resourceName)]
@@ -739,23 +740,41 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 				log.FromContext(ctx).Info("simulator created capacity is ", "num", resourceQuantity)
 				node.Status.Capacity[v1.ResourceName(resourceName)] = *resourceQuantity
 			}
-
 		}
 
 		if allocationStatus == "deleting" {
 			// assume only one quantity can be requested for a profile
 			resourceName := "nvidia.com/mig-" + allocation.Profile
+			// Count InstaSlice extended resources in Capacity
+			countCapacity := 0
+			for resourceName := range node.Status.Capacity {
+				if strings.HasPrefix(string(resourceName), OrgInstaslicePrefix) {
+					countCapacity++
+				}
+			}
+			log.FromContext(ctx).Info("capacity while deleting", "count", countCapacity)
 			resourceQuantity := resource.NewQuantity(1, resource.DecimalSI)
+			extendedResCapacityQuantity := resource.NewQuantity(int64(countCapacity), resource.DecimalSI)
 			existingCapacity, capacityExists := node.Status.Capacity[v1.ResourceName(resourceName)]
 
 			if capacityExists {
 				log.FromContext(ctx).Info("subtraction resource ", "name", resourceName, "pod", allocation.PodName)
-				existingCapacity.Sub(*resourceQuantity)
-				if existingCapacity.Sign() != -1 {
-					log.FromContext(ctx).Info("simulator reduced capacity is ", "num", existingCapacity)
-					node.Status.Capacity[v1.ResourceName(resourceName)] = existingCapacity
+				if extendedResCapacityQuantity.Value() == 0 {
+					zeroQuantity := resource.NewQuantity(0, resource.DecimalSI)
+					existingCapacity.Set(zeroQuantity.Value())
+					if existingCapacity.Sign() != -1 {
+						log.FromContext(ctx).Info("simulator reduced capacity is ", "num", existingCapacity)
+						node.Status.Capacity[v1.ResourceName(resourceName)] = existingCapacity
+					}
 				}
 
+				if existingCapacity.Cmp(*extendedResCapacityQuantity) == 1 || existingCapacity.Cmp(*extendedResCapacityQuantity) == 0 {
+					existingCapacity.Sub(*resourceQuantity)
+					if existingCapacity.Sign() != -1 {
+						log.FromContext(ctx).Info("simulator reduced capacity is ", "num", existingCapacity)
+						node.Status.Capacity[v1.ResourceName(resourceName)] = existingCapacity
+					}
+				}
 			}
 
 			log.FromContext(ctx).Info("done updating the capacity for ", "allocation", allocationStatus)

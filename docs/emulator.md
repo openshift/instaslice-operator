@@ -33,6 +33,8 @@ kubectl describe instaslice
 kubectl patch node kind-control-plane --subresource=status --type=json -p='[{"op":"add","path":"/status/capacity/nvidia.com~1accelerator-memory","value":"80Gi"}]'
 ```
 
+- Make sure no dangling org.instaslice/* extended resources exists on the cluster before you submit a pod
+
 - Submit emulator pod using command
 
 ```console
