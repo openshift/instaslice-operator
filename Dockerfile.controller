@@ -1,6 +1,6 @@
 ARG CUDA_VERSION=12.4.1
 ARG BASE_DIST=ubi8
-FROM nvidia/cuda:${CUDA_VERSION}-base-${BASE_DIST} AS build
+FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-base-${BASE_DIST} AS build
 
 ARG GOLANG_VERSION=1.22.2
 RUN yum install -y wget make git gcc
@@ -44,7 +44,7 @@ RUN go build -o bin/manager cmd/controller/main.go
 
 ARG CUDA_VERSION=12.4.1
 ARG BASE_DIST=ubi8
-FROM nvidia/cuda:${CUDA_VERSION}-base-${BASE_DIST}
+FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-base-${BASE_DIST}
 
 # Remove CUDA libs(compat etc) in favor of libs installed by the NVIDIA driver
 RUN dnf remove -y cuda-*
