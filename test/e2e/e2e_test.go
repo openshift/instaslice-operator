@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -73,15 +75,26 @@ var _ = Describe("controller", Ordered, func() {
 		It("should run successfully", func() {
 			var err error
 
-			var projectimage = "quay.io/amalvank/instaslicev2-controller:latest"
+			var controllerIMG = "quay.io/amalvank/instaslicev2-controller:latest"
 
-			By("building the manager(Operator) image")
-			cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectimage))
+			var daemonsetIMG = "quay.io/amalvank/instaslicev2-daemonset:latest"
+
+			By("building the Operator images")
+			cmd := exec.Command(
+				"make",
+				"docker-build",
+				fmt.Sprintf("IMG=%s", controllerIMG),
+				fmt.Sprintf("IMG_DMST=%s", daemonsetIMG),
+			)
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("loading the manager(Operator) image on Kind")
-			err = utils.LoadImageToKindClusterWithName(projectimage)
+			err = utils.LoadImageToKindClusterWithName(controllerIMG)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			By("loading the daemonSet(Operator) image on Kind")
+			err = utils.LoadImageToKindClusterWithName(daemonsetIMG)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("installing CRDs")
@@ -89,8 +102,13 @@ var _ = Describe("controller", Ordered, func() {
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-			By("deploying the controller-manager")
-			cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectimage))
+			By("deploying the controller-manager & controller-daemonset")
+			cmd = exec.Command(
+				"make",
+				"deploy-emulated",
+				fmt.Sprintf("IMG=%s", controllerIMG),
+				fmt.Sprintf("IMG_DMST=%s", daemonsetIMG),
+			)
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
@@ -104,6 +122,10 @@ var _ = Describe("controller", Ordered, func() {
 				EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("service", "app.kubernetes.io/component=webhook", namespace).Should(BeTrue())
 			*/
 			// Until then, adding a sleep of 1 Minute should mitigate the intermittent failures running the e2e tests.
+
+			By("validating that the controller-daemonset pod is running as expected")
+			EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("pod", "app=controller-daemonset", namespace).Should(BeTrue())
+
 			time.Sleep(time.Minute)
 		})
 
@@ -397,6 +419,91 @@ var _ = Describe("controller", Ordered, func() {
 				Fail("No Instaslice objects found")
 			}
 		})
+
+		It("should verify that the Kubernetes node has nvidia.com/accelerator-memory resource and matches total GPU memory", func() {
+			// Step 1: Get the total GPU memory from the Instaslice object
+			By("Getting the Instaslice object")
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
+			output, err := cmd.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
+
+			// Parse the JSON output of Instaslice object
+			var instasliceResult struct {
+				Items []map[string]interface{} `json:"items"`
+			}
+			err = json.Unmarshal(output, &instasliceResult)
+			Expect(err).NotTo(HaveOccurred(), "Failed to parse Instaslice JSON output")
+
+			// Check if there are any Instaslice objects
+			Expect(len(instasliceResult.Items)).To(BeNumerically(">", 0), "No Instaslice objects found")
+
+			instaslice := instasliceResult.Items[0]
+			spec, found := instaslice["spec"].(map[string]interface{})
+			Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
+
+			migGPUs, found := spec["MigGPUUUID"].(map[string]interface{})
+			Expect(found).To(BeTrue(), "MigGPUUUID not found in Instaslice object")
+
+			// Calculate the total GPU memory
+			totalMemoryGB := 0
+			re := regexp.MustCompile(`(\d+)(GB)`)
+			for _, gpuInfo := range migGPUs {
+				gpuInfoStr, ok := gpuInfo.(string)
+				if !ok {
+					continue
+				}
+				matches := re.FindStringSubmatch(gpuInfoStr)
+				if len(matches) == 3 {
+					memoryGB, err := strconv.Atoi(matches[1])
+					if err != nil {
+						Fail("unable to parse GPU memory value: " + err.Error())
+					}
+					totalMemoryGB += memoryGB
+				}
+			}
+
+			// Step 2: Get the patched resource from the node
+			By("Verifying that node has custom resource nvidia.com/accelerator-memory")
+			cmd = exec.Command("kubectl", "get", "node", "-o", "json")
+			output, err = cmd.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), "Failed to get node details: "+string(output))
+
+			// Parse the JSON output of nodes
+			var nodeResult struct {
+				Items []map[string]interface{} `json:"items"`
+			}
+			err = json.Unmarshal(output, &nodeResult)
+			Expect(err).NotTo(HaveOccurred(), "Failed to parse node JSON output")
+
+			// Check if there are any nodes
+			Expect(len(nodeResult.Items)).To(BeNumerically(">", 0), "No nodes found")
+
+			node := nodeResult.Items[0]
+			status, found := node["status"].(map[string]interface{})
+			Expect(found).To(BeTrue(), "Status not found in Node object")
+
+			capacity, found := status["capacity"].(map[string]interface{})
+			Expect(found).To(BeTrue(), "Capacity resources not found in Node object")
+
+			acceleratorMemory, found := capacity["nvidia.com/accelerator-memory"].(string)
+			Expect(found).To(BeTrue(), "nvidia.com/accelerator-memory not found in Node object")
+
+			// Extract the memory size from the acceleratorMemory
+			reMemory := regexp.MustCompile(`(\d+)Gi`)
+			matches := reMemory.FindStringSubmatch(acceleratorMemory)
+			var nodeMemoryGB int
+			if len(matches) == 2 {
+				nodeMemoryGB, err = strconv.Atoi(matches[1])
+				Expect(err).NotTo(HaveOccurred(), "Failed to extract memory")
+			} else {
+				Expect(matches).To(HaveLen(2), "Failed to match memory size")
+			}
+
+			// Step 3: Verify the node's accelerator memory matches the total GPU memory in Instaslice
+			By("Verifying that node's accelerator memory matches Instaslice total GPU memory")
+			Expect(nodeMemoryGB).To(BeNumerically("==", totalMemoryGB), "nvidia.com/accelerator-memory on node does not match total GPU memory in Instaslice object")
+		})
+
 	})
 })
 
