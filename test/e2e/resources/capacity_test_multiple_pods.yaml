@@ -10,7 +10,7 @@ spec:
   containers:
   - name: vectoradd
     image: "quay.io/tardieu/vectoradd:0.1.0"
-    command: ["sh", "-c", "sleep 120"]
+    command: ["sh", "-c", "sleep 20"]
     resources:
       limits:
         nvidia.com/mig-1g.5gb: 1
@@ -27,7 +27,7 @@ spec:
   containers:
   - name: vectoradd
     image: "quay.io/tardieu/vectoradd:0.1.0"
-    command: ["sh", "-c", "sleep 120"]
+    command: ["sh", "-c", "sleep 20"]
     resources:
       limits:
         nvidia.com/mig-1g.5gb: 1
@@ -44,7 +44,7 @@ spec:
   containers:
   - name: vectoradd
     image: "quay.io/tardieu/vectoradd:0.1.0"
-    command: ["sh", "-c", "sleep 120"]
+    command: ["sh", "-c", "sleep 20"]
     resources:
       limits:
         nvidia.com/mig-1g.5gb: 1
@@ -61,7 +61,7 @@ spec:
   containers:
   - name: vectoradd
     image: "quay.io/tardieu/vectoradd:0.1.0"
-    command: ["sh", "-c", "sleep 120"]
+    command: ["sh", "-c", "sleep 20"]
     resources:
       limits:
         nvidia.com/mig-1g.5gb: 1
@@ -78,7 +78,7 @@ spec:
   containers:
   - name: vectoradd
     image: "quay.io/tardieu/vectoradd:0.1.0"
-    command: ["sh", "-c", "sleep 120"]
+    command: ["sh", "-c", "sleep 20"]
     resources:
       limits:
         nvidia.com/mig-1g.5gb: 1
@@ -95,7 +95,7 @@ spec:
   containers:
   - name: vectoradd
     image: "quay.io/tardieu/vectoradd:0.1.0"
-    command: ["sh", "-c", "sleep 120"]
+    command: ["sh", "-c", "sleep 20"]
     resources:
       limits:
         nvidia.com/mig-1g.5gb: 1
@@ -112,7 +112,7 @@ spec:
   containers:
   - name: vectoradd
     image: "quay.io/tardieu/vectoradd:0.1.0"
-    command: ["sh", "-c", "sleep 120"]
+    command: ["sh", "-c", "sleep 20"]
     resources:
       limits:
         nvidia.com/mig-1g.5gb: 1

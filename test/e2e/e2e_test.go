@@ -61,12 +61,12 @@ var _ = Describe("controller", Ordered, func() {
 		EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("pod", "app=webhook", "cert-manager").Should(BeTrue())
 	})
 
-	// AfterAll(func() {
-	// 	fmt.Println("Deleting the cluster")
-	// 	cmd := exec.Command("kind", "delete", "cluster")
-	// 	output, err := cmd.CombinedOutput()
-	// 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create Kind cluster: %s", output))
-	// })
+	AfterAll(func() {
+		fmt.Println("Deleting the cluster")
+		cmd := exec.Command("kind", "delete", "cluster")
+		output, err := cmd.CombinedOutput()
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create Kind cluster: %s", output))
+	})
 
 	Context("Operator", func() {
 		It("should run successfully", func() {
@@ -109,6 +109,13 @@ var _ = Describe("controller", Ordered, func() {
 			cmdCm := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/instaslice-fake-capacity.yaml")
 			outputCm, err := cmdCm.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add fake capacity to the cluster: %s", outputCm))
+
+			By("installing accelarator resource in the cluster")
+			patch := `[{"op":"add","path":"/status/capacity/nvidia.com~1accelerator-memory","value":"80Gi"}]`
+			nodeName := "kind-control-plane"
+			cmdPatch := exec.Command("kubectl", "patch", "node", nodeName, "--subresource=status", "--type=json", "-p", patch)
+			outputPatchRes, err := cmdPatch.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add fake capacity to the cluster: %s", outputPatchRes))
 		})
 
 		It("should apply the YAML and check if that instaslice resource exists", func() {
@@ -123,11 +130,11 @@ var _ = Describe("controller", Ordered, func() {
 		})
 
 		It("should apply the pod YAML with no requests and check if finalizer exists", func() {
-			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-pod-no-requests.yaml")
+			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-finalizer.yaml")
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmdGetPod := exec.Command("kubectl", "get", "pod", "vectoradd-no-req", "-o", "json")
+			cmdGetPod := exec.Command("kubectl", "get", "pod", "vectoradd-finalizer", "-o", "json")
 			outputGetPod, err := cmdGetPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to get pod: %s", outputGetPod))
 
@@ -165,9 +172,10 @@ var _ = Describe("controller", Ordered, func() {
 				Expect(found).To(BeTrue(), "Spec.Allocations not found in Instaslice object")
 				for _, data := range allocations {
 					if allocation, ok := data.(map[string]interface{}); ok {
-						if status, ok := allocation["allocationStatus"].(string); ok {
+						if _, ok := allocation["allocationStatus"].(string); ok {
 							Expect(ok).To(BeTrue(), "allocationStatus not found in Instaslice object")
-							Expect(status).To(Equal("creating"), "Spec.Allocations not found in Instaslice object")
+							_, notCreated := findPodName(allocations, "vectoradd-no-req")
+							Expect(notCreated).To(BeFalse(), "Spec.Allocations found in Instaslice object")
 						}
 					}
 				}
@@ -202,9 +210,10 @@ var _ = Describe("controller", Ordered, func() {
 				Expect(found).To(BeTrue(), "Spec.Allocations not found in Instaslice object")
 				for _, data := range allocations {
 					if allocation, ok := data.(map[string]interface{}); ok {
-						if status, ok := allocation["allocationStatus"].(string); ok {
+						if _, ok := allocation["allocationStatus"].(string); ok {
 							Expect(ok).To(BeTrue(), "allocationStatus not found in Instaslice object")
-							Expect(status).To(Equal("creating"), "Spec.Allocations not found in Instaslice object")
+							_, notCreated := findPodName(allocations, "vectoradd-small-req")
+							Expect(notCreated).To(BeFalse(), "Spec.Allocations found in Instaslice object")
 						}
 					}
 				}
@@ -411,10 +420,10 @@ var _ = Describe("controller", Ordered, func() {
 		ctx := context.TODO()
 		namespace := "default"
 		nodeName := "kind-control-plane"
-		// Helper function to patch the node and set nvidia.com/mig-1g.5gb to zero
+
 		resetMIGResource := func() error {
 			patch := `{"status": {"capacity": {"nvidia.com/mig-1g.5gb": "0"}}}`
-			cmd := exec.CommandContext(ctx, "kubectl", "patch", "node", nodeName, "--type=merge", "-p", patch)
+			cmd := exec.CommandContext(ctx, "kubectl", "patch", "node", nodeName, "--subresource=status", "--type=merge", "-p", patch)
 			output, err := cmd.CombinedOutput()
 			if err != nil {
 				fmt.Printf("Failed to reset nvidia.com/mig-1g.5gb: %v\n", err)
@@ -424,9 +433,8 @@ var _ = Describe("controller", Ordered, func() {
 			return nil
 		}
 
-		// Helper function to delete extended resources starting with org.instaslice/*
 		deleteInstasliceResources := func() error {
-			cmd := exec.CommandContext(ctx, "kubectl", "get", "node", nodeName, "-o", "json")
+			cmd := exec.CommandContext(ctx, "kubectl", "get", "node", nodeName, "--subresource=status", "-o", "json")
 			output, err := cmd.CombinedOutput()
 			if err != nil {
 				fmt.Printf("Failed to get node info: %v\n", err)
@@ -444,14 +452,12 @@ var _ = Describe("controller", Ordered, func() {
 				return err
 			}
 
-			// Create a patch to remove org.instaslice/* resources
 			patchData := map[string]interface{}{
 				"status": map[string]interface{}{
 					"capacity": map[string]interface{}{},
 				},
 			}
 
-			// Identify all resources with org.instaslice/* and add them to the patch
 			for resource := range nodeResult.Status.Capacity {
 				if strings.HasPrefix(resource, "org.instaslice/") {
 					patchData["status"].(map[string]interface{})["capacity"].(map[string]interface{})[resource] = nil
@@ -464,8 +470,7 @@ var _ = Describe("controller", Ordered, func() {
 				return err
 			}
 
-			// Apply the patch to delete the org.instaslice/* resources
-			cmdPatch := exec.CommandContext(ctx, "kubectl", "patch", "node", nodeName, "--type=merge", "-p", string(patchBytes))
+			cmdPatch := exec.CommandContext(ctx, "kubectl", "patch", "node", nodeName, "--subresource=status", "--type=merge", "-p", string(patchBytes))
 			outputPatch, err := cmdPatch.CombinedOutput()
 			if err != nil {
 				fmt.Printf("Failed to delete org.instaslice resources: %v\n", err)
@@ -476,21 +481,18 @@ var _ = Describe("controller", Ordered, func() {
 			return nil
 		}
 
-		// Reset the MIG resource to zero
 		err := resetMIGResource()
 		Expect(err).NotTo(HaveOccurred(), "Failed to reset nvidia.com/mig-1g.5gb to zero")
 
-		// Delete the org.instaslice/* resources
 		err = deleteInstasliceResources()
 		Expect(err).NotTo(HaveOccurred(), "Failed to delete org.instaslice/* resources")
 
-		// Helper function to check the nvidia.com/mig-1g.5gb value on the node
 		checkMIG := func(expectedMIG string) bool {
 			cmd := exec.CommandContext(ctx, "kubectl", "get", "node", "kind-control-plane", "-o", "json")
 			output, err := cmd.CombinedOutput()
 			if err != nil {
 				fmt.Printf("Failed to execute kubectl: %v\n", err)
-				fmt.Printf("kubectl output: %s\n", string(output)) // Print the full output for debugging
+				fmt.Printf("kubectl output: %s\n", string(output))
 				return false
 			}
 
@@ -509,68 +511,88 @@ var _ = Describe("controller", Ordered, func() {
 			return found && migCapacity == expectedMIG
 		}
 
-		// Check that nvidia.com/mig-1g.5gb is zero before submitting pods
 		Expect(checkMIG("0")).To(BeTrue(), "nvidia.com/mig-1g.5gb is not zero before submitting pods")
 
-		// Apply the job YAML
-		cmdApply := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/emulator-capacity-sample.yaml")
+		cmdApply := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/capacity_test_multiple_pods.yaml")
 		outputApply, err := cmdApply.CombinedOutput()
 		if err != nil {
-			fmt.Printf("kubectl apply error: %s\n", string(outputApply)) // Print apply error output for debugging
+			fmt.Printf("kubectl apply error: %s\n", string(outputApply))
 		}
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputApply))
 
-		// Wait until all pods in the namespace are either Running or Completed
 		Eventually(func() bool {
 			cmd := exec.CommandContext(ctx, "kubectl", "get", "pods", "-n", namespace, "--no-headers")
 			output, err := cmd.CombinedOutput()
 			if err != nil {
 				fmt.Printf("Failed to execute kubectl: %v\n", err)
-				fmt.Printf("kubectl output: %s\n", string(output)) // Print the full output for debugging
+				fmt.Printf("kubectl output: %s\n", string(output))
 				return false
 			}
 
 			outputStr := strings.TrimSpace(string(output))
 			podLines := strings.Split(outputStr, "\n")
 
-			// Check if all pods are either Running or Completed
 			for _, podLine := range podLines {
-				if strings.Contains(podLine, "Running") || strings.Contains(podLine, "Completed") {
+				if strings.Contains(podLine, "Running") {
 					continue
 				}
 				return false
 			}
 
 			return true
-		}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Not all pods are Running or Completed")
+		}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Not all pods are Running")
 
-		// Check that nvidia.com/mig-1g.5gb is in sync with running pods
-		runningPodsCount := 1 // Adjust based on your expected running pod count
+		runningPodsCount := 7
 		Expect(checkMIG(fmt.Sprintf("%d", runningPodsCount))).To(BeTrue(), "nvidia.com/mig-1g.5gb is not in sync with the number of running pods")
 
-		// Wait for all pods to complete and check nvidia.com/mig-1g.5gb is set to zero
 		Eventually(func() bool {
 			cmd := exec.CommandContext(ctx, "kubectl", "get", "pods", "-n", namespace, "--no-headers")
 			output, err := cmd.CombinedOutput()
 			if err != nil {
 				fmt.Printf("Failed to execute kubectl: %v\n", err)
-				fmt.Printf("kubectl output: %s\n", string(output)) // Print the full output for debugging
+				fmt.Printf("kubectl output: %s\n", string(output))
 				return false
 			}
 
 			outputStr := strings.TrimSpace(string(output))
 			podLines := strings.Split(outputStr, "\n")
 
-			// Check if all pods have Completed status
 			for _, podLine := range podLines {
 				if !strings.Contains(podLine, "Completed") {
 					return false
 				}
 			}
 
-			// Check that nvidia.com/mig-1g.5gb is now zero
 			return checkMIG("0")
-		}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "nvidia.com/mig-1g.5gb was not set to zero after all pods completed")
+		}, 4*time.Minute, 5*time.Second).Should(BeTrue(), "nvidia.com/mig-1g.5gb was not set to zero after all pods completed")
+	})
+
+	AfterEach(func() {
+		time.Sleep(5 * time.Second)
+		namespace = "default"
+		cmdDeleteJob := exec.Command("kubectl", "delete", "job", "--all", "-n", namespace)
+		outputDeleteJob, err := cmdDeleteJob.CombinedOutput()
+		if err != nil {
+			fmt.Printf("Failed to delete job: %s\n", string(outputDeleteJob))
+		}
+
+		cmdDeleteDeployments := exec.Command("kubectl", "delete", "deployments", "--all", "-n", namespace)
+		outputDeleteDeployments, err := cmdDeleteDeployments.CombinedOutput()
+		if err != nil {
+			fmt.Printf("Failed to delete pods: %s\n", string(outputDeleteDeployments))
+		}
+
+		cmdDeleteStatefulsets := exec.Command("kubectl", "delete", "statefulsets", "--all", "-n", namespace)
+		outputDeleteStatefulsets, err := cmdDeleteStatefulsets.CombinedOutput()
+		if err != nil {
+			fmt.Printf("Failed to delete pods: %s\n", string(outputDeleteStatefulsets))
+		}
+
+		cmdDeletePods := exec.Command("kubectl", "delete", "pod", "--all", "-n", namespace)
+		outputDeletePods, err := cmdDeletePods.CombinedOutput()
+		if err != nil {
+			fmt.Printf("Failed to delete pods: %s\n", string(outputDeletePods))
+		}
 	})
 })
 
@@ -603,7 +625,7 @@ func isResourceReady(resource, label, namespace string) bool {
 			"-n", namespace, "--timeout=2m",
 		)
 	default:
-		fmt.Errorf("unsupported resource : %s\n", resource)
+		//fmt.Errorf("unsupported resource : %s\n", resource)
 		return false
 	}
 	output, err := cmd.CombinedOutput()
