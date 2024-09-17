@@ -114,6 +114,20 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.FromContext(ctx).Error(err, "Error listing Instaslice")
 	}
 
+	// failed pods are not deleted by InstaSlice, finalizer is removed so that user can
+	// delete the pod and later InstaSlice will clean up the MIG slice.
+	if pod.Status.Phase == v1.PodFailed && controllerutil.ContainsFinalizer(pod, finalizerOrGateName) {
+
+		errRemovingFinalizer := controllerutil.RemoveFinalizer(pod, finalizerOrGateName)
+		if !errRemovingFinalizer {
+			log.FromContext(ctx).Info("finalizer not deleted for ", "pod", pod.Name)
+		}
+		if err := r.Update(ctx, pod); err != nil {
+			log.FromContext(ctx).Info("unable to update removal of finalizer, retrying")
+			return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
+		}
+	}
+
 	// pod is completed move allocation to deleting state and return
 	if pod.Status.Phase == v1.PodSucceeded && controllerutil.ContainsFinalizer(pod, finalizerOrGateName) {
 		for _, instaslice := range instasliceList.Items {
