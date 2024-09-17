@@ -699,6 +699,14 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 		return err
 	}
 	originalNode := node.DeepCopy()
+	// In a real cluster this will never be nil
+	// it was added to pass the unit test.
+	if node.Status.Capacity == nil {
+		node.Status.Capacity = v1.ResourceList{}
+	}
+	if node.Status.Allocatable == nil {
+		node.Status.Allocatable = v1.ResourceList{}
+	}
 	// NOTE: Label value should be maunally added when the cluster is setup.
 	if value, exists := node.Labels["nvidia.com/device-plugin.config"]; exists {
 		if value == "update-capacity-1" {
