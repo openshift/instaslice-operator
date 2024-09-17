@@ -700,12 +700,12 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 	}
 	originalNode := node.DeepCopy()
 	// NOTE: Label value should be maunally added when the cluster is setup.
-	if value, exists := node.Labels["nvidia.com/device-plugin.config"]; exists && value == "update-capacity-1" {
-		node.Labels["nvidia.com/device-plugin.config"] = "update-capacity"
-	}
-
-	if value, exists := node.Labels["nvidia.com/device-plugin.config"]; exists && value == "update-capacity" {
-		node.Labels["nvidia.com/device-plugin.config"] = "update-capacity-1"
+	if value, exists := node.Labels["nvidia.com/device-plugin.config"]; exists {
+		if value == "update-capacity-1" {
+			node.Labels["nvidia.com/device-plugin.config"] = "update-capacity"
+		} else if value == "update-capacity" {
+			node.Labels["nvidia.com/device-plugin.config"] = "update-capacity-1"
+		}
 	}
 
 	if emulatorMode == "true" {
