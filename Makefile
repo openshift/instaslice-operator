@@ -141,6 +141,11 @@ test: manifests generate fmt vet envtest ## Run tests.
 test-e2e:
 	go test ./test/e2e/ -v -ginkgo.v
 
+# Utilize Kind and run a simple e2e with emulator mode
+.PHONY: test-e2e-emulator
+test-e2e-emulator:
+	go test ./test/e2e_emulator/ -v -ginkgo.v
+
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.54.2
 golangci-lint:
