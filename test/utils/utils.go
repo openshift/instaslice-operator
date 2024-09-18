@@ -34,8 +34,9 @@ const (
 	certmanagerURLTmpl = "https://github.com/jetstack/cert-manager/releases/download/%s/cert-manager.yaml"
 )
 
-func warnError(err error) {
-	fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
+func warnError(err error) error {
+	_, fprintFerr := fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
+	return fprintFerr
 }
 
 // InstallPrometheusOperator installs the prometheus Operator to be used to export the enabled metrics.
@@ -52,12 +53,18 @@ func Run(cmd *exec.Cmd) ([]byte, error) {
 	cmd.Dir = dir
 
 	if err := os.Chdir(cmd.Dir); err != nil {
-		fmt.Fprintf(GinkgoWriter, "chdir dir: %s\n", err)
+		_, fprintFErr := fmt.Fprintf(GinkgoWriter, "chdir dir: %s\n", err)
+		if fprintFErr != nil {
+			return nil, fprintFErr
+		}
 	}
 
 	cmd.Env = append(os.Environ(), "GO111MODULE=on")
 	command := strings.Join(cmd.Args, " ")
-	fmt.Fprintf(GinkgoWriter, "running: %s\n", command)
+	_, runningWriteErr := fmt.Fprintf(GinkgoWriter, "running: %s\n", command)
+	if runningWriteErr != nil {
+		return nil, runningWriteErr
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return output, fmt.Errorf("%s failed with error: (%v) %s", command, err, string(output))
@@ -67,21 +74,23 @@ func Run(cmd *exec.Cmd) ([]byte, error) {
 }
 
 // UninstallPrometheusOperator uninstalls the prometheus
-func UninstallPrometheusOperator() {
+func UninstallPrometheusOperator() error {
 	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
 	cmd := exec.Command("kubectl", "delete", "-f", url)
 	if _, err := Run(cmd); err != nil {
-		warnError(err)
+		return warnError(err)
 	}
+	return nil
 }
 
 // UninstallCertManager uninstalls the cert manager
-func UninstallCertManager() {
+func UninstallCertManager() error {
 	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
 	cmd := exec.Command("kubectl", "delete", "-f", url)
 	if _, err := Run(cmd); err != nil {
-		warnError(err)
+		return warnError(err)
 	}
+	return nil
 }
 
 // InstallCertManager installs the cert manager bundle.

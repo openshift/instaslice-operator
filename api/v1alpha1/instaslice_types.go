@@ -32,21 +32,31 @@ type Placement struct {
 	Size  int `json:"size"`
 	Start int `json:"start"`
 }
+type AllocationStatus string
+
+const (
+	AllocationStatusDeleted  AllocationStatus = "deleted"
+	AllocationStatusDeleting AllocationStatus = "deleting"
+	AllocationStatusUngated  AllocationStatus = "ungated"
+	AllocationStatusCreating AllocationStatus = "creating"
+	AllocationStatusCreated  AllocationStatus = "created"
+)
 
 // Define the struct for allocation details
 type AllocationDetails struct {
-	Profile            string `json:"profile"`
-	Start              uint32 `json:"start"`
-	Size               uint32 `json:"size"`
-	PodUUID            string `json:"podUUID"`
-	GPUUUID            string `json:"gpuUUID"`
-	Nodename           string `json:"nodename"`
-	Allocationstatus   string `json:"allocationStatus"`
-	Resourceidentifier string `json:"resourceIdentifier"`
-	Namespace          string `json:"namespace"`
-	PodName            string `json:"podName"`
-	Cpu                int64  `json:"cpu"`
-	Memory             int64  `json:"memory"`
+	Profile  string `json:"profile"`
+	Start    uint32 `json:"start"`
+	Size     uint32 `json:"size"`
+	PodUUID  string `json:"podUUID"`
+	GPUUUID  string `json:"gpuUUID"`
+	Nodename string `json:"nodename"`
+	// +kubebuilder:validation:Enum:=deleted;deleting;ungated;creating;created
+	Allocationstatus   AllocationStatus `json:"allocationStatus"`
+	Resourceidentifier string           `json:"resourceIdentifier"`
+	Namespace          string           `json:"namespace"`
+	PodName            string           `json:"podName"`
+	Cpu                int64            `json:"cpu"`
+	Memory             int64            `json:"memory"`
 }
 
 // Define the struct for allocation details
@@ -73,7 +83,7 @@ type InstasliceSpec struct {
 
 // InstasliceStatus defines the observed state of Instaslice
 type InstasliceStatus struct {
-	Processed string `json:"processed,omitempty"`
+	Processed bool `json:"processed,omitempty"`
 }
 
 //+kubebuilder:object:root=true
