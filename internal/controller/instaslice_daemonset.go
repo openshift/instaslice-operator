@@ -141,7 +141,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			}
 
 			nodeName := os.Getenv("NODE_NAME")
-			if errUpdatingNodeCapacity := r.updateNodeCapacity(ctx, nodeName, allocations, emulatorMode, allocations.Allocationstatus); errUpdatingNodeCapacity != nil {
+			if errUpdatingNodeCapacity := r.updateNodeCapacity(ctx, nodeName, allocations, emulatorMode); errUpdatingNodeCapacity != nil {
 				return ctrl.Result{Requeue: true}, nil
 			}
 			var deletePrepared string
@@ -365,7 +365,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 				}
 				nodeName := os.Getenv("NODE_NAME")
-				if errUpdatingNodeCapacity := r.updateNodeCapacity(ctx, nodeName, allocations, emulatorMode, allocations.Allocationstatus); errUpdatingNodeCapacity != nil {
+				if errUpdatingNodeCapacity := r.updateNodeCapacity(ctx, nodeName, allocations, emulatorMode); errUpdatingNodeCapacity != nil {
 					return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 				}
 				var updateInstasliceObject inferencev1alpha1.Instaslice
@@ -690,7 +690,7 @@ func (r *InstaSliceDaemonsetReconciler) createPreparedEntry(ctx context.Context,
 // there is a possibility of double update, should that happen while we retry?
 // sometimes the device plugin pod needs to be manually bounced before a burst of short lived
 // pods are submitted for testing, this check could be part of installation.
-func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, nodeName string, allocation inferencev1alpha1.AllocationDetails, emulatorMode string, allocationStatus string) error {
+func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, nodeName string, allocation inferencev1alpha1.AllocationDetails, emulatorMode string) error {
 	node := &v1.Node{}
 	nodeNameObject := types.NamespacedName{Name: nodeName}
 	err := r.Get(ctx, nodeNameObject, node)
@@ -714,7 +714,7 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 			log.FromContext(ctx).Error(err, "failed to marshal original node")
 			return err
 		}
-		if allocationStatus == "creating" {
+		if allocation.Allocationstatus == "creating" {
 			// assume only one quantity can be requested for a profile
 			resourceName := "nvidia.com/mig-" + allocation.Profile
 			// Count InstaSlice extended resources in Capacity
@@ -742,7 +742,7 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 			}
 		}
 
-		if allocationStatus == "deleting" {
+		if allocation.Allocationstatus == "deleting" {
 			// assume only one quantity can be requested for a profile
 			resourceName := "nvidia.com/mig-" + allocation.Profile
 			// Count InstaSlice extended resources in Capacity
@@ -777,7 +777,7 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 				}
 			}
 
-			log.FromContext(ctx).Info("done updating the capacity for ", "allocation", allocationStatus)
+			log.FromContext(ctx).Info("done updating the capacity for ", "allocation", allocation.Allocationstatus)
 		}
 
 		modifiedData, err := json.Marshal(node)
