@@ -17,11 +17,11 @@ kind: Pod
 metadata:
   name: $ORIGINAL_NAME
   finalizers:
-  - org.instaslice/accelarator
+  - org.instaslice/accelerator
 spec:
   restartPolicy: OnFailure
   schedulingGates:
-  - name: org.instaslice/accelarator
+  - name: org.instaslice/accelerator
   containers:
   - name: $ORIGINAL_NAME
     image: "quay.io/tardieu/vectoradd:0.1.0"
@@ -42,10 +42,10 @@ echo $start_time
 # Loop to generate new names and apply YAML
 for i in $(seq 1 $NUM_NEW_NAMES); do
   NEW_NAME="cuda-vectoradd-$((i+1))"
-  
+
   # Replace occurrences of the original name with the new name
   MODIFIED_YAML=$(echo "$YAML_CONTENT" | sed "s/$ORIGINAL_NAME/$NEW_NAME/g")
-  
+
   # Apply the modified YAML
   echo "$MODIFIED_YAML" | kubectl apply -f -
   #sleep 3

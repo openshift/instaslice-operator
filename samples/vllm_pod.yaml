@@ -5,10 +5,10 @@ metadata:
   labels:
     app: vllm
   finalizers:
-  - org.instaslice/accelarator
+  - org.instaslice/accelerator
 spec:
   schedulingGates:
-  - name: org.instaslice/accelarator
+  - name: org.instaslice/accelerator
   containers:
   - name: vllm
     image: quay.io/chenw615/vllm_dra:latest
@@ -31,7 +31,7 @@ spec:
       mountPath: /root/.cache/huggingface
     resources:
       limits:
-        nvidia.com/mig-3g.20gb: 1 
+        nvidia.com/mig-3g.20gb: 1
   volumes:
   - name: cache-volume
     persistentVolumeClaim:
