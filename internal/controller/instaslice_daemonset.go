@@ -102,6 +102,10 @@ type preparedMig struct {
 // TODO: remove once we figure out NVML calls that does CI and GI discovery
 var cachedPreparedMig = make(map[string]preparedMig)
 
+const (
+	OrgInstaslicePrefix = "org.instaslice/"
+)
+
 func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
 	nodeName := os.Getenv("NODE_NAME")
@@ -820,9 +824,8 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 		<-mgr.Elected() // Wait for the manager to be elected
 		var instaslice inferencev1alpha1.Instaslice
 		typeNamespacedName := types.NamespacedName{
-			Name: nodeName,
-			//TODO: change namespace
-			Namespace: "default",
+			Name:      nodeName,
+			Namespace: "default", //TODO: change namespace
 		}
 		errRetrievingInstaSliceForSetup := r.Get(ctx, typeNamespacedName, &instaslice)
 		if errRetrievingInstaSliceForSetup != nil {
@@ -839,6 +842,16 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 				}
 			}
 		}
+
+		// Patch the node capacity with GPU memory in emulator mode
+		if emulatorMode == emulatorModeTrue {
+			totalEmulatedGPUMemory := calculateTotalMemoryGB(instaslice.Spec.MigGPUUUID)
+			log.FromContext(context.TODO()).Info("MIG INFO: ", "MIG", instaslice.Spec.MigGPUUUID)
+			if err := r.patchNodeStatusForNode(ctx, nodeName, totalEmulatedGPUMemory); err != nil {
+				return err
+			}
+		}
+
 		return nil
 	}))
 	if mgrAddErr != nil {
@@ -856,17 +869,10 @@ func (r *InstaSliceDaemonsetReconciler) setupWithManager(mgr ctrl.Manager) error
 		Complete(r)
 }
 
-// This function discovers MIG devices as the plugin comes up. this is run exactly once.
-func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]string, error) {
-
-	instaslice, _, gpuModelMap, failed, errorDiscoveringProfiles := r.discoverAvailableProfilesOnGpus()
-	if failed {
-		return nil, errorDiscoveringProfiles
-	}
-
+func calculateTotalMemoryGB(gpuInfoList map[string]string) int {
 	totalMemoryGB := 0
 	re := regexp.MustCompile(`(\d+)(GB)`)
-	for _, gpuInfo := range gpuModelMap {
+	for _, gpuInfo := range gpuInfoList {
 		matches := re.FindStringSubmatch(gpuInfo)
 		if len(matches) == 3 {
 			memoryGB, err := strconv.Atoi(matches[1])
@@ -877,7 +883,18 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 			totalMemoryGB += memoryGB
 		}
 	}
+	return totalMemoryGB
+}
 
+// This function discovers MIG devices as the plugin comes up. this is run exactly once.
+func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]string, error) {
+
+	instaslice, _, gpuModelMap, failed, errorDiscoveringProfiles := r.discoverAvailableProfilesOnGpus()
+	if failed {
+		return nil, errorDiscoveringProfiles
+	}
+
+	totalMemoryGB := calculateTotalMemoryGB(gpuModelMap)
 	err := r.discoverDanglingSlices(instaslice)
 
 	if err != nil {
@@ -911,7 +928,51 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 		return nil, errForStatus
 	}
 
+	// Patch the node capacity to reflect the total GPU memory
+	if err := r.patchNodeStatusForNode(customCtx, nodeName, totalMemoryGB); err != nil {
+		return nil, err
+	}
+
 	return discoveredGpusOnHost, nil
+}
+
+// patchNodeStatusForNode fetches the node and patches its capacity with the given GPU memory
+func (r *InstaSliceDaemonsetReconciler) patchNodeStatusForNode(ctx context.Context, nodeName string, totalMemoryGB int) error {
+	// Fetch the node object
+	node, err := r.kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		log.FromContext(ctx).Error(err, "unable to fetch Node")
+		return err
+	}
+
+	// Patch the node capacity with total GPU memory
+	if err := r.patchNodeStatus(ctx, node, strconv.Itoa(totalMemoryGB)+"Gi"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// patch node with accelerator memory capacity
+func (r *InstaSliceDaemonsetReconciler) patchNodeStatus(ctx context.Context, node *v1.Node, memory string) error {
+	logger := log.FromContext(ctx)
+
+	// Create patch data for accelerator-memory
+	resourceIdentifier := "accelerator-memory"
+	patchData, err := createPatchData("nvidia.com/"+resourceIdentifier, memory)
+	if err != nil {
+		logger.Error(err, "unable to create correct json for patching node")
+		return err
+	}
+
+	// Apply the patch to the node capacity
+	if err := r.Status().Patch(ctx, node, client.RawPatch(types.JSONPatchType, patchData)); err != nil {
+		logger.Error(err, "unable to patch Node capacity with accelerator GPU memory custom resource")
+		return err
+	}
+
+	logger.Info("Successfully patched node capacity with accelerator GPU memory custom resource", "Node", node.Name)
+	return nil
 }
 
 func (r *InstaSliceDaemonsetReconciler) classicalResourcesAndGPUMemOnNode(ctx context.Context, nodeName string, totalGPUMemory string) (int64, int64, error) {
