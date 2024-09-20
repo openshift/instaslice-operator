@@ -126,24 +126,24 @@ func TestCleanUp(t *testing.T) {
 func TestUpdateNodeCapacity(t *testing.T) {
 	var _ = Describe("InstaSliceDaemonsetReconciler", func() {
 		var (
-			ctx              context.Context
-			reconciler       InstaSliceDaemonsetReconciler
-			fakeClient       client.Client
-			node             *v1.Node
-			profile          string
-			nodeName         string
-			emulatorMode     string
-			allocationStatus string
+			ctx          context.Context
+			reconciler   InstaSliceDaemonsetReconciler
+			fakeClient   client.Client
+			node         *v1.Node
+			nodeName     string
+			emulatorMode string
 		)
+		allocation := inferencev1alpha1.AllocationDetails{
+			Allocationstatus: inferencev1alpha1.AllocationStatusCreating,
+			Profile:          "test-profile",
+		}
 
 		BeforeEach(func() {
 			ctx = context.TODO()
 
 			// Setup fake client with a test node
 			nodeName = "test-node"
-			profile = "test-profile"
 			emulatorMode = "false"
-			allocationStatus = "creating"
 
 			node = &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
@@ -168,7 +168,7 @@ func TestUpdateNodeCapacity(t *testing.T) {
 		Context("when updating node capacity in emulator mode", func() {
 			It("should toggle the label and update node capacity", func() {
 
-				err := reconciler.updateNodeCapacity(ctx, nodeName, profile, emulatorMode, allocationStatus)
+				err := reconciler.updateNodeCapacity(ctx, nodeName, allocation, emulatorMode)
 				Expect(err).ToNot(HaveOccurred())
 
 				updatedNode := &v1.Node{}

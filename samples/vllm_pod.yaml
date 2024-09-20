@@ -4,11 +4,7 @@ metadata:
   name: vllm
   labels:
     app: vllm
-  finalizers:
-  - org.instaslice/accelerator
 spec:
-  schedulingGates:
-  - name: org.instaslice/accelerator
   containers:
   - name: vllm
     image: quay.io/chenw615/vllm_dra:latest

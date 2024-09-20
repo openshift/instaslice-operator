@@ -56,7 +56,7 @@ type InstaSliceDaemonsetReconciler struct {
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/finalizers,verbs=update
-//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;update;patch
+//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=nodes/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
@@ -87,11 +87,6 @@ type ResPatchOperation struct {
 	Value string `json:"value"`
 }
 
-const (
-	// media extension MIG profile attribute
-	AttributeMediaExtensions = "me"
-)
-
 // struct to get ci and gi after a mig has been created.
 type preparedMig struct {
 	gid     uint32
@@ -101,10 +96,6 @@ type preparedMig struct {
 
 // TODO: remove once we figure out NVML calls that does CI and GI discovery
 var cachedPreparedMig = make(map[string]preparedMig)
-
-const (
-	OrgInstaslicePrefix = "org.instaslice/"
-)
 
 func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
@@ -139,7 +130,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			}
 
 			nodeName := os.Getenv("NODE_NAME")
-			if errUpdatingNodeCapacity := r.updateNodeCapacity(ctx, nodeName, allocations.Profile, emulatorMode, string(allocations.Allocationstatus)); errUpdatingNodeCapacity != nil {
+			if errUpdatingNodeCapacity := r.updateNodeCapacity(ctx, nodeName, allocations, emulatorMode); errUpdatingNodeCapacity != nil {
 				return ctrl.Result{Requeue: true}, nil
 			}
 			var deletePrepared string
@@ -351,7 +342,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 				}
 				nodeName := os.Getenv("NODE_NAME")
-				if errUpdatingNodeCapacity := r.updateNodeCapacity(ctx, nodeName, allocations.Profile, emulatorMode, string(allocations.Allocationstatus)); errUpdatingNodeCapacity != nil {
+				if errUpdatingNodeCapacity := r.updateNodeCapacity(ctx, nodeName, allocations, emulatorMode); errUpdatingNodeCapacity != nil {
 					return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 				}
 				var updateInstasliceObject inferencev1alpha1.Instaslice
@@ -676,7 +667,7 @@ func (r *InstaSliceDaemonsetReconciler) createPreparedEntry(ctx context.Context,
 // there is a possibility of double update, should that happen while we retry?
 // sometimes the device plugin pod needs to be manually bounced before a burst of short lived
 // pods are submitted for testing, this check could be part of installation.
-func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, nodeName string, profile string, emulatorMode string, allocationStatus string) error {
+func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, nodeName string, allocation inferencev1alpha1.AllocationDetails, emulatorMode string) error {
 	node := &v1.Node{}
 	nodeNameObject := types.NamespacedName{Name: nodeName}
 	err := r.Get(ctx, nodeNameObject, node)
@@ -708,9 +699,9 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 			log.FromContext(ctx).Error(err, "failed to marshal original node")
 			return err
 		}
-		if allocationStatus == string(inferencev1alpha1.AllocationStatusCreating) {
+		if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreating {
 			// assume only one quantity can be requested for a profile
-			resourceName := "nvidia.com/mig-" + profile
+			resourceName := "nvidia.com/mig-" + allocation.Profile
 			// Count InstaSlice extended resources in Capacity
 			countCapacity := 0
 			for resourceName := range node.Status.Capacity {
@@ -718,64 +709,59 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 					countCapacity++
 				}
 			}
+			log.FromContext(ctx).Info("capacity while creating", "count", countCapacity)
 			resourceQuantity := resource.NewQuantity(1, resource.DecimalSI)
-			extendedResQuantity := resource.NewQuantity(int64(countCapacity), resource.DecimalSI)
+			extendedResCapacityQuantity := resource.NewQuantity(int64(countCapacity), resource.DecimalSI)
 			existingCapacity, capacityExists := node.Status.Capacity[v1.ResourceName(resourceName)]
-			existingAllocatable, allocatableExists := node.Status.Allocatable[v1.ResourceName(resourceName)]
 			if capacityExists {
-				if extendedResQuantity.Cmp(existingCapacity) == 1 {
+				if existingCapacity.Cmp(*extendedResCapacityQuantity) == -1 {
+					log.FromContext(ctx).Info("Adding resource ", "name", resourceName, "pod", allocation.PodName)
 					existingCapacity.Add(*resourceQuantity)
 					log.FromContext(ctx).Info("simulator added capacity is ", "num", existingCapacity)
 					node.Status.Capacity[v1.ResourceName(resourceName)] = existingCapacity
 				}
 			} else {
-				log.FromContext(ctx).Info("simulator added capacity is ", "num", existingCapacity)
+				log.FromContext(ctx).Info("simulator created capacity is ", "num", resourceQuantity)
 				node.Status.Capacity[v1.ResourceName(resourceName)] = *resourceQuantity
-			}
-			// Count InstaSlice extended resources in Capacity
-			countAllocatable := 0
-			for resourceName := range node.Status.Capacity {
-				if strings.HasPrefix(string(resourceName), orgInstaslicePrefix) {
-					countAllocatable++
-				}
-			}
-			if allocatableExists {
-				if extendedResQuantity.Cmp(existingCapacity) == 1 {
-					existingAllocatable.Add(*resourceQuantity)
-					log.FromContext(ctx).Info("simulator added allocatable is ", "num", existingCapacity)
-					node.Status.Allocatable[v1.ResourceName(resourceName)] = existingAllocatable
-				}
-			} else {
-				log.FromContext(ctx).Info("simulator added allocatable is ", "num", existingCapacity)
-				node.Status.Allocatable[v1.ResourceName(resourceName)] = *resourceQuantity
 			}
 		}
 
-		if allocationStatus == string(inferencev1alpha1.AllocationStatusDeleting) {
+		if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleting {
 			// assume only one quantity can be requested for a profile
-			resourceName := "nvidia.com/mig-" + profile
-			log.FromContext(ctx).Info("subtraction resource ", "name", resourceName)
+			resourceName := "nvidia.com/mig-" + allocation.Profile
+			// Count InstaSlice extended resources in Capacity
+			countCapacity := 0
+			for resourceName := range node.Status.Capacity {
+				if strings.HasPrefix(string(resourceName), orgInstaslicePrefix) {
+					countCapacity++
+				}
+			}
+			log.FromContext(ctx).Info("capacity while deleting", "count", countCapacity)
 			resourceQuantity := resource.NewQuantity(1, resource.DecimalSI)
+			extendedResCapacityQuantity := resource.NewQuantity(int64(countCapacity), resource.DecimalSI)
 			existingCapacity, capacityExists := node.Status.Capacity[v1.ResourceName(resourceName)]
-			existingAllocatable, allocatableExists := node.Status.Allocatable[v1.ResourceName(resourceName)]
 
 			if capacityExists {
-				existingCapacity.Sub(*resourceQuantity)
-				if existingCapacity.Sign() != -1 {
-					log.FromContext(ctx).Info("simulator reduced capacity is ", "num", existingCapacity)
-					node.Status.Capacity[v1.ResourceName(resourceName)] = existingCapacity
+				log.FromContext(ctx).Info("subtraction resource ", "name", resourceName, "pod", allocation.PodName)
+				if extendedResCapacityQuantity.Value() == 0 {
+					zeroQuantity := resource.NewQuantity(0, resource.DecimalSI)
+					existingCapacity.Set(zeroQuantity.Value())
+					if existingCapacity.Sign() != -1 {
+						log.FromContext(ctx).Info("simulator reduced capacity is ", "num", existingCapacity)
+						node.Status.Capacity[v1.ResourceName(resourceName)] = existingCapacity
+					}
 				}
 
-			}
-			if allocatableExists {
-				existingAllocatable.Sub(*resourceQuantity)
-				if existingAllocatable.Sign() != -1 {
-					log.FromContext(ctx).Info("simulator reduced allocatable is ", "num", existingCapacity)
-					node.Status.Allocatable[v1.ResourceName(resourceName)] = existingAllocatable
+				if existingCapacity.Cmp(*extendedResCapacityQuantity) == 1 || existingCapacity.Cmp(*extendedResCapacityQuantity) == 0 {
+					existingCapacity.Sub(*resourceQuantity)
+					if existingCapacity.Sign() != -1 {
+						log.FromContext(ctx).Info("simulator reduced capacity is ", "num", existingCapacity)
+						node.Status.Capacity[v1.ResourceName(resourceName)] = existingCapacity
+					}
 				}
 			}
 
-			log.FromContext(ctx).Info("done updating the capacity for ", "allocation", allocationStatus)
+			log.FromContext(ctx).Info("done updating the capacity for ", "allocation", allocation.Allocationstatus)
 		}
 
 		modifiedData, err := json.Marshal(node)

@@ -18,13 +18,9 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: tf-notebook
-  finalizers:
-  - org.instaslice/accelerator
   labels:
     app: tf-notebook
 spec:
-  schedulingGates:
-  - name: org.instaslice/accelerator
   securityContext:
     fsGroup: 0
   containers:
