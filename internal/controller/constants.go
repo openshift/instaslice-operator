@@ -20,6 +20,6 @@ const (
 	finalizerOrGateName      string = "org.instaslice/accelerator"
 	emulatorModeFalse        string = "false"
 	emulatorModeTrue         string = "true"
-	orgInstaslicePrefix             = "org.instaslice/"
-	AttributeMediaExtensions        = "me"
+	orgInstaslicePrefix      string = "org.instaslice/"
+	AttributeMediaExtensions string = "me"
 )
