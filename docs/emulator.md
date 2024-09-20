@@ -27,12 +27,6 @@ kubectl apply -f test/e2e/resources/instaslice-fake-capacity.yaml
 kubectl describe instaslice
 ```
 
-- Add accelerator memory resource to the fake node object named kind-control-plane, accelerator memory is 80GB as we have two fake A100s GPUs each having 40 GB of GPU memory
-
-```console
-kubectl patch node kind-control-plane --subresource=status --type=json -p='[{"op":"add","path":"/status/capacity/nvidia.com~1accelerator-memory","value":"80Gi"}]'
-```
-
 - Make sure no dangling org.instaslice/* extended resources exist on the cluster before you submit a pod
 
 - Submit emulator pod using command
