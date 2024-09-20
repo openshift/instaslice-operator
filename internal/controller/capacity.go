@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// checks the classical resources like CPU and memory and continous GPU index available
+// checks the classical resources like CPU and memory and continuous GPU index available
 // before making an allocation.
 
 // find node, gpu and gpu index to place the slice
@@ -55,7 +55,7 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 	}
 	if userCpuCoresCeil < nodeAvailableCpu && userMemoryBytes < nodeAvailableMemory {
 		//TODO: discover this value, this may work for A100 and H100 for now.
-		for gpuuuid, _ := range instaslice.Spec.MigGPUUUID {
+		for gpuuuid := range instaslice.Spec.MigGPUUUID {
 			if instaslice.Spec.Allocations == nil {
 				instaslice.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
 			}
@@ -68,8 +68,8 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 			}
 			size, discoveredGiprofile, Ciprofileid, Ciengprofileid := r.extractGpuProfile(instaslice, profileName)
 			resourceIdentifier := pod.Spec.Containers[0].EnvFrom[0].ConfigMapRef.Name
-			allocDetails := policy.SetAllocationDetails(profileName, uint32(newStart), uint32(size),
-				string(pod.UID), instaslice.Name, "creating", discoveredGiprofile,
+			allocDetails := policy.SetAllocationDetails(profileName, newStart, uint32(size),
+				string(pod.UID), instaslice.Name, string(inferencev1alpha1.AllocationStatusCreating), discoveredGiprofile,
 				Ciprofileid, Ciengprofileid, pod.Namespace, pod.Name, gpuuuid, resourceIdentifier, userCpuCoresCeil, userMemoryBytes)
 			return allocDetails, nil
 		}
@@ -99,7 +99,7 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 	// deleted allocations can be reused
 	// ungated allocations are already counted in prepared
 	for _, item := range instaslice.Spec.Allocations {
-		if item.GPUUUID == gpuUUID && item.Allocationstatus != "deleted" && item.Allocationstatus != "ungated" {
+		if item.GPUUUID == gpuUUID && item.Allocationstatus != inferencev1alpha1.AllocationStatusDeleted && item.Allocationstatus != inferencev1alpha1.AllocationStatusUngated {
 			for i := 0; i < int(item.Size); i++ {
 				gpuAllocatedIndex[int(item.Start)+i] = 1
 			}

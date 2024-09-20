@@ -17,7 +17,6 @@ limitations under the License.
 package controller
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -36,7 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -58,7 +56,7 @@ type InstaSliceDaemonsetReconciler struct {
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/finalizers,verbs=update
-//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=nodes/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
@@ -89,11 +87,6 @@ type ResPatchOperation struct {
 	Value string `json:"value"`
 }
 
-const (
-	// media extension MIG profile attribute
-	AttributeMediaExtensions = "me"
-)
-
 // struct to get ci and gi after a mig has been created.
 type preparedMig struct {
 	gid     uint32
@@ -103,10 +96,6 @@ type preparedMig struct {
 
 // TODO: remove once we figure out NVML calls that does CI and GI discovery
 var cachedPreparedMig = make(map[string]preparedMig)
-
-const (
-	OrgInstaslicePrefix = "org.instaslice/"
-)
 
 func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
@@ -128,9 +117,9 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		// if user deletes abruptly, cm, instaslice resource, ci and gi may not exists
 		// handle such scenario's.
 		// delete first before creating new slice
-		if allocations.Allocationstatus == "deleting" && allocations.Nodename == nodeName {
+		if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusDeleting && allocations.Nodename == nodeName {
 			log.FromContext(ctx).Info("Performing cleanup ", "pod", allocations.PodName)
-			extendedResourceName := OrgInstaslicePrefix + allocations.Resourceidentifier
+			extendedResourceName := orgInstaslicePrefix + allocations.Resourceidentifier
 			if errDeletingCm := r.deleteConfigMap(ctx, allocations.Resourceidentifier, allocations.Namespace); errDeletingCm != nil {
 				log.FromContext(ctx).Error(errDeletingCm, "error deleting configmap for ", "pod", allocations.PodName)
 				return ctrl.Result{Requeue: true}, nil
@@ -145,21 +134,9 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				return ctrl.Result{Requeue: true}, nil
 			}
 			var deletePrepared string
-			var errDeletingCiorGi error
 
-			if emulatorMode == "false" {
-				deletePrepared, errDeletingCiorGi = r.cleanUpCiAndGi(ctx, allocations.PodUUID, instaslice)
-				if errDeletingCiorGi != nil {
-					// deleting CI and GI is important
-					//avoid "error" : "Invalid Argument"
-					// which means that slice was deleted in previous reconcile logic and controller is trying to
-					// delete an non-existent slice
-					if errDeletingCiorGi.Error() != "Invalid Argument" {
-						log.FromContext(ctx).Error(errDeletingCiorGi, "error deleting ci or gi for ", "pod", allocations.PodName)
-						return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
-					}
-
-				}
+			if emulatorMode == emulatorModeFalse {
+				deletePrepared = r.cleanUpCiAndGi(ctx, allocations.PodUUID, instaslice)
 				log.FromContext(ctx).Info("Done deleting ci and gi for ", "pod", allocations.PodName)
 			}
 
@@ -191,7 +168,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				delete(updateInstasliceObject.Spec.Prepared, searchToDelPrepared)
 			}
 
-			allocations.Allocationstatus = "deleted"
+			allocations.Allocationstatus = inferencev1alpha1.AllocationStatusDeleted
 			updateInstasliceObject.Spec.Allocations[allocations.PodUUID] = allocations
 			errUpdatingAllocation := r.Update(ctx, &updateInstasliceObject)
 			if errUpdatingAllocation != nil {
@@ -200,7 +177,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			}
 		}
 		// create new slice by obeying controller allocation
-		if allocations.Allocationstatus == "creating" && allocations.Nodename == nodeName {
+		if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusCreating && allocations.Nodename == nodeName {
 			//Assume pod only has one container with one GPU request
 			log.FromContext(ctx).Info("creating allocation for ", "pod", allocations.PodName)
 			var podUUID = allocations.PodUUID
@@ -215,14 +192,14 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			}
 			existingAllocations := instaslice.Spec.Allocations[podUUID]
 
-			if emulatorMode == "true" {
+			if emulatorMode == emulatorModeTrue {
 				// Emulating cost to create CI and GI on a GPU
 				time.Sleep(1 * time.Second)
 				cachedPreparedMig[allocations.PodName] = preparedMig{gid: 0, miguuid: allocations.PodUUID, cid: 0}
 
 			}
 
-			if emulatorMode == "false" {
+			if emulatorMode == emulatorModeFalse {
 				ret := nvml.Init()
 				if ret != nvml.SUCCESS {
 					log.FromContext(ctx).Error(ret, "Unable to initialize NVML")
@@ -343,7 +320,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 						}
 
 						//get created mig details
-						giId, migUUID, ciId, errGettingSliceDetails := r.getCreatedSliceDetails(ctx, giInfo, ret, device, uuid, profileName)
+						giId, migUUID, ciId, errGettingSliceDetails := r.getCreatedSliceDetails(ctx, giInfo, device, profileName)
 						if errGettingSliceDetails != nil {
 							//TODO: should we retry?
 							log.FromContext(ctx).Error(errGettingSliceDetails, "slice details not found in prepared section", "pod", allocations.PodName)
@@ -383,7 +360,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				// updated object is still in creating status, chances are user has not yet deleted
 				// set status to created.
 				if updatedAllocation.Allocationstatus == existingAllocations.Allocationstatus {
-					existingAllocations.Allocationstatus = "created"
+					existingAllocations.Allocationstatus = inferencev1alpha1.AllocationStatusCreated
 				} else {
 					// Add the new allocation status which is not created and let the daemonset handle in next reconcile
 					log.FromContext(ctx).Info("allocation status changed for ", "pod", allocations.PodName, "status", updatedAllocation.Allocationstatus)
@@ -400,7 +377,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		}
 
 		// delete slice
-		if allocations.Allocationstatus == "deleted" && allocations.Nodename == nodeName {
+		if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted && allocations.Nodename == nodeName {
 			var updateInstasliceObject inferencev1alpha1.Instaslice
 			typeNamespacedName := types.NamespacedName{
 				Name:      instaslice.Name,
@@ -427,7 +404,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 }
 
 func (r *InstaSliceDaemonsetReconciler) searchGi(ctx context.Context, device nvml.Device, instaslice inferencev1alpha1.Instaslice) (int, error) {
-	var preparedGis []uint32
+	preparedGis := make([]uint32, len(instaslice.Spec.Prepared))
 	var giError int
 	for _, prepared := range instaslice.Spec.Prepared {
 		preparedGis = append(preparedGis, prepared.Giinfoid)
@@ -465,13 +442,13 @@ func (r *InstaSliceDaemonsetReconciler) createInstaSliceResource(ctx context.Con
 		log.FromContext(ctx).Error(err, "unable to fetch Node")
 		return err
 	}
-	capacityKey := OrgInstaslicePrefix + resourceIdentifier
+	capacityKey := orgInstaslicePrefix + resourceIdentifier
 	//desiredCapacity := resource.MustParse("1")
 	if _, exists := node.Status.Capacity[v1.ResourceName(capacityKey)]; exists {
 		log.FromContext(ctx).Info("Node already patched with ", "capacity", capacityKey)
 		return nil
 	}
-	patchData, err := createPatchData(OrgInstaslicePrefix+resourceIdentifier, "1")
+	patchData, err := createPatchData(orgInstaslicePrefix+resourceIdentifier, "1")
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to create correct json for patching node")
 		return err
@@ -494,7 +471,7 @@ func (r *InstaSliceDaemonsetReconciler) getAllocationsToprepare(ctx context.Cont
 	}
 	for _, v := range instaslice.Spec.Allocations {
 		if !allocationExists {
-			if v.Allocationstatus == "creating" && v.PodUUID == podUuid {
+			if v.Allocationstatus == inferencev1alpha1.AllocationStatusCreating && v.PodUUID == podUuid {
 				placement.Size = v.Size
 				placement.Start = v.Start
 				return placement, nil
@@ -506,7 +483,7 @@ func (r *InstaSliceDaemonsetReconciler) getAllocationsToprepare(ctx context.Cont
 }
 
 // when a slice is created we do a discovery again to get MIG uuid device details
-func (*InstaSliceDaemonsetReconciler) getCreatedSliceDetails(ctx context.Context, giInfo nvml.GpuInstanceInfo, ret nvml.Return, device nvml.Device, uuid string, profileName string) (uint32, string, uint32, error) {
+func (*InstaSliceDaemonsetReconciler) getCreatedSliceDetails(ctx context.Context, giInfo nvml.GpuInstanceInfo, device nvml.Device, profileName string) (uint32, string, uint32, error) {
 	var giIdError, ciMigInfoError uint32
 	// setting large number to return error
 	giIdError = 1000
@@ -569,7 +546,7 @@ func (r *InstaSliceDaemonsetReconciler) getAllocation(instaslice inferencev1alph
 	var gpuUUID, profile, resourceIdentifier string
 
 	for _, v := range instaslice.Spec.Allocations {
-		if v.Allocationstatus == "creating" && v.PodUUID == podUuid {
+		if v.Allocationstatus == inferencev1alpha1.AllocationStatusCreating && v.PodUUID == podUuid {
 			return v.GPUUUID, v.Profile, v.Resourceidentifier, nil
 		}
 	}
@@ -579,7 +556,7 @@ func (r *InstaSliceDaemonsetReconciler) getAllocation(instaslice inferencev1alph
 
 // deletes CI and GI in that order.
 // TODO: split this method into two methods.
-func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, podUuid string, instaslice inferencev1alpha1.Instaslice) (string, error) {
+func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, podUuid string, instaslice inferencev1alpha1.Instaslice) string {
 	ret := nvml.Init()
 	if ret != nvml.SUCCESS {
 		log.FromContext(ctx).Error(ret, "Unable to initialize NVML")
@@ -624,7 +601,7 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, podU
 		}
 	}
 
-	return candidateDel, nil
+	return candidateDel
 }
 
 // delete custom extended resource when a pod is deleted.
@@ -699,29 +676,36 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 		return err
 	}
 	originalNode := node.DeepCopy()
+	// In a real cluster this will never be nil
+	// it was added to pass the unit test.
+	if node.Status.Capacity == nil {
+		node.Status.Capacity = v1.ResourceList{}
+	}
+	if node.Status.Allocatable == nil {
+		node.Status.Allocatable = v1.ResourceList{}
+	}
 	// NOTE: Label value should be maunally added when the cluster is setup.
-	if value, exists := node.Labels["nvidia.com/device-plugin.config"]; exists && value == "update-capacity-1" {
-		node.Labels["nvidia.com/device-plugin.config"] = "update-capacity"
+	if value, exists := node.Labels["nvidia.com/device-plugin.config"]; exists {
+		if value == "update-capacity-1" {
+			node.Labels["nvidia.com/device-plugin.config"] = "update-capacity"
+		} else if value == "update-capacity" {
+			node.Labels["nvidia.com/device-plugin.config"] = "update-capacity-1"
+		}
 	}
 
-	if value, exists := node.Labels["nvidia.com/device-plugin.config"]; exists && value == "update-capacity" {
-		node.Labels["nvidia.com/device-plugin.config"] = "update-capacity-1"
-	}
-
-	if emulatorMode == "true" {
+	if emulatorMode == emulatorModeTrue {
 		originalData, err := json.Marshal(originalNode)
 		if err != nil {
 			log.FromContext(ctx).Error(err, "failed to marshal original node")
 			return err
 		}
-		if allocation.Allocationstatus == "creating" {
+		if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreating {
 			// assume only one quantity can be requested for a profile
 			resourceName := "nvidia.com/mig-" + allocation.Profile
 			// Count InstaSlice extended resources in Capacity
 			countCapacity := 0
 			for resourceName := range node.Status.Capacity {
-				if strings.HasPrefix(string(resourceName), OrgInstaslicePrefix) {
-					//resourceIdentifierInCapacity := strings.TrimPrefix(string(resourceName), OrgInstaslicePrefix)
+				if strings.HasPrefix(string(resourceName), orgInstaslicePrefix) {
 					countCapacity++
 				}
 			}
@@ -742,13 +726,13 @@ func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, 
 			}
 		}
 
-		if allocation.Allocationstatus == "deleting" {
+		if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleting {
 			// assume only one quantity can be requested for a profile
 			resourceName := "nvidia.com/mig-" + allocation.Profile
 			// Count InstaSlice extended resources in Capacity
 			countCapacity := 0
 			for resourceName := range node.Status.Capacity {
-				if strings.HasPrefix(string(resourceName), OrgInstaslicePrefix) {
+				if strings.HasPrefix(string(resourceName), orgInstaslicePrefix) {
 					countCapacity++
 				}
 			}
@@ -830,13 +814,12 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 	//Init InstaSlice obj as the first thing when cache is loaded.
 	//RunnableFunc is added to the manager.
 	//This function waits for the manager to be elected (<-mgr.Elected()) and then runs InstaSlice init code.
-	mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+	mgrAddErr := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
 		<-mgr.Elected() // Wait for the manager to be elected
 		var instaslice inferencev1alpha1.Instaslice
 		typeNamespacedName := types.NamespacedName{
-			Name: nodeName,
-			//TODO: change namespace
-			Namespace: "default",
+			Name:      nodeName,
+			Namespace: "default", //TODO: change namespace
 		}
 		errRetrievingInstaSliceForSetup := r.Get(ctx, typeNamespacedName, &instaslice)
 		if errRetrievingInstaSliceForSetup != nil {
@@ -845,16 +828,29 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 			//os.Exit(1)
 		}
 
-		if emulatorMode == "false" {
-			if instaslice.Status.Processed != "true" || (instaslice.Name == "" && instaslice.Namespace == "") {
+		if emulatorMode == emulatorModeFalse {
+			if !instaslice.Status.Processed || (instaslice.Name == "" && instaslice.Namespace == "") {
 				_, errForDiscoveringGpus := r.discoverMigEnabledGpuWithSlices()
 				if errForDiscoveringGpus != nil {
 					log.FromContext(ctx).Error(errForDiscoveringGpus, "error discovering GPUs")
 				}
 			}
 		}
+
+		// Patch the node capacity with GPU memory in emulator mode
+		if emulatorMode == emulatorModeTrue {
+			totalEmulatedGPUMemory := calculateTotalMemoryGB(instaslice.Spec.MigGPUUUID)
+			log.FromContext(context.TODO()).Info("MIG INFO: ", "MIG", instaslice.Spec.MigGPUUUID)
+			if err := r.patchNodeStatusForNode(ctx, nodeName, totalEmulatedGPUMemory); err != nil {
+				return err
+			}
+		}
+
 		return nil
 	}))
+	if mgrAddErr != nil {
+		return mgrAddErr
+	}
 
 	return nil
 }
@@ -867,17 +863,10 @@ func (r *InstaSliceDaemonsetReconciler) setupWithManager(mgr ctrl.Manager) error
 		Complete(r)
 }
 
-// This function discovers MIG devices as the plugin comes up. this is run exactly once.
-func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]string, error) {
-
-	instaslice, _, gpuModelMap, failed, returnValue, errorDiscoveringProfiles := r.discoverAvailableProfilesOnGpus()
-	if failed {
-		return returnValue, errorDiscoveringProfiles
-	}
-
+func calculateTotalMemoryGB(gpuInfoList map[string]string) int {
 	totalMemoryGB := 0
 	re := regexp.MustCompile(`(\d+)(GB)`)
-	for _, gpuInfo := range gpuModelMap {
+	for _, gpuInfo := range gpuInfoList {
 		matches := re.FindStringSubmatch(gpuInfo)
 		if len(matches) == 3 {
 			memoryGB, err := strconv.Atoi(matches[1])
@@ -888,7 +877,18 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 			totalMemoryGB += memoryGB
 		}
 	}
+	return totalMemoryGB
+}
 
+// This function discovers MIG devices as the plugin comes up. this is run exactly once.
+func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]string, error) {
+
+	instaslice, _, gpuModelMap, failed, errorDiscoveringProfiles := r.discoverAvailableProfilesOnGpus()
+	if failed {
+		return nil, errorDiscoveringProfiles
+	}
+
+	totalMemoryGB := calculateTotalMemoryGB(gpuModelMap)
 	err := r.discoverDanglingSlices(instaslice)
 
 	if err != nil {
@@ -908,7 +908,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 	instaslice.Name = nodeName
 	instaslice.Namespace = "default"
 	instaslice.Spec.MigGPUUUID = gpuModelMap
-	instaslice.Status.Processed = "true"
+	instaslice.Status.Processed = true
 	//TODO: should we use context.TODO() ?
 	customCtx := context.TODO()
 	errToCreate := r.Create(customCtx, instaslice)
@@ -917,12 +917,56 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 	}
 
 	// Object exists, update its status
-	instaslice.Status.Processed = "true"
+	instaslice.Status.Processed = true
 	if errForStatus := r.Status().Update(customCtx, instaslice); errForStatus != nil {
 		return nil, errForStatus
 	}
 
+	// Patch the node capacity to reflect the total GPU memory
+	if err := r.patchNodeStatusForNode(customCtx, nodeName, totalMemoryGB); err != nil {
+		return nil, err
+	}
+
 	return discoveredGpusOnHost, nil
+}
+
+// patchNodeStatusForNode fetches the node and patches its capacity with the given GPU memory
+func (r *InstaSliceDaemonsetReconciler) patchNodeStatusForNode(ctx context.Context, nodeName string, totalMemoryGB int) error {
+	// Fetch the node object
+	node, err := r.kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		log.FromContext(ctx).Error(err, "unable to fetch Node")
+		return err
+	}
+
+	// Patch the node capacity with total GPU memory
+	if err := r.patchNodeStatus(ctx, node, strconv.Itoa(totalMemoryGB)+"Gi"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// patch node with accelerator memory capacity
+func (r *InstaSliceDaemonsetReconciler) patchNodeStatus(ctx context.Context, node *v1.Node, memory string) error {
+	logger := log.FromContext(ctx)
+
+	// Create patch data for accelerator-memory
+	resourceIdentifier := "accelerator-memory"
+	patchData, err := createPatchData("nvidia.com/"+resourceIdentifier, memory)
+	if err != nil {
+		logger.Error(err, "unable to create correct json for patching node")
+		return err
+	}
+
+	// Apply the patch to the node capacity
+	if err := r.Status().Patch(ctx, node, client.RawPatch(types.JSONPatchType, patchData)); err != nil {
+		logger.Error(err, "unable to patch Node capacity with accelerator GPU memory custom resource")
+		return err
+	}
+
+	logger.Info("Successfully patched node capacity with accelerator GPU memory custom resource", "Node", node.Name)
+	return nil
 }
 
 func (r *InstaSliceDaemonsetReconciler) classicalResourcesAndGPUMemOnNode(ctx context.Context, nodeName string, totalGPUMemory string) (int64, int64, error) {
@@ -950,23 +994,23 @@ func (r *InstaSliceDaemonsetReconciler) classicalResourcesAndGPUMemOnNode(ctx co
 }
 
 // during init time we need to discover GPU that are MIG enabled and slices if any on them to start making allocations of the next pods.
-func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*inferencev1alpha1.Instaslice, nvml.Return, map[string]string, bool, []string, error) {
+func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*inferencev1alpha1.Instaslice, nvml.Return, map[string]string, bool, error) {
 	instaslice := &inferencev1alpha1.Instaslice{}
 	ret := nvml.Init()
 	if ret != nvml.SUCCESS {
-		return nil, ret, nil, false, nil, ret
+		return nil, ret, nil, false, ret
 	}
 
 	count, ret := nvml.DeviceGetCount()
 	if ret != nvml.SUCCESS {
-		return nil, ret, nil, false, nil, ret
+		return nil, ret, nil, false, ret
 	}
 	gpuModelMap := make(map[string]string)
 	discoverProfilePerNode := true
 	for i := 0; i < count; i++ {
 		device, ret := nvml.DeviceGetHandleByIndex(i)
 		if ret != nvml.SUCCESS {
-			return nil, ret, nil, false, nil, ret
+			return nil, ret, nil, false, ret
 		}
 
 		uuid, _ := device.GetUUID()
@@ -984,12 +1028,12 @@ func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*infe
 					continue
 				}
 				if ret != nvml.SUCCESS {
-					return nil, ret, nil, false, nil, ret
+					return nil, ret, nil, false, ret
 				}
 
 				memory, ret := device.GetMemoryInfo()
 				if ret != nvml.SUCCESS {
-					return nil, ret, nil, false, nil, ret
+					return nil, ret, nil, false, ret
 				}
 
 				profile := NewMigProfile(i, i, nvml.COMPUTE_INSTANCE_ENGINE_PROFILE_SHARED, giProfileInfo.SliceCount, giProfileInfo.SliceCount, giProfileInfo.MemorySizeMB, memory.Total)
@@ -1002,7 +1046,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*infe
 					continue
 				}
 				if ret != nvml.SUCCESS {
-					return nil, 0, nil, true, nil, ret
+					return nil, 0, nil, true, ret
 				}
 				placementsForProfile := []inferencev1alpha1.Placement{}
 				for _, p := range giPossiblePlacements {
@@ -1025,7 +1069,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*infe
 			discoverProfilePerNode = false
 		}
 	}
-	return instaslice, ret, gpuModelMap, false, nil, nil
+	return instaslice, ret, gpuModelMap, false, nil
 }
 
 // TODO: remove this logic once we are able to use clean slate GPUs from upstream GPU operator fixes
@@ -1223,34 +1267,4 @@ func deletePatchData(resourceName string) ([]byte, error) {
 		},
 	}
 	return json.Marshal(patch)
-}
-
-func readObjectFromFile(filePath string, obj runtime.Object) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to read file: %v", err)
-	}
-	reader := bytes.NewReader(data)
-	decoder := yaml.NewYAMLOrJSONDecoder(reader, 1024)
-	if err := decoder.Decode(obj); err != nil {
-		return fmt.Errorf("failed to decode object: %v", err)
-	}
-
-	return nil
-}
-
-func (r *InstaSliceDaemonsetReconciler) createInstasliceObject(ctx context.Context, filePath string, obj client.Object) error {
-	// Read the object from file
-	err := readObjectFromFile(filePath, obj)
-	if err != nil {
-		return err
-	}
-
-	// Create the object in the cluster
-	errToCreate := r.Create(ctx, obj)
-	if errToCreate != nil {
-		return errToCreate
-	}
-
-	return nil
 }
