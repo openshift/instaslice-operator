@@ -120,16 +120,16 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				if podUuid == string(pod.UID) {
 					allocationFound = true
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
-						result, errDeletingAllocation := r.deleteInstasliceAllocation(ctx, instaslice, allocation)
+						resultDelete, errDeletingAllocation := r.deleteInstasliceAllocation(ctx, instaslice, allocation)
 						if err != nil {
-							return result, errDeletingAllocation
+							return resultDelete, errDeletingAllocation
 						}
-						result, errRemovingFinalizer := r.removeInstaSliceFinalizer(ctx, req)
+						resultRemove, errRemovingFinalizer := r.removeInstaSliceFinalizer(ctx, req)
 						if err != nil {
-							return result, errRemovingFinalizer
+							return resultRemove, errRemovingFinalizer
 						}
 					} else {
-						log.FromContext(ctx).Info("deleting allocation for completed ", "pod", allocation.PodName)
+						log.FromContext(ctx).Info("pod failed set allocation status to deleting ", "pod", allocation.PodName)
 						allocation.Allocationstatus = inferencev1alpha1.AllocationStatusDeleting
 						var updateInstasliceObject inferencev1alpha1.Instaslice
 						typeNamespacedName := types.NamespacedName{
@@ -161,26 +161,27 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				log.FromContext(ctx).Info("finalizer deleted")
 			}
 		}
+		return ctrl.Result{}, nil
 	}
 
 	// pod is completed move allocation to deleting state and return
 	if pod.Status.Phase == v1.PodSucceeded && controllerutil.ContainsFinalizer(pod, finalizerOrGateName) {
 		allocationFound := false
 		for _, instaslice := range instasliceList.Items {
-			allocationFound = true
 			for podUuid, allocation := range instaslice.Spec.Allocations {
 				if podUuid == string(pod.UID) {
+					allocationFound = true
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
-						result, err := r.deleteInstasliceAllocation(ctx, instaslice, allocation)
+						deleteResult, err := r.deleteInstasliceAllocation(ctx, instaslice, allocation)
 						if err != nil {
-							return result, err
+							return deleteResult, err
 						}
-						result, errRemovingFinalizer := r.removeInstaSliceFinalizer(ctx, req)
+						removeResult, errRemovingFinalizer := r.removeInstaSliceFinalizer(ctx, req)
 						if err != nil {
-							return result, errRemovingFinalizer
+							return removeResult, errRemovingFinalizer
 						}
 					} else {
-						log.FromContext(ctx).Info("deleting allocation for completed ", "pod", allocation.PodName)
+						log.FromContext(ctx).Info("pod completed set allocation status to deleting ", "pod", allocation.PodName)
 						allocation.Allocationstatus = inferencev1alpha1.AllocationStatusDeleting
 						var updateInstasliceObject inferencev1alpha1.Instaslice
 						typeNamespacedName := types.NamespacedName{
@@ -263,16 +264,13 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				for podUuid, allocation := range instaslice.Spec.Allocations {
 					if podUuid == string(pod.UID) {
 						if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
-							result, err := r.deleteInstasliceAllocation(ctx, instaslice, allocation)
-							if err != nil {
-								return result, err
+							resultDelete, errDeletingAllocation := r.deleteInstasliceAllocation(ctx, instaslice, allocation)
+							if errDeletingAllocation != nil {
+								return resultDelete, errDeletingAllocation
 							}
-							if controllerutil.RemoveFinalizer(pod, finalizerOrGateName) {
-								if err := r.Update(ctx, pod); err != nil {
-									log.FromContext(ctx).Info("unable to update removal of finalizer, retrying")
-									return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
-								}
-								log.FromContext(ctx).Info("finalizer deleted")
+							resultRemove, errRemovingFinalizer := r.removeInstaSliceFinalizer(ctx, req)
+							if errDeletingAllocation != nil {
+								return resultRemove, errRemovingFinalizer
 							}
 						}
 						elapsed := time.Since(pod.DeletionTimestamp.Time)
