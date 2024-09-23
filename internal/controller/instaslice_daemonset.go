@@ -376,28 +376,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 		}
 
-		// delete slice
-		if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted && allocations.Nodename == nodeName {
-			var updateInstasliceObject inferencev1alpha1.Instaslice
-			typeNamespacedName := types.NamespacedName{
-				Name:      instaslice.Name,
-				Namespace: "default", // TODO: modify
-			}
-			err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
-			if err != nil {
-				log.FromContext(ctx).Error(err, "error getting latest instaslice object")
-				return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
-			}
-			delete(updateInstasliceObject.Spec.Allocations, allocations.PodUUID)
-			errUpdatingAllocation := r.Update(ctx, &updateInstasliceObject)
-			if errUpdatingAllocation != nil {
-				log.FromContext(ctx).Error(errUpdatingAllocation, "Error updating InstaSlice object for ", "pod", allocations.PodName)
-				// deleted allocations are re-used by the controller, we can be slow to delete these
-				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-			}
-
-		}
-
 	}
 
 	return ctrl.Result{}, nil
