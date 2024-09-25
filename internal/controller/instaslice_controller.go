@@ -114,7 +114,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// failed pods are not deleted by InstaSlice, finalizer is removed so that user can
 	// delete the pod and later InstaSlice will clean up the MIG slice.
 	if pod.Status.Phase == v1.PodFailed && controllerutil.ContainsFinalizer(pod, finalizerOrGateName) {
-		allocationFound := false
 		for _, instaslice := range instasliceList.Items {
 			for _, allocation := range instaslice.Spec.Allocations {
 				found, result, err := r.processInstasliceAllocation(ctx, instaslice.Name, string(pod.UID), allocation, req)
@@ -128,22 +127,19 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			}
 		}
 		// pod can be terminated without any allocation
-		if !allocationFound {
-			if controllerutil.RemoveFinalizer(pod, finalizerOrGateName) {
-				if err := r.Update(ctx, pod); err != nil {
-					log.FromContext(ctx).Error(err, "unable to update removal of finalizer, retrying")
-					// requeing immediately as the finalizer removal gets lost
-					return ctrl.Result{Requeue: true}, nil
-				}
-				log.FromContext(ctx).Info("finalizer deleted")
+		if controllerutil.RemoveFinalizer(pod, finalizerOrGateName) {
+			if err := r.Update(ctx, pod); err != nil {
+				log.FromContext(ctx).Error(err, "unable to update removal of finalizer, retrying")
+				// requeing immediately as the finalizer removal gets lost
+				return ctrl.Result{Requeue: true}, nil
 			}
+			log.FromContext(ctx).Info("finalizer deleted")
 		}
 		return ctrl.Result{}, nil
 	}
 
 	// pod is completed move allocation to deleting state and return
 	if pod.Status.Phase == v1.PodSucceeded && controllerutil.ContainsFinalizer(pod, finalizerOrGateName) {
-		allocationFound := false
 		for _, instaslice := range instasliceList.Items {
 			for _, allocation := range instaslice.Spec.Allocations {
 				found, result, err := r.processInstasliceAllocation(ctx, instaslice.Name, string(pod.UID), allocation, req)
@@ -157,15 +153,13 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 
 		// pod can be terminated as allocation was deleted in previous reconcile loop
-		if !allocationFound {
-			if controllerutil.RemoveFinalizer(pod, finalizerOrGateName) {
-				if err := r.Update(ctx, pod); err != nil {
-					log.FromContext(ctx).Error(err, "unable to update removal of finalizer, retrying")
-					// requeing immediately as the finalizer removal gets lost
-					return ctrl.Result{Requeue: true}, nil
-				}
-				log.FromContext(ctx).Info("finalizer deleted")
+		if controllerutil.RemoveFinalizer(pod, finalizerOrGateName) {
+			if err := r.Update(ctx, pod); err != nil {
+				log.FromContext(ctx).Error(err, "unable to update removal of finalizer, retrying")
+				// requeing immediately as the finalizer removal gets lost
+				return ctrl.Result{Requeue: true}, nil
 			}
+			log.FromContext(ctx).Info("finalizer deleted")
 		}
 		return ctrl.Result{}, nil
 	}
