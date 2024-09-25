@@ -21,64 +21,140 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 )
 
-var _ = Describe("Instaslice Controller", func() {
-	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
+var _ = Describe("InstasliceReconciler processInstasliceAllocation", func() {
+	var (
+		ctx                 context.Context
+		r                   *InstasliceReconciler
+		fakeClient          client.Client
+		instaslice          *inferencev1alpha1.Instaslice
+		pod                 *v1.Pod
+		podUUID             string
+		req                 ctrl.Request
+		instasliceNamespace string
+	)
 
-		ctx := context.Background()
+	BeforeEach(func() {
+		ctx = context.TODO()
 
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+		scheme := runtime.NewScheme()
+		Expect(inferencev1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(v1.AddToScheme(scheme)).To(Succeed())
+
+		fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		r = &InstasliceReconciler{
+			Client: fakeClient,
 		}
-		instaslice := &inferencev1alpha1.Instaslice{}
 
-		BeforeEach(func() {
-			By("creating the custom resource for the Kind Instaslice")
-			err := k8sClient.Get(ctx, typeNamespacedName, instaslice)
-			if err != nil && errors.IsNotFound(err) {
-				resource := &inferencev1alpha1.Instaslice{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
+		instasliceNamespace = "default"
+		podUUID = "test-pod-uuid"
+
+		instaslice = &inferencev1alpha1.Instaslice{
+			Spec: inferencev1alpha1.InstasliceSpec{
+				Allocations: map[string]inferencev1alpha1.AllocationDetails{
+					podUUID: {
+						PodUUID:          podUUID,
+						PodName:          "test-pod",
+						Allocationstatus: inferencev1alpha1.AllocationStatusCreating,
 					},
-					// TODO(user): Specify other spec details if needed.
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
-			}
-		})
+				},
+			},
+		}
+		instaslice.Name = "test-instaslice"
+		instaslice.Namespace = instasliceNamespace
+		pod = &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: instasliceNamespace,
+				UID:       types.UID(podUUID),
+				Finalizers: []string{
+					finalizerOrGateName,
+				},
+			},
+		}
 
-		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &inferencev1alpha1.Instaslice{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
+		Expect(fakeClient.Create(ctx, instaslice)).To(Succeed())
+		Expect(fakeClient.Create(ctx, pod)).To(Succeed())
 
-			By("Cleanup the specific resource instance Instaslice")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
-		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
-			controllerReconciler := &InstasliceReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
+		req = ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "test-pod",
+				Namespace: instasliceNamespace,
+			},
+		}
+	})
 
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
-		})
+	It("should delete instaslice allocation when allocation status is Deleted", func() {
+		instaslice.Spec.Allocations[podUUID] = inferencev1alpha1.AllocationDetails{
+			PodUUID:          podUUID,
+			PodName:          "test-pod",
+			Allocationstatus: inferencev1alpha1.AllocationStatusDeleted,
+		}
+		Expect(fakeClient.Update(ctx, instaslice)).To(Succeed())
+
+		found, result, err := r.processInstasliceAllocation(ctx, instaslice.Name, podUUID, instaslice.Spec.Allocations[podUUID], req)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(found).To(BeTrue())
+		Expect(result).To(Equal(ctrl.Result{}))
+
+		updatedInstaSlice := &inferencev1alpha1.Instaslice{}
+		Expect(fakeClient.Get(ctx, types.NamespacedName{Name: instaslice.Name, Namespace: instasliceNamespace}, updatedInstaSlice)).To(Succeed())
+		_, allocationExists := updatedInstaSlice.Spec.Allocations[podUUID]
+		Expect(allocationExists).To(BeFalse())
+	})
+
+	It("should remove finalizer after allocation is deleted", func() {
+		instaslice.Spec.Allocations[podUUID] = inferencev1alpha1.AllocationDetails{
+			PodUUID:          podUUID,
+			PodName:          "test-pod",
+			Allocationstatus: inferencev1alpha1.AllocationStatusDeleted,
+		}
+		Expect(fakeClient.Update(ctx, instaslice)).To(Succeed())
+
+		found, result, err := r.processInstasliceAllocation(ctx, instaslice.Name, podUUID, instaslice.Spec.Allocations[podUUID], req)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(found).To(BeTrue())
+		Expect(result).To(Equal(ctrl.Result{}))
+
+		updatedPod := &v1.Pod{}
+		Expect(fakeClient.Get(ctx, req.NamespacedName, updatedPod)).To(Succeed())
+		Expect(updatedPod.Finalizers).NotTo(ContainElement(finalizerOrGateName))
+	})
+
+	It("should set allocation status to Deleting if status is not Deleted", func() {
+		found, result, err := r.processInstasliceAllocation(ctx, instaslice.Name, podUUID, instaslice.Spec.Allocations[podUUID], req)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(found).To(BeTrue())
+
+		updatedInstaSlice := &inferencev1alpha1.Instaslice{}
+		Expect(fakeClient.Get(ctx, types.NamespacedName{Name: instaslice.Name, Namespace: instasliceNamespace}, updatedInstaSlice)).To(Succeed())
+
+		Expect(updatedInstaSlice.Spec.Allocations[podUUID].Allocationstatus).To(Equal(inferencev1alpha1.AllocationStatusDeleting))
+
+		Expect(result).To(Equal(ctrl.Result{}))
+	})
+
+	It("should requeue if there is an error updating the instaslice", func() {
+		r.Client = fake.NewClientBuilder().WithScheme(runtime.NewScheme()).Build()
+
+		found, result, err := r.processInstasliceAllocation(ctx, instaslice.Name, podUUID, instaslice.Spec.Allocations[podUUID], req)
+
+		Expect(found).To(BeTrue())
+		Expect(err).To(HaveOccurred())
+		Expect(result.Requeue).To(BeTrue())
 	})
 })
