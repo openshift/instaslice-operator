@@ -17,9 +17,10 @@ limitations under the License.
 package controller
 
 const (
-	finalizerOrGateName      string = "org.instaslice/accelerator"
-	emulatorModeFalse        string = "false"
-	emulatorModeTrue         string = "true"
-	orgInstaslicePrefix      string = "org.instaslice/"
-	AttributeMediaExtensions string = "me"
+	finalizerOrGateName         string = "org.instaslice/accelerator"
+	emulatorModeFalse           string = "false"
+	emulatorModeTrue            string = "true"
+	orgInstaslicePrefix         string = "org.instaslice/"
+	AttributeMediaExtensions    string = "me"
+	instaSliceOperatorNamespace string = "default"
 )
