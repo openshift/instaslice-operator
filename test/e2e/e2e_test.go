@@ -688,7 +688,7 @@ var _ = Describe("controller", Ordered, func() {
 
 				_, found := instaslice["allocations"].([]interface{})
 				if found {
-					return fmt.Errorf("allocations fieldc found in Instaslice object")
+					return fmt.Errorf("allocations field found in Instaslice object")
 				}
 
 				return nil
