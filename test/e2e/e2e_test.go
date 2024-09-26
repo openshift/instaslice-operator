@@ -46,7 +46,7 @@ var _ = Describe("controller", Ordered, func() {
 
 	BeforeAll(func() {
 		fmt.Println("Setting up Kind cluster")
-		cmd := exec.Command("kind", "create", "cluster")
+		cmd := exec.Command("kind", "create", "cluster", "--image", "kindest/node:v1.30.0@sha256:047357ac0cfea04663786a612ba1eaba9702bef25227a794b52890dd8bcd692e")
 		output, err := cmd.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create Kind cluster: %s", output))
 
@@ -102,6 +102,11 @@ var _ = Describe("controller", Ordered, func() {
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
+			By("installing fake GPU capacity")
+			cmdCm := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/instaslice-fake-capacity.yaml")
+			outputCm, err := cmdCm.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add fake capacity to the cluster: %s", outputCm))
+
 			By("deploying the controller-manager & controller-daemonset")
 			cmd = exec.Command(
 				"make",
@@ -128,17 +133,6 @@ var _ = Describe("controller", Ordered, func() {
 
 			time.Sleep(time.Minute)
 
-			By("installing fake GPU capacity")
-			cmdCm := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/instaslice-fake-capacity.yaml")
-			outputCm, err := cmdCm.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add fake capacity to the cluster: %s", outputCm))
-
-			By("installing accelerator resource in the cluster")
-			patch := `[{"op":"add","path":"/status/capacity/nvidia.com~1accelerator-memory","value":"80Gi"}]`
-			nodeName := "kind-control-plane"
-			cmdPatch := exec.Command("kubectl", "patch", "node", nodeName, "--subresource=status", "--type=json", "-p", patch)
-			outputPatchRes, err := cmdPatch.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add fake capacity to the cluster: %s", outputPatchRes))
 		})
 
 		It("should apply the YAML and check if that instaslice resource exists", func() {
@@ -666,6 +660,39 @@ var _ = Describe("controller", Ordered, func() {
 			// Step 3: Verify the node's accelerator memory matches the total GPU memory in Instaslice
 			By("Verifying that node's accelerator memory matches Instaslice total GPU memory")
 			Expect(nodeMemoryGB).To(BeNumerically("==", totalMemoryGB), "nvidia.com/accelerator-memory on node does not match total GPU memory in Instaslice object")
+		})
+		// NOTE: Keep this as the last test in e2e test suite, when all workloads are deleted
+		// there should be no allocations in InstaSlice object.
+		It("should verify that there are no allocations on the Instaslice object", func() {
+			Eventually(func() error {
+				cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					return fmt.Errorf("failed to get Instaslice object: %s", string(output))
+				}
+
+				var instasliceResult struct {
+					Items []map[string]interface{} `json:"items"`
+				}
+
+				err = json.Unmarshal(output, &instasliceResult)
+				if err != nil {
+					return fmt.Errorf("failed to parse Instaslice JSON output: %s", err)
+				}
+
+				if len(instasliceResult.Items) == 0 {
+					return fmt.Errorf("no Instaslice objects found")
+				}
+
+				instaslice := instasliceResult.Items[0]
+
+				_, found := instaslice["allocations"].([]interface{})
+				if found {
+					return fmt.Errorf("allocations field found in Instaslice object")
+				}
+
+				return nil
+			}, "60s", "5s").Should(Succeed(), "Expected no allocations in the Instaslice object")
 		})
 
 	})
