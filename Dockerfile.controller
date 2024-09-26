@@ -35,6 +35,7 @@ COPY internal/controller/instaslice_controller.go internal/controller/instaslice
 COPY internal/controller/pod_webhook.go internal/controller/pod_webhook.go
 COPY internal/controller/capacity.go internal/controller/capacity.go
 COPY internal/controller/constants.go internal/controller/constants.go
+COPY internal/controller/utils.go internal/controller/utils.go
 
 # Build
 # the GOARCH has not a default value to allow the binary be built according to the host where the command

@@ -161,7 +161,8 @@ var _ = Describe("controller", Ordered, func() {
 
 			finalizers, found := podObj["metadata"].(map[string]interface{})["finalizers"].([]interface{})
 			Expect(found).To(BeTrue(), "Pod does not have finalizers")
-			Expect(finalizers).To(ContainElement("org.instaslice/accelerator"), "Finalizer org.instaslice/accelerator not found on pod")
+			finalizer := utils.AppendToInstaSlicePrefix("accelerator")
+			Expect(finalizers).To(ContainElement(finalizer), "Finalizer '%s' not found on pod", finalizer)
 		})
 
 		It("should apply the pod YAML with no requests and check the allocation in instaslice object", func() {
@@ -471,7 +472,7 @@ var _ = Describe("controller", Ordered, func() {
 				}
 
 				for resource := range nodeResult.Status.Capacity {
-					if strings.HasPrefix(resource, "org.instaslice/") {
+					if strings.HasPrefix(resource, utils.OrgInstaslicePrefix) {
 						patchData["status"].(map[string]interface{})["capacity"].(map[string]interface{})[resource] = nil
 					}
 				}
@@ -497,7 +498,7 @@ var _ = Describe("controller", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to reset nvidia.com/mig-1g.5gb to zero")
 
 			err = deleteInstasliceResources()
-			Expect(err).NotTo(HaveOccurred(), "Failed to delete org.instaslice/* resources")
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to delete %s* resources", utils.OrgInstaslicePrefix))
 
 			checkMIG := func(expectedMIG string) bool {
 				cmd := exec.CommandContext(ctx, "kubectl", "get", "node", "kind-control-plane", "-o", "json")

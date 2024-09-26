@@ -71,7 +71,7 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 
 	// Generate an extended resource name based on the pod name
 	uuidStr := uuid.New().String()
-	extendedResourceName := fmt.Sprintf("org.instaslice/%s", uuidStr)
+	extendedResourceName := AppendToInstaSlicePrefix(uuidStr)
 
 	// Add envFrom with a unique ConfigMap name derived from the pod name
 	configMapName := uuidStr

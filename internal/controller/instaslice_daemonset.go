@@ -118,7 +118,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		// delete first before creating new slice
 		if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusDeleting && allocations.Nodename == nodeName {
 			log.FromContext(ctx).Info("Performing cleanup ", "pod", allocations.PodName)
-			extendedResourceName := orgInstaslicePrefix + allocations.Resourceidentifier
+			extendedResourceName := AppendToInstaSlicePrefix(allocations.Resourceidentifier)
 			if errDeletingCm := r.deleteConfigMap(ctx, allocations.Resourceidentifier, allocations.Namespace); errDeletingCm != nil {
 				log.FromContext(ctx).Error(errDeletingCm, "error deleting configmap for ", "pod", allocations.PodName)
 				return ctrl.Result{Requeue: true}, nil
@@ -419,13 +419,13 @@ func (r *InstaSliceDaemonsetReconciler) createInstaSliceResource(ctx context.Con
 		log.FromContext(ctx).Error(err, "unable to fetch Node")
 		return err
 	}
-	capacityKey := orgInstaslicePrefix + resourceIdentifier
+	capacityKey := AppendToInstaSlicePrefix(resourceIdentifier)
 	//desiredCapacity := resource.MustParse("1")
 	if _, exists := node.Status.Capacity[v1.ResourceName(capacityKey)]; exists {
 		log.FromContext(ctx).Info("Node already patched with ", "capacity", capacityKey)
 		return nil
 	}
-	patchData, err := createPatchData(orgInstaslicePrefix+resourceIdentifier, "1")
+	patchData, err := createPatchData(AppendToInstaSlicePrefix(resourceIdentifier), "1")
 	if err != nil {
 		log.FromContext(ctx).Error(err, "unable to create correct json for patching node")
 		return err
