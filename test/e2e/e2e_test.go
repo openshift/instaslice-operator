@@ -578,7 +578,8 @@ var _ = Describe("controller", Ordered, func() {
 				return checkMIG("0")
 			}, 4*time.Minute, 5*time.Second).Should(BeTrue(), "nvidia.com/mig-1g.5gb was not set to zero after all pods completed")
 		})
-		It("should verify that the Kubernetes node has nvidia.com/accelerator-memory resource and matches total GPU memory", func() {
+		It("should verify that the Kubernetes node has the specified resource and matches total GPU memory", func() {
+			instasliceQuotaResourceName := "org.instaslice/accelerator-memory-quota"
 			// Step 1: Get the total GPU memory from the Instaslice object
 			By("Getting the Instaslice object")
 			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
@@ -621,7 +622,7 @@ var _ = Describe("controller", Ordered, func() {
 			}
 
 			// Step 2: Get the patched resource from the node
-			By("Verifying that node has custom resource nvidia.com/accelerator-memory")
+			By(fmt.Sprintf("Verifying that node has custom resource %s", instasliceQuotaResourceName))
 			cmd = exec.Command("kubectl", "get", "node", "-o", "json")
 			output, err = cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get node details: "+string(output))
@@ -643,8 +644,8 @@ var _ = Describe("controller", Ordered, func() {
 			capacity, found := status["capacity"].(map[string]interface{})
 			Expect(found).To(BeTrue(), "Capacity resources not found in Node object")
 
-			acceleratorMemory, found := capacity["nvidia.com/accelerator-memory"].(string)
-			Expect(found).To(BeTrue(), "nvidia.com/accelerator-memory not found in Node object")
+			acceleratorMemory, found := capacity[instasliceQuotaResourceName].(string)
+			Expect(found).To(BeTrue(), fmt.Sprintf("%s not found in Node object", instasliceQuotaResourceName))
 
 			// Extract the memory size from the acceleratorMemory
 			reMemory := regexp.MustCompile(`(\d+)Gi`)
@@ -658,8 +659,8 @@ var _ = Describe("controller", Ordered, func() {
 			}
 
 			// Step 3: Verify the node's accelerator memory matches the total GPU memory in Instaslice
-			By("Verifying that node's accelerator memory matches Instaslice total GPU memory")
-			Expect(nodeMemoryGB).To(BeNumerically("==", totalMemoryGB), "nvidia.com/accelerator-memory on node does not match total GPU memory in Instaslice object")
+			By("Verifying that node's accelerator memory quota matches Instaslice total GPU memory")
+			Expect(nodeMemoryGB).To(BeNumerically("==", totalMemoryGB), fmt.Sprintf("%s on node does not match total GPU memory in Instaslice object", instasliceQuotaResourceName))
 		})
 		// NOTE: Keep this as the last test in e2e test suite, when all workloads are deleted
 		// there should be no allocations in InstaSlice object.

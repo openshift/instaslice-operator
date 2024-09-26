@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: minimal-pod-1
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - name: minimal-container-1
+    image: "ubuntu:20.04" # minimal base image for architecture compatibility
+    resources:
+      limits:
+        nvidia.com/mig-1g.5gb: 1
+    command:
+      - sh
+      - -c
+      - "echo 'Running a minimal container'; sleep 180"
+      # requests:
+      #   cpu: 1000m
+      #   memory: 512Mi
