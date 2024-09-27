@@ -17,11 +17,12 @@ limitations under the License.
 package controller
 
 const (
-	orgInstaslicePrefix         string = "org.instaslice/"
-	finalizerOrGateName         string = orgInstaslicePrefix + "accelerator"
-	quotaResourceName           string = orgInstaslicePrefix + "accelerator-memory-quota"
-	emulatorModeFalse           string = "false"
-	emulatorModeTrue            string = "true"
-	AttributeMediaExtensions    string = "me"
-	instaSliceOperatorNamespace string = "default"
+	orgInstaslicePrefix         = "org.instaslice/"
+	finalizerOrGateName         = orgInstaslicePrefix + "accelerator"
+	quotaResourceName           = orgInstaslicePrefix + "accelerator-memory-quota"
+	emulatorModeFalse           = "false"
+	emulatorModeTrue            = "true"
+	AttributeMediaExtensions    = "me"
+	instaSliceOperatorNamespace = "default"
+	NvidiaMIGPrefix             = "nvidia.com/mig-"
 )
