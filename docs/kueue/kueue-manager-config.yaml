@@ -63,4 +63,4 @@ data:
     #  enable: true
     #  preemptionStrategies: [LessThanOrEqualToFinalShare, LessThanInitialShare]
     resources:
-      excludeResourcePrefixes: [ "org.instaslice/", "nvidia.com/accelerator-memory" ]
+      excludeResourcePrefixes: [ "org.instaslice/", "org.instaslice/accelerator-memory-quota" ]

@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	jsonpatch "github.com/evanphx/json-patch"
@@ -33,6 +34,7 @@ import (
 )
 
 func TestHandle(t *testing.T) {
+	instasliceQuotaResourceName := "org.instaslice/accelerator-memory-quota"
 	scheme := runtime.NewScheme()
 	_ = v1.AddToScheme(scheme)
 
@@ -126,10 +128,10 @@ func TestHandle(t *testing.T) {
 				modifiedPod := &v1.Pod{}
 				g.Expect(json.Unmarshal(patchedPodBytes, modifiedPod)).To(Succeed(), "Failed to unmarshal patched pod")
 
-				actualMemory, found := modifiedPod.Spec.Containers[0].Resources.Limits["nvidia.com/accelerator-memory"]
-				g.Expect(found).To(BeTrue(), "nvidia.com/accelerator-memory limit not found in the modified pod")
+				actualMemory, found := modifiedPod.Spec.Containers[0].Resources.Limits["org.instaslice/accelerator-memory-quota"]
+				g.Expect(found).To(BeTrue(), fmt.Sprintf("%s limit not found in the modified pod", instasliceQuotaResourceName))
 				expectedMemory := resource.MustParse(tt.expectedLimit)
-				g.Expect(actualMemory.Cmp(expectedMemory)).To(Equal(0), "Expected nvidia.com/accelerator-memory to be %s", tt.expectedLimit)
+				g.Expect(actualMemory.Cmp(expectedMemory)).To(Equal(0), fmt.Sprintf("Expected %s to be %s", instasliceQuotaResourceName, tt.expectedLimit))
 			} else {
 				g.Expect(resp.Allowed).To(BeTrue(), "Expected request to be allowed without mutation")
 				g.Expect(resp.Patches).To(BeEmpty(), "Expected no patches but found some")

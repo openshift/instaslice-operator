@@ -897,9 +897,8 @@ func (r *InstaSliceDaemonsetReconciler) patchNodeStatusForNode(ctx context.Conte
 func (r *InstaSliceDaemonsetReconciler) patchNodeStatus(ctx context.Context, node *v1.Node, memory string) error {
 	logger := log.FromContext(ctx)
 
-	// Create patch data for accelerator-memory
-	resourceIdentifier := "accelerator-memory"
-	patchData, err := createPatchData("nvidia.com/"+resourceIdentifier, memory)
+	// Create patch data for accelerator-memory-quota
+	patchData, err := createPatchData(quotaResourceName, memory)
 	if err != nil {
 		logger.Error(err, "unable to create correct json for patching node")
 		return err
@@ -922,7 +921,9 @@ func (r *InstaSliceDaemonsetReconciler) classicalResourcesAndGPUMemOnNode(ctx co
 	}
 
 	newResourceQuantity := resource.MustParse(totalGPUMemory + "Gi")
-	node.Status.Capacity["nvidia.com/accelerator-memory"] = newResourceQuantity
+	// Convert the string to ResourceName
+	resourceName := v1.ResourceName(quotaResourceName)
+	node.Status.Capacity[resourceName] = newResourceQuantity
 
 	// Step 3: Patch the Node object with the updated status
 	if err := r.Status().Update(ctx, node); err != nil {

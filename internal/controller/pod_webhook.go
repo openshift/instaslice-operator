@@ -39,8 +39,7 @@ type PodAnnotator struct {
 }
 
 const (
-	NvidiaAcceleratorMemoryKey = "nvidia.com/accelerator-memory"
-	NvidiaMIGPrefix            = "nvidia.com/mig-"
+	NvidiaMIGPrefix = "nvidia.com/mig-"
 )
 
 func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admission.Response {
@@ -138,7 +137,9 @@ func performQuotaArithmetic(pod *v1.Pod, req admission.Request) admission.Respon
 				}
 				acceleratorMemory := memoryValue * int(quantity.Value())
 				// assume 1 container workload
-				pod.Spec.Containers[0].Resources.Limits[NvidiaAcceleratorMemoryKey] = resource.MustParse(fmt.Sprintf("%dGi", acceleratorMemory))
+				// Convert the string to ResourceName
+				resourceName := v1.ResourceName(quotaResourceName)
+				pod.Spec.Containers[0].Resources.Limits[resourceName] = resource.MustParse(fmt.Sprintf("%dGi", acceleratorMemory))
 			}
 		}
 	}

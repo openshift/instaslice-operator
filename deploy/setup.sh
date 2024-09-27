@@ -18,14 +18,14 @@ nodes:
       containerPath: /var/run/nvidia-container-devices/all
 EOF
 
+echo "> Deploying cert manager"
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.3/cert-manager.yaml
+
 echo "> Creating symlink in the control-plane container"
 docker exec -ti kind-control-plane ln -s /sbin/ldconfig /sbin/ldconfig.real
 
 echo "> Unmounting the nvidia devices in the control-plane container"
 docker exec -ti kind-control-plane umount -R /proc/driver/nvidia
-
-echo "> Deploying cert manager"
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.3/cert-manager.yaml
 
 # According to https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/getting-started.html
 echo "> Adding/updateding the NVIDIA Helm repository"
