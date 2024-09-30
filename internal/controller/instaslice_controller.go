@@ -578,7 +578,7 @@ func (r *InstasliceReconciler) processInstasliceAllocation(ctx context.Context, 
 			errUpdatingInstaslice := r.Update(ctx, &updateInstasliceObject)
 			if errUpdatingInstaslice != nil {
 				log.FromContext(ctx).Info("unable to set instaslice to state ", "state", allocation.Allocationstatus, "pod", allocation.PodName)
-				return true, ctrl.Result{RequeueAfter: 1 * time.Second}, nil
+				return true, ctrl.Result{RequeueAfter: 1 * time.Second}, errUpdatingInstaslice
 			}
 		}
 		return true, ctrl.Result{}, nil
