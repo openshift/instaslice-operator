@@ -389,7 +389,7 @@ func (r *InstaSliceDaemonsetReconciler) searchGi(ctx context.Context, device nvm
 
 	h := &deviceHandler{}
 	h.nvml = nvml.New()
-	h.nvdevice = nvdevice.New(nvdevice.WithNvml(h.nvml))
+	h.nvdevice = nvdevice.New(h.nvml)
 	nvlibParentDevice, err := h.nvdevice.NewDevice(device)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "error init new device")
@@ -468,7 +468,7 @@ func (*InstaSliceDaemonsetReconciler) getCreatedSliceDetails(ctx context.Context
 	realizedMigError := ""
 	h := &deviceHandler{}
 	h.nvml = nvml.New()
-	h.nvdevice = nvdevice.New(nvdevice.WithNvml(h.nvml))
+	h.nvdevice = nvdevice.New(h.nvml)
 
 	ret1 := h.nvml.Init()
 	if ret1 != nvml.SUCCESS {
@@ -1023,7 +1023,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*infe
 func (r *InstaSliceDaemonsetReconciler) discoverDanglingSlices(instaslice *inferencev1alpha1.Instaslice) error {
 	h := &deviceHandler{}
 	h.nvml = nvml.New()
-	h.nvdevice = nvdevice.New(nvdevice.WithNvml(h.nvml))
+	h.nvdevice = nvdevice.New(h.nvml)
 
 	errInitNvml := h.nvml.Init()
 	if errInitNvml != nvml.SUCCESS {
