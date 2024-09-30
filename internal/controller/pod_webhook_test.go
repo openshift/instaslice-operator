@@ -128,7 +128,7 @@ func TestHandle(t *testing.T) {
 				modifiedPod := &v1.Pod{}
 				g.Expect(json.Unmarshal(patchedPodBytes, modifiedPod)).To(Succeed(), "Failed to unmarshal patched pod")
 
-				actualMemory, found := modifiedPod.Spec.Containers[0].Resources.Limits["org.instaslice/accelerator-memory-quota"]
+				actualMemory, found := modifiedPod.Spec.Containers[0].Resources.Limits[v1.ResourceName(instasliceQuotaResourceName)]
 				g.Expect(found).To(BeTrue(), fmt.Sprintf("%s limit not found in the modified pod", instasliceQuotaResourceName))
 				expectedMemory := resource.MustParse(tt.expectedLimit)
 				g.Expect(actualMemory.Cmp(expectedMemory)).To(Equal(0), fmt.Sprintf("Expected %s to be %s", instasliceQuotaResourceName, tt.expectedLimit))

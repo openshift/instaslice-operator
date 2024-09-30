@@ -38,10 +38,6 @@ type PodAnnotator struct {
 	Decoder *admission.Decoder
 }
 
-const (
-	NvidiaMIGPrefix = "nvidia.com/mig-"
-)
-
 func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	// Decode the incoming pod object
 	pod := &v1.Pod{}
