@@ -18,7 +18,8 @@ package controller
 
 const (
 	orgInstaslicePrefix         = "org.instaslice/"
-	finalizerOrGateName         = orgInstaslicePrefix + "accelerator"
+	gateName                    = orgInstaslicePrefix + "accelerator"
+	finalizerName               = gateName
 	quotaResourceName           = orgInstaslicePrefix + "accelerator-memory-quota"
 	emulatorModeFalse           = "false"
 	emulatorModeTrue            = "true"

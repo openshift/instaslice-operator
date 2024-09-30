@@ -81,7 +81,7 @@ func TestChangesAllocationDeletionndFinalizer(t *testing.T) {
 					Namespace: instasliceNamespace,
 					UID:       types.UID(podUUID),
 					Finalizers: []string{
-						finalizerOrGateName,
+						finalizerName,
 					},
 				},
 			}
@@ -133,7 +133,7 @@ func TestChangesAllocationDeletionndFinalizer(t *testing.T) {
 
 			updatedPod := &v1.Pod{}
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedPod)).To(Succeed())
-			Expect(updatedPod.Finalizers).NotTo(ContainElement(finalizerOrGateName))
+			Expect(updatedPod.Finalizers).NotTo(ContainElement(finalizerName))
 		})
 
 		It("should set allocation status to Deleting if status is not Deleted", func() {
