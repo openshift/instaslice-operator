@@ -161,7 +161,7 @@ var _ = Describe("controller", Ordered, func() {
 
 			finalizers, found := podObj["metadata"].(map[string]interface{})["finalizers"].([]interface{})
 			Expect(found).To(BeTrue(), "Pod does not have finalizers")
-			finalizer := utils.AppendToInstaSlicePrefix("accelerator")
+			finalizer := utils.AppendToInstaSlicePrefix("accelarator")
 			Expect(finalizers).To(ContainElement(finalizer), "Finalizer '%s' not found on pod", finalizer)
 		})
 
