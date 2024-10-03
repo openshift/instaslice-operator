@@ -125,15 +125,14 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 	}
 
 	emulatorMode := os.Getenv("EMULATOR_MODE")
-	log.FromContext(ctx).Info(" daemonset simulator mode ", "enabled", emulatorMode)
-
+	log.FromContext(ctx).Info("daemonset simulator mode ", "enabled", emulatorMode)
 	for _, allocations := range instaslice.Spec.Allocations {
 		//TODO: we make assumption that resources would always exists to delete
 		// if user deletes abruptly, cm, instaslice resource, ci and gi may not exists
 		// handle such scenario's.
 		// delete first before creating new slice
 		if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusDeleting && allocations.Nodename == nodeName {
-			log.FromContext(ctx).Info("Performing cleanup ", "pod", allocations.PodName)
+			log.FromContext(ctx).Info("performing cleanup ", "pod", allocations.PodName)
 			extendedResourceName := orgInstaslicePrefix + allocations.Resourceidentifier
 			if errDeletingCm := r.deleteConfigMap(ctx, allocations.Resourceidentifier, allocations.Namespace); errDeletingCm != nil {
 				log.FromContext(ctx).Error(errDeletingCm, "error deleting configmap for ", "pod", allocations.PodName)
@@ -154,12 +153,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				if errCleaningCiAndGi != nil {
 					return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 				}
-				log.FromContext(ctx).Info("Done deleting ci and gi for ", "pod", allocations.PodName)
-			}
-
-			nodeName := os.Getenv("NODE_NAME")
-			if errUpdatingNodeCapacity := r.updateNodeCapacity(ctx, nodeName, allocations, emulatorMode); errUpdatingNodeCapacity != nil {
-				return ctrl.Result{Requeue: true}, nil
+				log.FromContext(ctx).Info("done deleting ci and gi for ", "pod", allocations.PodName)
 			}
 			//TODO: could be merged with the creating call above
 			var updateInstasliceObject inferencev1alpha1.Instaslice
@@ -187,7 +181,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			updateInstasliceObject.Spec.Allocations[allocations.PodUUID] = allocations
 			errUpdatingAllocation := r.Update(ctx, &updateInstasliceObject)
 			if errUpdatingAllocation != nil {
-				log.FromContext(ctx).Error(errUpdatingAllocation, "Error updating InstaSlice object for ", "pod", allocations.PodName)
+				log.FromContext(ctx).Error(errUpdatingAllocation, "error updating InstaSlice object for ", "pod", allocations.PodName)
 				return ctrl.Result{Requeue: true}, nil
 			}
 		}
@@ -239,7 +233,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				// TODO: move this logic to a new vendor specific file
 				if prep, exists := cachedPreparedMig[allocations.PodUUID]; !exists || isPreparedMigEmpty(prep) {
 					placement := nvml.GpuInstancePlacement{}
-					log.FromContext(ctx).Info("Slice does not exists on GPU for ", "pod", allocations.PodName)
 					device, retCodeForDevice := nvml.DeviceGetHandleByUUID(allocations.GPUUUID)
 					if retCodeForDevice != nvml.SUCCESS {
 						log.FromContext(ctx).Error(ret, "error getting GPU device handle")
@@ -265,7 +258,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					createCiAndGi := true
 					migInfos := make(map[string]*MigDeviceInfo)
 					err = walkMigDevices(device, func(i int, migDevice nvml.Device) error {
-						log.FromContext(ctx).Info("Searching MIG slice")
 						giID, ret := migDevice.GetGpuInstanceId()
 						if ret != nvml.SUCCESS {
 							return fmt.Errorf("error getting GPU instance ID for MIG device: %v", ret)
@@ -335,7 +327,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 						//TODO: figure out the compute slice scenario, I think Kubernetes does not support this use case yet
 						ciProfileInfo, retCodeForCiProfile := gi.GetComputeInstanceProfileInfo(ciProfileId, 0)
 						if retCodeForCiProfile != nvml.SUCCESS {
-							//TODO: clean up GI and then return or may be re-use since we have the logic
 							log.FromContext(ctx).Error(retCodeForGiWithPlacement, "error getting compute instance profile info for ", "pod", allocations.PodName)
 						}
 						ci, retCodeForComputeInstance := gi.CreateComputeInstance(&ciProfileInfo)
@@ -358,19 +349,13 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				}
 			}
 			createdSliceDetails := cachedPreparedMig[allocations.PodUUID]
-			log.FromContext(ctx).Info("The created cache details loaded are", "pod name", allocations.PodName, "slice details", createdSliceDetails.miguuid)
 			//making sure that ci, gi and migUUID are not nil or dafault for the target pod.
 			if createdSliceDetails.miguuid != "" {
-				log.FromContext(ctx).Info("asmalvan creating cm, pe and updating cap")
 				if errCreatingConfigMap := r.createConfigMap(ctx, createdSliceDetails.miguuid, existingAllocations.Namespace, resourceIdentifier); errCreatingConfigMap != nil {
 					return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 				}
 
 				if errAddingPrepared := r.createPreparedEntry(ctx, profileName, podUUID, allocations.GPUUUID, createdSliceDetails.gid, createdSliceDetails.cid, &instaslice, createdSliceDetails.miguuid); errAddingPrepared != nil {
-					return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
-				}
-				nodeName := os.Getenv("NODE_NAME")
-				if errUpdatingNodeCapacity := r.updateNodeCapacity(ctx, nodeName, allocations, emulatorMode); errUpdatingNodeCapacity != nil {
 					return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 				}
 				var updateInstasliceObject inferencev1alpha1.Instaslice
@@ -402,7 +387,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					return ctrl.Result{Requeue: true}, nil
 				}
 			}
-
+			delete(cachedPreparedMig, allocations.PodUUID)
 		}
 	}
 	return ctrl.Result{}, nil
@@ -418,7 +403,7 @@ func (r *InstaSliceDaemonsetReconciler) createInstaSliceResource(ctx context.Con
 	capacityKey := orgInstaslicePrefix + resourceIdentifier
 	//desiredCapacity := resource.MustParse("1")
 	if _, exists := node.Status.Capacity[v1.ResourceName(capacityKey)]; exists {
-		log.FromContext(ctx).Info("Node already patched with ", "capacity", capacityKey)
+		log.FromContext(ctx).Info("node already patched with ", "capacity", capacityKey)
 		return nil
 	}
 	patchData, err := createPatchData(orgInstaslicePrefix+resourceIdentifier, "1")
@@ -451,7 +436,6 @@ func (r *InstaSliceDaemonsetReconciler) getAllocationsToprepare(ctx context.Cont
 			}
 		}
 	}
-	log.FromContext(ctx).Info("placement not found for ", "podUuid", podUuid)
 	return placement, fmt.Errorf("got prepared slice wait for object to be updated")
 }
 
@@ -644,106 +628,6 @@ func (r *InstaSliceDaemonsetReconciler) createPreparedEntry(ctx context.Context,
 		log.FromContext(ctx).Error(errForUpdate, "error adding prepared statement")
 		return errForUpdate
 	}
-	return nil
-}
-
-// Reloads the configuration in the device plugin to update node capacity
-// there is a possibility of double update, should that happen while we retry?
-// sometimes the device plugin pod needs to be manually bounced before a burst of short lived
-// pods are submitted for testing, this check could be part of installation.
-
-func (r *InstaSliceDaemonsetReconciler) updateNodeCapacity(ctx context.Context, nodeName string, allocation inferencev1alpha1.AllocationDetails, emulatorMode string) error {
-	node := &v1.Node{}
-	nodeNameObject := types.NamespacedName{Name: nodeName}
-	err := r.Get(ctx, nodeNameObject, node)
-	if err != nil {
-		log.FromContext(ctx).Error(err, "unable to get node object")
-		return err
-	}
-	// In a real cluster this will never be nil
-	// it was added to pass the unit test.
-	if node.Status.Capacity == nil {
-		node.Status.Capacity = v1.ResourceList{}
-	}
-	if node.Status.Allocatable == nil {
-		node.Status.Allocatable = v1.ResourceList{}
-	}
-	// NOTE: Label value should be maunally added when the cluster is setup.
-	if value, exists := node.Labels["nvidia.com/device-plugin.config"]; exists {
-		if value == "update-capacity-1" {
-			node.Labels["nvidia.com/device-plugin.config"] = "update-capacity"
-		} else if value == "update-capacity" {
-			node.Labels["nvidia.com/device-plugin.config"] = "update-capacity-1"
-		}
-	}
-	if emulatorMode == emulatorModeTrue {
-		if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreating {
-			// assume only one quantity can be requested for a profile
-			resourceName := "nvidia.com/mig-" + allocation.Profile
-			// Count InstaSlice extended resources in Capacity
-			countCapacity := 0
-			for resourceName := range node.Status.Capacity {
-				if strings.HasPrefix(string(resourceName), orgInstaslicePrefix) {
-					countCapacity++
-				}
-			}
-			log.FromContext(ctx).Info("capacity while creating", "count", countCapacity)
-			resourceQuantity := resource.NewQuantity(1, resource.DecimalSI)
-			extendedResCapacityQuantity := resource.NewQuantity(int64(countCapacity), resource.DecimalSI)
-			existingCapacity, capacityExists := node.Status.Capacity[v1.ResourceName(resourceName)]
-			if capacityExists {
-				if existingCapacity.Cmp(*extendedResCapacityQuantity) == -1 {
-					log.FromContext(ctx).Info("Adding resource ", "name", resourceName, "pod", allocation.PodName)
-					existingCapacity.Add(*resourceQuantity)
-					log.FromContext(ctx).Info("simulator added capacity is ", "num", existingCapacity)
-					node.Status.Capacity[v1.ResourceName(resourceName)] = existingCapacity
-				}
-			} else {
-				log.FromContext(ctx).Info("simulator created capacity is ", "num", resourceQuantity)
-				node.Status.Capacity[v1.ResourceName(resourceName)] = *resourceQuantity
-			}
-		}
-
-		if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleting {
-			// assume only one quantity can be requested for a profile
-			resourceName := "nvidia.com/mig-" + allocation.Profile
-			// Count InstaSlice extended resources in Capacity
-			countCapacity := 0
-			for resourceName := range node.Status.Capacity {
-				if strings.HasPrefix(string(resourceName), orgInstaslicePrefix) {
-					countCapacity++
-				}
-			}
-			log.FromContext(ctx).Info("capacity while deleting", "count", countCapacity)
-			extendedResCapacityQuantity := resource.NewQuantity(int64(countCapacity), resource.DecimalSI)
-			_, capacityExists := node.Status.Capacity[v1.ResourceName(resourceName)]
-
-			if capacityExists {
-				log.FromContext(ctx).Info("asmalvan: subtraction resource ", "name", resourceName, "pod", allocation.PodName)
-				// deletes have multiple scenarios, it can decrease the capacity, stay the same due to new instaslice resource added
-				// or drop to zero for last pod, hence we just try to be in sync with count of org.instaslice resource
-				node.Status.Capacity[v1.ResourceName(resourceName)] = *extendedResCapacityQuantity
-			}
-
-			log.FromContext(ctx).Info("done updating the capacity for ", "allocation", allocation.Allocationstatus)
-		}
-
-		err = r.Status().Update(ctx, node)
-		if err != nil {
-			log.FromContext(ctx).Error(err, "failed to patch node status")
-			return err
-		}
-
-		log.FromContext(ctx).Info("done updating the capacity")
-		return nil
-	}
-
-	err = r.Update(ctx, node)
-	if err != nil {
-		log.FromContext(ctx).Error(err, "unable to update Node")
-		return err
-	}
-	log.FromContext(ctx).Info("done updating the capacity")
 	return nil
 }
 

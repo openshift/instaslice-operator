@@ -96,7 +96,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// Pods with scheduling gates other than the InstaSlice gate are not ready to be scheduled and should be ignored
 	if isPodGatedByOthers(pod) {
-		//log.FromContext(ctx).Info("Ignoring gated pod", "pod", pod.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -319,37 +318,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocations := range instaslice.Spec.Allocations {
-				// Check if the allocatable resources contain eg: nvidia.com/mig-1g.5gb
-				resourceProfile := "nvidia.com/mig-" + allocations.Profile
-				gpuSliceAllocatable := 0
-				node := &v1.Node{}
-				nodeNameObject := types.NamespacedName{Name: instaslice.Name}
-				errRetrievingNodeObj := r.Get(ctx, nodeNameObject, node)
-				if errRetrievingNodeObj != nil {
-					log.FromContext(ctx).Error(err, "unable to get node object")
-					return ctrl.Result{Requeue: true}, nil
-				}
-				for resourceName, quantity := range node.Status.Allocatable {
-					// Check if the resource name starts with "org.instaslice"
-					if strings.HasPrefix(string(resourceName), resourceProfile) {
-						gpuSliceAllocatable += int(quantity.Value())
-					}
-				}
-				extResCap := 0
-				for resourceName, _ := range node.Status.Allocatable {
-					// Check if the resource name starts with "org.instaslice"
-					if strings.HasPrefix(string(resourceName), orgInstaslicePrefix) {
-						extResCap++
-					}
-				}
-
-				preparedCount := 0
-				for resourceName, _ := range instaslice.Spec.Prepared {
-					// Check if the resource name starts with "org.instaslice"
-					if strings.HasPrefix(string(resourceName), orgInstaslicePrefix) {
-						preparedCount++
-					}
-				}
 				gpuOperatorPodOk, err := r.isPatternPodRunningAndHealthy(ctx, "nvidia-device-plugin-daemonset", "gpu-operator")
 				if err != nil {
 					log.FromContext(ctx).Info("gpu operator pod not found")
@@ -379,9 +347,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						log.FromContext(ctx).Error(err, "Error updating instaslice allocations")
 						return ctrl.Result{Requeue: true}, nil
 					}
-					log.FromContext(ctx).Info("resource values are ", "gpuSliceAllocatable", gpuSliceAllocatable, "extResCap", extResCap, "gpiOperatorPodOk", gpuOperatorPodOk)
-					// (gpuSliceAllocatable == extResCap) &&
-					if (gpuSliceAllocatable-preparedCount >= 1) && gpuOperatorPodOk {
+					if gpuOperatorPodOk {
 						pod := r.unGatePod(pod)
 						errForUngating := r.Update(ctx, pod)
 						if errForUngating != nil {
@@ -396,9 +362,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				// InstaSlice object got updated with ungated status but the controller failed
 				// ungating the pod.
 				if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusUngated && allocations.PodUUID == string(pod.UID) {
-					log.FromContext(ctx).Info("resource values are in ungated are ", "gpuSliceAllocatable", gpuSliceAllocatable, "extResCap", extResCap, "gpiOperatorPodOk", gpuOperatorPodOk)
-					// && (gpuSliceAllocatable == extResCap)
-					if gpuSliceAllocatable != 0 && gpuOperatorPodOk {
+					if gpuOperatorPodOk {
 						pod := r.unGatePod(pod)
 						errForUngating := r.Update(ctx, pod)
 						if errForUngating != nil {
@@ -444,7 +408,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						updateInstasliceObject.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
 					}
 					updateInstasliceObject.Spec.Allocations[string(pod.UID)] = *allocDetails
-					log.FromContext(ctx).Info("allocation details for ", "allocDetails", *allocDetails)
 					if err := r.Update(ctx, &updateInstasliceObject); err != nil {
 						log.FromContext(ctx).Error(err, "Error updating instaslice allocations")
 						return ctrl.Result{Requeue: true}, nil
@@ -652,11 +615,6 @@ func (r *InstasliceReconciler) removeInstasliceAllocation(ctx context.Context, i
 		if errDeletingAllocation != nil {
 			return deleteResult, errDeletingAllocation
 		}
-
-		// removeResult, errRemovingFinalizer := r.removeInstaSliceFinalizer(ctx, req)
-		// if errRemovingFinalizer != nil {
-		// 	return removeResult, errRemovingFinalizer
-		// }
 	}
 	return ctrl.Result{}, nil
 }
@@ -686,7 +644,6 @@ func (r *InstasliceReconciler) setInstasliceAllocationToDeleting(ctx context.Con
 	return ctrl.Result{}, nil
 }
 
-// TODO: remove or change
 func (r *InstasliceReconciler) isPatternPodRunningAndHealthy(ctx context.Context, pattern string, namespace string) (bool, error) {
 	podList := &v1.PodList{}
 	listOpts := []client.ListOption{
