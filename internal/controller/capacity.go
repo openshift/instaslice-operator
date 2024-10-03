@@ -87,25 +87,27 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 	for i := range gpuAllocatedIndex {
 		gpuAllocatedIndex[i] = 0
 	}
-	//TODO: remove this once we start using GPU operator with device plugin fix
-	for _, item := range instaslice.Spec.Prepared {
-		if item.Parent == gpuUUID {
-			for i := 0; i < int(item.Size); i++ {
-				gpuAllocatedIndex[int(item.Start)+i] = 1
-			}
-
-		}
-	}
 	// deleted allocations can be reused
 	// ungated allocations are already counted in prepared
 	for _, item := range instaslice.Spec.Allocations {
-		if item.GPUUUID == gpuUUID && item.Allocationstatus != inferencev1alpha1.AllocationStatusDeleted && item.Allocationstatus != inferencev1alpha1.AllocationStatusUngated {
+		if item.GPUUUID == gpuUUID && item.Allocationstatus != inferencev1alpha1.AllocationStatusDeleted {
 			for i := 0; i < int(item.Size); i++ {
 				gpuAllocatedIndex[int(item.Start)+i] = 1
 			}
 		}
 	}
-
+	// Check if all indices are allocated
+	allAllocated := true
+	for _, allocated := range gpuAllocatedIndex {
+		if allocated != 1 {
+			allAllocated = false
+			break
+		}
+	}
+	if allAllocated {
+		// invalid index
+		return uint32(9)
+	}
 	var neededContinousSlot int
 	var possiblePlacements []int
 	for _, placement := range instaslice.Spec.Migplacement {
