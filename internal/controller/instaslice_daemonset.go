@@ -764,8 +764,51 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 	if err := r.patchNodeStatusForNode(customCtx, nodeName, totalMemoryGB); err != nil {
 		return nil, err
 	}
+	if err := r.addMigCapacityToNode(customCtx, instaslice); err != nil {
+		return nil, err
+	}
 
 	return discoveredGpusOnHost, nil
+}
+
+func (r *InstaSliceDaemonsetReconciler) addMigCapacityToNode(ctx context.Context, instaslice *inferencev1alpha1.Instaslice) error {
+	profilePlacements := make(map[string]int)
+	node := &v1.Node{}
+	nodeNameObject := types.NamespacedName{Name: instaslice.Name}
+	if err := r.Get(ctx, nodeNameObject, node); err != nil {
+		return err
+	}
+	for _, placement := range instaslice.Spec.Migplacement {
+		for _, p := range placement.Placements {
+			if p.Size > 0 {
+				profilePlacements[placement.Profile]++
+			}
+		}
+	}
+	numGPUs := len(instaslice.Spec.MigGPUUUID)
+	for profile, sum := range profilePlacements {
+		profilePlacements[profile] = sum * numGPUs
+	}
+	patches := []map[string]interface{}{}
+	for profile, count := range profilePlacements {
+		resourceName := "nvidia.com/mig-" + profile
+		patches = append(patches, map[string]interface{}{
+			"op":    "replace",
+			"path":  "/status/capacity/" + strings.Replace(resourceName, "/", "~1", -1),
+			"value": fmt.Sprintf("%d", count),
+		})
+	}
+
+	patchData, err := json.Marshal(patches)
+	if err != nil {
+		return fmt.Errorf("failed to marshal patch data: %v", err)
+	}
+	if err := r.Status().Patch(ctx, node, client.RawPatch(types.JSONPatchType, patchData)); err != nil {
+		return fmt.Errorf("failed to patch node status: %v", err)
+	}
+
+	log.FromContext(ctx).Info("Successfully patched node with possible maxMIG placement counts", "nodeName", instaslice.Name)
+	return nil
 }
 
 // patchNodeStatusForNode fetches the node and patches its capacity with the given GPU memory
