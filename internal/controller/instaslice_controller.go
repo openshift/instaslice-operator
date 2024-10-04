@@ -316,14 +316,16 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				}
 			}
 		}
+		gpuOperatorPodOk := false
+		var err error
 		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocations := range instaslice.Spec.Allocations {
-				gpuOperatorPodOk, err := r.isPatternPodRunningAndHealthy(ctx, "nvidia-device-plugin-daemonset", "gpu-operator")
-				if err != nil {
-					log.FromContext(ctx).Info("gpu operator pod not found")
-					return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
-				}
 				if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusCreated && allocations.PodUUID == string(pod.UID) {
+					gpuOperatorPodOk, err = r.isPatternPodRunningAndHealthy(ctx, "nvidia-device-plugin-daemonset", "gpu-operator")
+					if err != nil {
+						log.FromContext(ctx).Info("gpu operator pod not found")
+						return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+					}
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,

@@ -94,11 +94,10 @@ type preparedMig struct {
 }
 
 type MigDeviceInfo struct {
-	uuid    string
-	parent  *GpuInfo
-	profile *MigProfile
-	giInfo  *nvml.GpuInstanceInfo
-	ciInfo  *nvml.ComputeInstanceInfo
+	uuid   string
+	parent *GpuInfo
+	giInfo *nvml.GpuInstanceInfo
+	ciInfo *nvml.ComputeInstanceInfo
 }
 
 type GpuInfo struct {
@@ -250,14 +249,18 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					}
 
 					log.FromContext(ctx).Info("The profile id is", "giProfileInfo", giProfileInfo.Id, "Memory", giProfileInfo.MemorySizeMB, "pod", podUUID)
-
+					createCiAndGi := true
 					updatedPlacement, err := r.getAllocationsToprepare(ctx, placement, instaslice, allocations.PodUUID)
 					if err != nil {
-						log.FromContext(ctx).Error(err, "prepared already exists for ", "pod", allocations.PodName)
+						log.FromContext(ctx).Error(err, "prepared already exists will not create ci and gi for ", "pod", allocations.PodName)
+						createCiAndGi = false
 					}
-					createCiAndGi := true
 					migInfos := make(map[string]*MigDeviceInfo)
 					err = walkMigDevices(device, func(i int, migDevice nvml.Device) error {
+						parentUuid, ret := device.GetUUID()
+						if ret != nvml.SUCCESS {
+							return fmt.Errorf("error getting parent GPU UUID : %v", ret)
+						}
 						giID, ret := migDevice.GetGpuInstanceId()
 						if ret != nvml.SUCCESS {
 							return fmt.Errorf("error getting GPU instance ID for MIG device: %v", ret)
@@ -282,27 +285,24 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 						if ret != nvml.SUCCESS {
 							return fmt.Errorf("error getting Compute instance info for '%v': %v", ciID, ret)
 						}
-						log.FromContext(ctx).Info("Got MIG device UUID")
 						uuid, ret := migDevice.GetUUID()
 						if ret != nvml.SUCCESS {
 							return fmt.Errorf("error getting UUID for MIG device: %v", ret)
 						}
 						migInfos[uuid] = &MigDeviceInfo{
-							uuid:   uuid,
+							uuid:   parentUuid,
 							giInfo: &giInfo,
 							ciInfo: &ciInfo,
 						}
-						// if ci and gi exist, we need to assign those to the respective allocation
-						for _, migDevice := range migInfos {
-							if migDevice.giInfo != nil && migDevice.parent != nil {
-								if migDevice.giInfo.ProfileId == giProfileInfo.Id && migDevice.parent.uuid == allocations.GPUUUID {
-									cachedPreparedMig[allocations.PodUUID] = preparedMig{gid: giInfo.Id, miguuid: uuid, cid: ciInfo.Id}
-									createCiAndGi = false
-								}
-							}
-						}
 						return nil
 					})
+					// if ci and gi exist, we need to assign those to the respective allocation
+					for migUuid, migDevice := range migInfos {
+						if migDevice.giInfo.ProfileId == giProfileInfo.Id && migDevice.uuid == allocations.GPUUUID {
+							cachedPreparedMig[allocations.PodUUID] = preparedMig{gid: migDevice.giInfo.Id, miguuid: migUuid, cid: migDevice.ciInfo.Id}
+							createCiAndGi = false
+						}
+					}
 					if err != nil {
 						log.FromContext(ctx).Error(err, "walking MIG devices failed")
 					}
