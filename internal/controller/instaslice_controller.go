@@ -357,7 +357,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							return ctrl.Result{Requeue: true}, nil
 						}
 					} else {
-						log.FromContext(ctx).Info("extended allocatable resource not found in status created")
+						log.FromContext(ctx).Info("gpuOperatorPod is not found waiting for it to be in state Running")
 						return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 					}
 				}

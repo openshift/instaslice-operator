@@ -105,10 +105,9 @@ func TestChangesAllocationDeletionndFinalizer(t *testing.T) {
 			}
 			Expect(fakeClient.Update(ctx, instaslice)).To(Succeed())
 
-			found, result, err := r.processInstasliceAllocation(ctx, instaslice.Name, podUUID, instaslice.Spec.Allocations[podUUID], req)
+			result, err := r.deleteInstasliceAllocation(ctx, instaslice.Name, instaslice.Spec.Allocations[podUUID])
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(found).To(BeTrue())
 			Expect(result).To(Equal(ctrl.Result{}))
 
 			updatedInstaSlice := &inferencev1alpha1.Instaslice{}
@@ -125,10 +124,9 @@ func TestChangesAllocationDeletionndFinalizer(t *testing.T) {
 			}
 			Expect(fakeClient.Update(ctx, instaslice)).To(Succeed())
 
-			found, result, err := r.processInstasliceAllocation(ctx, instaslice.Name, podUUID, instaslice.Spec.Allocations[podUUID], req)
+			result, err := r.removeInstaSliceFinalizer(ctx, req)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(found).To(BeTrue())
 			Expect(result).To(Equal(ctrl.Result{}))
 
 			updatedPod := &v1.Pod{}
@@ -137,10 +135,9 @@ func TestChangesAllocationDeletionndFinalizer(t *testing.T) {
 		})
 
 		It("should set allocation status to Deleting if status is not Deleted", func() {
-			found, result, err := r.processInstasliceAllocation(ctx, instaslice.Name, podUUID, instaslice.Spec.Allocations[podUUID], req)
+			result, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, podUUID, instaslice.Spec.Allocations[podUUID], req)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(found).To(BeTrue())
 
 			updatedInstaSlice := &inferencev1alpha1.Instaslice{}
 			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: instaslice.Name, Namespace: instasliceNamespace}, updatedInstaSlice)).To(Succeed())
@@ -153,9 +150,8 @@ func TestChangesAllocationDeletionndFinalizer(t *testing.T) {
 		It("should requeue if there is an error updating the instaslice", func() {
 			r.Client = fake.NewClientBuilder().WithScheme(runtime.NewScheme()).Build()
 
-			found, result, err := r.processInstasliceAllocation(ctx, instaslice.Name, podUUID, instaslice.Spec.Allocations[podUUID], req)
+			result, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, podUUID, instaslice.Spec.Allocations[podUUID], req)
 
-			Expect(found).To(BeTrue())
 			Expect(err).To(HaveOccurred())
 			Expect(result.Requeue).To(BeTrue())
 		})

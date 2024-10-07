@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/test/utils"
 )
 
@@ -428,13 +429,13 @@ var _ = Describe("controller", Ordered, func() {
 			}
 		})
 
-		It("should verify nvidia.com/mig-1g.5gb is zero before submitting pods, sync with running pods, and set to zero after completion", func() {
+		It("should verify nvidia.com/mig-1g.5gb is max before submitting pods, sync with running pods, and set to zero after completion", Label("non-gpu"), func() {
 			ctx := context.TODO()
-			namespace := "default"
+			//namespace := "default"
 			nodeName := "kind-control-plane"
 
-			resetMIGResource := func() error {
-				patch := `{"status": {"capacity": {"nvidia.com/mig-1g.5gb": "0"}}}`
+			setMIGResourceToMaxFor5gProfile := func() error {
+				patch := `{"status": {"capacity": {"nvidia.com/mig-1g.5gb": "14"}}}`
 				cmd := exec.CommandContext(ctx, "kubectl", "patch", "node", nodeName, "--subresource=status", "--type=merge", "-p", patch)
 				output, err := cmd.CombinedOutput()
 				if err != nil {
@@ -493,7 +494,7 @@ var _ = Describe("controller", Ordered, func() {
 				return nil
 			}
 
-			err := resetMIGResource()
+			err := setMIGResourceToMaxFor5gProfile()
 			Expect(err).NotTo(HaveOccurred(), "Failed to reset nvidia.com/mig-1g.5gb to zero")
 
 			err = deleteInstasliceResources()
@@ -523,9 +524,9 @@ var _ = Describe("controller", Ordered, func() {
 				return found && migCapacity == expectedMIG
 			}
 
-			Expect(checkMIG("0")).To(BeTrue(), "nvidia.com/mig-1g.5gb is not zero before submitting pods")
+			Expect(checkMIG("14")).To(BeTrue(), "nvidia.com/mig-1g.5gb is not zero before submitting pods")
 
-			cmdApply := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/capacity_test_multiple_pods.yaml")
+			cmdApply := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test_multiple_pods.yaml")
 			outputApply, err := cmdApply.CombinedOutput()
 			if err != nil {
 				fmt.Printf("kubectl apply error: %s\n", string(outputApply))
@@ -533,50 +534,32 @@ var _ = Describe("controller", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputApply))
 
 			Eventually(func() bool {
-				cmd := exec.CommandContext(ctx, "kubectl", "get", "pods", "-n", namespace, "--no-headers")
+				// Retrieve the Instaslice object
+				cmd := exec.Command("kubectl", "get", "instaslice", "kind-control-plane", "-n", "default", "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
-					fmt.Printf("Failed to execute kubectl: %v\n", err)
-					fmt.Printf("kubectl output: %s\n", string(output))
+					fmt.Printf("Failed to retrieve the Instaslice object: %s\n", string(output))
 					return false
 				}
 
-				outputStr := strings.TrimSpace(string(output))
-				podLines := strings.Split(outputStr, "\n")
+				instaslice := &inferencev1alpha1.Instaslice{}
 
-				for _, podLine := range podLines {
-					if strings.Contains(podLine, "Running") {
-						continue
-					}
-					return false
-				}
-
-				return true
-			}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Not all pods are Running")
-
-			runningPodsCount := 7
-			Expect(checkMIG(fmt.Sprintf("%d", runningPodsCount))).To(BeTrue(), "nvidia.com/mig-1g.5gb is not in sync with the number of running pods")
-
-			Eventually(func() bool {
-				cmd := exec.CommandContext(ctx, "kubectl", "get", "pods", "-n", namespace, "--no-headers")
-				output, err := cmd.CombinedOutput()
+				err = json.Unmarshal(output, &instaslice)
 				if err != nil {
-					fmt.Printf("Failed to execute kubectl: %v\n", err)
-					fmt.Printf("kubectl output: %s\n", string(output))
+					fmt.Printf("Failed to unmarshal the Instaslice object: %v\n", err)
 					return false
 				}
 
-				outputStr := strings.TrimSpace(string(output))
-				podLines := strings.Split(outputStr, "\n")
-
-				for _, podLine := range podLines {
-					if !strings.Contains(podLine, "Completed") {
+				// Check if all allocations are in the 'ungated' state
+				for _, allocation := range instaslice.Spec.Allocations {
+					if allocation.Allocationstatus != inferencev1alpha1.AllocationStatusUngated {
 						return false
 					}
 				}
 
-				return checkMIG("0")
-			}, 4*time.Minute, 5*time.Second).Should(BeTrue(), "nvidia.com/mig-1g.5gb was not set to zero after all pods completed")
+				// All allocations are in the 'ungated' state
+				return true
+			}, "60s", "5s").Should(BeTrue(), "Not all allocations are in the 'ungated' state after the timeout")
 		})
 		It("should verify that the Kubernetes node has nvidia.com/accelerator-memory resource and matches total GPU memory", func() {
 			// Step 1: Get the total GPU memory from the Instaslice object

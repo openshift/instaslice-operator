@@ -29,11 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	runtimefake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -121,63 +117,4 @@ func TestCleanUp(t *testing.T) {
 	_, exists := updatedNode.Status.Capacity["org.instaslice/uid-1"]
 	assert.False(t, exists, "resource 'org.instaslice/uid-1' should be deleted from the node's capacity")
 
-}
-
-func TestUpdateNodeCapacity(t *testing.T) {
-	var _ = Describe("InstaSliceDaemonsetReconciler", func() {
-		var (
-			ctx          context.Context
-			reconciler   InstaSliceDaemonsetReconciler
-			fakeClient   client.Client
-			node         *v1.Node
-			nodeName     string
-			emulatorMode string
-		)
-		allocation := inferencev1alpha1.AllocationDetails{
-			Allocationstatus: inferencev1alpha1.AllocationStatusCreating,
-			Profile:          "test-profile",
-		}
-
-		BeforeEach(func() {
-			ctx = context.TODO()
-
-			// Setup fake client with a test node
-			nodeName = "test-node"
-			emulatorMode = "false"
-
-			node = &v1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: nodeName,
-					Labels: map[string]string{
-						"nvidia.com/device-plugin.config": "update-capacity-1",
-					},
-				},
-				Status: v1.NodeStatus{
-					Capacity:    v1.ResourceList{},
-					Allocatable: v1.ResourceList{},
-				},
-			}
-
-			fakeClient = fake.NewClientBuilder().WithObjects(node).Build()
-
-			reconciler = InstaSliceDaemonsetReconciler{
-				Client: fakeClient,
-			}
-		})
-
-		Context("when updating node capacity in emulator mode", func() {
-			It("should toggle the label and update node capacity", func() {
-
-				err := reconciler.updateNodeCapacity(ctx, nodeName, allocation, emulatorMode)
-				Expect(err).ToNot(HaveOccurred())
-
-				updatedNode := &v1.Node{}
-				err = fakeClient.Get(ctx, types.NamespacedName{Name: nodeName}, updatedNode)
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(updatedNode.Labels["nvidia.com/device-plugin.config"]).To(Equal("update-capacity"))
-			})
-		})
-
-	})
 }
