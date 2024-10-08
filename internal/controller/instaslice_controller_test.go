@@ -135,7 +135,7 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 		})
 
 		It("should set allocation status to Deleting if status is not Deleted", func() {
-			result, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, podUUID, instaslice.Spec.Allocations[podUUID], req)
+			result, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, podUUID, instaslice.Spec.Allocations[podUUID])
 
 			Expect(err).NotTo(HaveOccurred())
 
@@ -150,7 +150,7 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 		It("should requeue if there is an error updating the instaslice", func() {
 			r.Client = fake.NewClientBuilder().WithScheme(runtime.NewScheme()).Build()
 
-			result, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, podUUID, instaslice.Spec.Allocations[podUUID], req)
+			result, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, podUUID, instaslice.Spec.Allocations[podUUID])
 
 			Expect(err).To(HaveOccurred())
 			Expect(result.Requeue).To(BeTrue())
