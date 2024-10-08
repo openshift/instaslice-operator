@@ -235,7 +235,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 					log.FromContext(ctx).Info("The profile id is", "giProfileInfo", giProfileInfo.Id, "Memory", giProfileInfo.MemorySizeMB, "pod", podUUID)
 					createCiAndGi := true
-					updatedPlacement, err := r.getAllocationsToprepare(ctx, placement, instaslice, allocations.PodUUID)
+					updatedPlacement, err := r.getAllocationsToprepare(placement, instaslice, allocations.PodUUID)
 					if err != nil {
 						log.FromContext(ctx).Error(err, "prepared already exists will not create ci and gi for ", "pod", allocations.PodName)
 						createCiAndGi = false
@@ -376,31 +376,8 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 	return ctrl.Result{}, nil
 }
 
-// this method creates an extended resource to help scheduler place pod on the controller selected node.
-func (r *InstaSliceDaemonsetReconciler) createInstaSliceResource(ctx context.Context, nodeName string, resourceIdentifier string) error {
-	node := &v1.Node{}
-	if err := r.Get(ctx, types.NamespacedName{Name: nodeName}, node); err != nil {
-		return err
-	}
-	capacityKey := AppendToInstaSlicePrefix(resourceIdentifier)
-	//desiredCapacity := resource.MustParse("1")
-	if _, exists := node.Status.Capacity[v1.ResourceName(capacityKey)]; exists {
-		//node already patched
-		return nil
-	}
-	patchData, err := createPatchData(AppendToInstaSlicePrefix(resourceIdentifier), "1")
-	if err != nil {
-		return err
-	}
-
-	if err := r.Status().Patch(ctx, node, client.RawPatch(types.JSONPatchType, patchData)); err != nil {
-		return err
-	}
-	return nil
-}
-
 // controller will set allocations that need to created (prepared) on the GPU nodes.
-func (r *InstaSliceDaemonsetReconciler) getAllocationsToprepare(ctx context.Context, placement nvml.GpuInstancePlacement, instaslice inferencev1alpha1.Instaslice, podUuid string) (nvml.GpuInstancePlacement, error) {
+func (r *InstaSliceDaemonsetReconciler) getAllocationsToprepare(placement nvml.GpuInstancePlacement, instaslice inferencev1alpha1.Instaslice, podUuid string) (nvml.GpuInstancePlacement, error) {
 	allocationExists := false
 	for _, prepared := range instaslice.Spec.Prepared {
 		if prepared.PodUUID == podUuid {
@@ -1091,15 +1068,6 @@ func createPatchData(resourceName string, resourceValue string) ([]byte, error) 
 		{Op: "add",
 			Path:  fmt.Sprintf("/status/capacity/%s", strings.ReplaceAll(resourceName, "/", "~1")),
 			Value: resourceValue,
-		},
-	}
-	return json.Marshal(patch)
-}
-
-func deletePatchData(resourceName string) ([]byte, error) {
-	patch := []ResPatchOperation{
-		{Op: "remove",
-			Path: fmt.Sprintf("/status/capacity/%s", strings.ReplaceAll(resourceName, "/", "~1")),
 		},
 	}
 	return json.Marshal(patch)
