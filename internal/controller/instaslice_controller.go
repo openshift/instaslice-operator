@@ -84,7 +84,10 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			for _, instaslice := range instasliceList.Items {
 				for _, allocation := range instaslice.Spec.Allocations {
 					if allocation.PodName == pod.Name {
-						r.deleteInstasliceAllocation(ctx, instaslice.Name, allocation)
+						result, err := r.deleteInstasliceAllocation(ctx, instaslice.Name, allocation)
+						if err != nil {
+							return result, err
+						}
 					}
 				}
 			}
@@ -137,7 +140,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						return ctrl.Result{}, nil
 					}
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
-						resultRemove, errInRemove := r.removeInstasliceAllocation(ctx, instaslice.Name, allocation, req)
+						resultRemove, errInRemove := r.removeInstasliceAllocation(ctx, instaslice.Name, allocation)
 						if errInRemove != nil {
 							return resultRemove, nil
 						}
@@ -177,7 +180,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					}
 
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
-						result, err := r.removeInstasliceAllocation(ctx, instaslice.Name, allocation, req)
+						result, err := r.removeInstasliceAllocation(ctx, instaslice.Name, allocation)
 						if err != nil {
 							return result, nil
 						}
@@ -225,7 +228,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					}
 				}
 				if podUuid == string(pod.UID) && allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
-					result, err := r.removeInstasliceAllocation(ctx, instaslice.Name, allocation, req)
+					result, err := r.removeInstasliceAllocation(ctx, instaslice.Name, allocation)
 					if err != nil {
 						return result, nil
 					}
@@ -612,7 +615,7 @@ func (l *RightToLeftPolicy) SetAllocationDetails(profileName string, newStart, s
 	return &inferencev1alpha1.AllocationDetails{}
 }
 
-func (r *InstasliceReconciler) removeInstasliceAllocation(ctx context.Context, instasliceName string, allocation inferencev1alpha1.AllocationDetails, req ctrl.Request) (ctrl.Result, error) {
+func (r *InstasliceReconciler) removeInstasliceAllocation(ctx context.Context, instasliceName string, allocation inferencev1alpha1.AllocationDetails) (ctrl.Result, error) {
 	if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
 		deleteResult, errDeletingAllocation := r.deleteInstasliceAllocation(ctx, instasliceName, allocation)
 		if errDeletingAllocation != nil {

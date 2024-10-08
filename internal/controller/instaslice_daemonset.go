@@ -1069,7 +1069,7 @@ func isPreparedMigEmpty(pm preparedMig) bool {
 }
 
 func walkMigDevices(d nvml.Device, f func(i int, d nvml.Device) error) error {
-	count, ret := nvml.Device(d).GetMaxMigDeviceCount()
+	count, ret := d.GetMaxMigDeviceCount()
 	if ret != nvml.SUCCESS {
 		return fmt.Errorf("error getting max MIG device count: %v", ret)
 	}
