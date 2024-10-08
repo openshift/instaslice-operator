@@ -41,10 +41,10 @@ func TestCleanUp(t *testing.T) {
 	_ = inferencev1alpha1.AddToScheme(s)
 	fakeClient := runtimefake.NewClientBuilder().WithScheme(s).Build()
 
-	reconciler := &InstaSliceDaemonsetReconciler{
-		Client: fakeClient,
-		Scheme: s,
-	}
+	// reconciler := &InstaSliceDaemonsetReconciler{
+	// 	Client: fakeClient,
+	// 	Scheme: s,
+	// }
 
 	instaslice := &inferencev1alpha1.Instaslice{
 		ObjectMeta: metav1.ObjectMeta{
