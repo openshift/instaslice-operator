@@ -447,8 +447,6 @@ func (*InstasliceReconciler) extractProfileName(limits v1.ResourceList) string {
 			match := re.FindStringSubmatch(k.String())
 			if len(match) > 1 {
 				profileName = match[1]
-			} else {
-				fmt.Printf("No match found")
 			}
 		}
 	}
