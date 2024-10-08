@@ -128,7 +128,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 					}
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreated || allocation.Allocationstatus == inferencev1alpha1.AllocationStatusUngated {
-						resultDeleting, errInDeleting := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, string(pod.UID), allocation, req)
+						resultDeleting, errInDeleting := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, string(pod.UID), allocation)
 						if errInDeleting != nil {
 							return resultDeleting, nil
 						}
@@ -167,7 +167,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				if allocation.PodUUID == string(pod.UID) {
 					allocationNotFound = false
 					if allocation.Allocationstatus != inferencev1alpha1.AllocationStatusDeleted {
-						result, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, string(pod.UID), allocation, req)
+						result, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, string(pod.UID), allocation)
 						if err != nil {
 							return result, err
 						}
@@ -622,7 +622,7 @@ func (r *InstasliceReconciler) removeInstasliceAllocation(ctx context.Context, i
 	return ctrl.Result{}, nil
 }
 
-func (r *InstasliceReconciler) setInstasliceAllocationToDeleting(ctx context.Context, instasliceName string, podUUID string, allocation inferencev1alpha1.AllocationDetails, req ctrl.Request) (ctrl.Result, error) {
+func (r *InstasliceReconciler) setInstasliceAllocationToDeleting(ctx context.Context, instasliceName string, podUUID string, allocation inferencev1alpha1.AllocationDetails) (ctrl.Result, error) {
 
 	allocation.Allocationstatus = inferencev1alpha1.AllocationStatusDeleting
 
