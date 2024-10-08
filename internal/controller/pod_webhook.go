@@ -59,14 +59,12 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 	}
 
 	limits := pod.Spec.Containers[0].Resources.Limits
-	if limits != nil {
-		for resourceName, quantity := range limits {
-			if strings.HasPrefix(string(resourceName), "nvidia.com/mig-") {
-				newResourceName := strings.Replace(string(resourceName), "nvidia.com", "org.instaslice", 1)
-				delete(pod.Spec.Containers[0].Resources.Limits, resourceName)
-				limits[v1.ResourceName(newResourceName)] = quantity
-				log.FromContext(ctx).Info("Transforming resource ", "limits", limits)
-			}
+	for resourceName, quantity := range limits {
+		if strings.HasPrefix(string(resourceName), "nvidia.com/mig-") {
+			newResourceName := strings.Replace(string(resourceName), "nvidia.com", "org.instaslice", 1)
+			delete(pod.Spec.Containers[0].Resources.Limits, resourceName)
+			limits[v1.ResourceName(newResourceName)] = quantity
+			log.FromContext(ctx).Info("Transforming resource ", "limits", limits)
 		}
 	}
 
