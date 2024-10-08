@@ -68,7 +68,6 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 	}
 
 	if pod.Spec.Containers[0].Resources.Requests == nil {
-		log.FromContext(ctx).Info("Initializing resource requests for ", "pod", pod.Name)
 		pod.Spec.Containers[0].Resources.Requests = make(v1.ResourceList)
 	}
 

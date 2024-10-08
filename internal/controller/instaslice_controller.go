@@ -61,6 +61,8 @@ type LeftToRightPolicy struct{}
 // first fit policy is implemented at the moment
 type FirstFitPolicy struct{}
 
+const requeueDelay = 2 * time.Second
+
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/finalizers,verbs=update
@@ -74,6 +76,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	var instasliceList inferencev1alpha1.InstasliceList
 	if err := r.List(ctx, &instasliceList, &client.ListOptions{}); err != nil {
 		log.FromContext(ctx).Error(err, "Error listing Instaslice")
+		return ctrl.Result{}, err
 	}
 	err := r.Get(ctx, req.NamespacedName, pod)
 	if err != nil {
@@ -81,6 +84,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if errors.IsNotFound(err) {
 			log.FromContext(ctx).Info("unable to fetch pod might be deleted")
 			// TODO figure out why are allocations present post pod deletes?
+			// https://github.com/openshift/instaslice-operator/issues/150
 			for _, instaslice := range instasliceList.Items {
 				for _, allocation := range instaslice.Spec.Allocations {
 					if allocation.PodName == pod.Name {
@@ -128,11 +132,11 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				if pod.UID == types.UID(allocation.PodUUID) {
 					allocationNotFound = false
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreating {
-						return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+						return ctrl.Result{RequeueAfter: requeueDelay}, nil
 					}
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreated || allocation.Allocationstatus == inferencev1alpha1.AllocationStatusUngated {
-						resultDeleting, errInDeleting := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, string(pod.UID), allocation)
-						if errInDeleting != nil {
+						resultDeleting, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, string(pod.UID), allocation)
+						if err != nil {
 							return resultDeleting, nil
 						}
 						// return and rely on daemonset to se allocation status to created
@@ -140,12 +144,12 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						return ctrl.Result{}, nil
 					}
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
-						resultRemove, errInRemove := r.removeInstasliceAllocation(ctx, instaslice.Name, allocation)
-						if errInRemove != nil {
+						resultRemove, err := r.removeInstasliceAllocation(ctx, instaslice.Name, allocation)
+						if err != nil {
 							return resultRemove, nil
 						}
 						// requeue for the finalizer to be removed
-						return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+						return ctrl.Result{RequeueAfter: requeueDelay}, nil
 					}
 				}
 			}
@@ -185,7 +189,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							return result, nil
 						}
 						// requeue for the finalizer to be removed
-						return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+						return ctrl.Result{RequeueAfter: requeueDelay}, nil
 					}
 				}
 
@@ -315,16 +319,10 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				}
 			}
 		}
-		gpuOperatorPodOk := false
-		var err error
+
 		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocations := range instaslice.Spec.Allocations {
 				if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusCreated && allocations.PodUUID == string(pod.UID) {
-					gpuOperatorPodOk, err = r.isPatternPodRunningAndHealthy(ctx, "nvidia-device-plugin-daemonset", "gpu-operator")
-					if err != nil {
-						log.FromContext(ctx).Info("gpu operator pod not found")
-						return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
-					}
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,
@@ -346,40 +344,17 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					if err := r.Update(ctx, &updateInstasliceObject); err != nil {
 						return ctrl.Result{Requeue: true}, nil
 					}
-					if gpuOperatorPodOk {
-						// Add nodeSelector to the pod
-						if pod.Spec.NodeSelector == nil {
-							pod.Spec.NodeSelector = make(map[string]string)
-						}
-						pod.Spec.NodeSelector[NodeLabel] = allocations.Nodename
-
-						pod := r.unGatePod(pod)
-						errForUngating := r.Update(ctx, pod)
-						if errForUngating != nil {
-							return ctrl.Result{Requeue: true}, nil
-						}
-					} else {
-						log.FromContext(ctx).Info("gpuOperatorPod is not found waiting for it to be in state Running")
-						return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+					result, err := r.ungateIfGpuOperatorPod(ctx, pod, allocations)
+					if err != nil {
+						return result, err
 					}
 				}
 				// InstaSlice object got updated with ungated status but the controller failed
 				// ungating the pod.
 				if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusUngated && allocations.PodUUID == string(pod.UID) {
-					if gpuOperatorPodOk {
-						// Add nodeSelector to the pod
-						if pod.Spec.NodeSelector == nil {
-							pod.Spec.NodeSelector = make(map[string]string)
-						}
-						pod.Spec.NodeSelector[NodeLabel] = allocations.Nodename
-
-						pod := r.unGatePod(pod)
-						errForUngating := r.Update(ctx, pod)
-						if errForUngating != nil {
-							return ctrl.Result{Requeue: true}, nil
-						}
-					} else {
-						return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+					result, err := r.ungateIfGpuOperatorPod(ctx, pod, allocations)
+					if err != nil {
+						return result, err
 					}
 				}
 			}
@@ -546,7 +521,7 @@ func (r *InstasliceReconciler) deleteInstasliceAllocation(ctx context.Context, i
 	err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "error getting latest instaslice object")
-		return ctrl.Result{RequeueAfter: 2 * time.Second}, err
+		return ctrl.Result{RequeueAfter: requeueDelay}, err
 	}
 	delete(updateInstasliceObject.Spec.Allocations, allocation.PodUUID)
 	errUpdatingAllocation := r.Update(ctx, &updateInstasliceObject)
@@ -681,4 +656,35 @@ func (r *InstasliceReconciler) isPatternPodRunningAndHealthy(ctx context.Context
 
 	log.FromContext(ctx).Info("No pod matching the pattern was found", "pattern", pattern, "namespace", namespace)
 	return false, nil
+}
+
+func (r *InstasliceReconciler) ungateIfGpuOperatorPod(ctx context.Context, pod *v1.Pod, allocations inferencev1alpha1.AllocationDetails) (ctrl.Result, error) {
+	gpuOperatorPodOk, err := r.isPatternPodRunningAndHealthy(ctx, "nvidia-device-plugin-daemonset", "gpu-operator")
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.FromContext(ctx).Info("gpu operator pod not found")
+			return ctrl.Result{RequeueAfter: requeueDelay}, nil
+		} else {
+			log.FromContext(ctx).Error(err, "error with gpu operator deployment")
+			return ctrl.Result{RequeueAfter: requeueDelay}, nil
+		}
+	}
+	if gpuOperatorPodOk {
+		// Add nodeSelector to the pod
+		if pod.Spec.NodeSelector == nil {
+			pod.Spec.NodeSelector = make(map[string]string)
+		}
+		pod.Spec.NodeSelector[NodeLabel] = allocations.Nodename
+
+		pod := r.unGatePod(pod)
+		err := r.Update(ctx, pod)
+		if err != nil {
+			log.FromContext(ctx).Error(err, "error ungating pod")
+			return ctrl.Result{Requeue: true}, nil
+		}
+	} else {
+		log.FromContext(ctx).Info("gpuOperatorPod is not found waiting for it to be in state Running")
+		return ctrl.Result{RequeueAfter: requeueDelay}, nil
+	}
+	return ctrl.Result{}, nil
 }
