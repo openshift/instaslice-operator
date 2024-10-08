@@ -101,11 +101,9 @@ type MigDeviceInfo struct {
 }
 
 type GpuInfo struct {
-	uuid         string
-	migEnabled   bool
-	memoryBytes  uint64
-	productName  string
-	architecture string
+	uuid        string
+	migEnabled  bool
+	memoryBytes uint64
 }
 
 // TODO: remove once we figure out NVML calls that does CI and GI discovery
