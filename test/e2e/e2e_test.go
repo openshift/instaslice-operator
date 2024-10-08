@@ -103,12 +103,13 @@ var _ = Describe("controller", Ordered, func() {
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
+			// add wait before installing fake capacity
+			time.Sleep(10 * time.Second)
+
 			By("installing fake GPU capacity")
 			cmdCm := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/instaslice-fake-capacity.yaml")
 			outputCm, err := cmdCm.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add fake capacity to the cluster: %s", outputCm))
-
-			time.Sleep(10 * time.Second)
 
 			By("deploying the controller-manager & controller-daemonset")
 			cmd = exec.Command(
@@ -447,7 +448,7 @@ var _ = Describe("controller", Ordered, func() {
 			}
 		})
 
-		It("should verify org.instaslice/mig-1g.5gb is max before submitting pods, sync with running pods, and set to zero after completion", func() {
+		It("should verify org.instaslice/mig-1g.5gb is max before submitting pods and verify the existence of pod allocation", func() {
 			ctx := context.TODO()
 			checkMIG := func(expectedMIG string) bool {
 				cmd := exec.CommandContext(ctx, "kubectl", "get", "node", "kind-control-plane", "-o", "json")
