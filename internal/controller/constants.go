@@ -17,10 +17,14 @@ limitations under the License.
 package controller
 
 const (
-	finalizerOrGateName         string = "org.instaslice/accelerator"
-	emulatorModeFalse           string = "false"
-	emulatorModeTrue            string = "true"
-	orgInstaslicePrefix         string = "org.instaslice/"
-	AttributeMediaExtensions    string = "me"
-	instaSliceOperatorNamespace string = "default"
+	orgInstaslicePrefix         = "org.instaslice/"
+	gateName                    = orgInstaslicePrefix + "accelerator"
+	finalizerName               = gateName
+	quotaResourceName           = orgInstaslicePrefix + "accelerator-memory-quota"
+	emulatorModeFalse           = "false"
+	emulatorModeTrue            = "true"
+	AttributeMediaExtensions    = "me"
+	instaSliceOperatorNamespace = "default"
+	NvidiaMIGPrefix             = "nvidia.com/mig-"
+	NodeLabel                   = "kubernetes.io/hostname"
 )

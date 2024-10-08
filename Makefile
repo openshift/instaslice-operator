@@ -229,9 +229,21 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG} daemonset=${IMG_DMST}
 	$(KUSTOMIZE) build config/$(KUSTOMIZATION) | $(KUBECTL) apply -f -
 
+.PHONY: ocp-deploy
+ocp-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG} daemonset=${IMG_DMST}
+	$(KUBECTL) apply -f config/rbac/instaslice-operator-scc.yaml
+	$(KUBECTL) apply -f config/rbac/openshift_scc_cluster_role_binding.yaml
+	$(KUBECTL) apply -f config/rbac/openshift_cluster_role.yaml
+	$(KUSTOMIZE) build config/$(KUSTOMIZATION) | $(KUBECTL) apply -f -
+
 .PHONY: deploy-emulated ## Deploy controller in emulator mode
 deploy-emulated: KUSTOMIZATION=emulator
 deploy-emulated: deploy
+
+.PHONY: ocp-deploy-emulated ## Deploy controller in emulator mode in Openshift
+ocp-deploy-emulated: KUSTOMIZATION=emulator
+ocp-deploy-emulated: ocp-deploy
 
 # .PHONY: deploy-daemonset
 # deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
@@ -242,9 +254,20 @@ deploy-emulated: deploy
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/$(KUSTOMIZATION) | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
+.PHONY: ocp-undeploy
+ocp-undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+	$(KUSTOMIZE) build config/$(KUSTOMIZATION) | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+	$(KUBECTL) delete -f config/rbac/instaslice-operator-scc.yaml
+	$(KUBECTL) delete -f config/rbac/openshift_scc_cluster_role_binding.yaml
+	$(KUBECTL) apply -f config/rbac/openshift_cluster_role.yaml
+
 .PHONY: undeploy-emulated
 undeploy-emulated: KUSTOMIZATION=emulator ## Undeploy controller deployed in emulator mode
 undeploy-emulated: undeploy
+
+.PHONY: ocp-undeploy-emulated
+ocp-undeploy-emulated: KUSTOMIZATION=emulator ## Undeploy controller deployed in emulator mode in Openshift
+ocp-undeploy-emulated: ocp-undeploy
 
 ##@ Build Dependencies
 

@@ -108,6 +108,8 @@ var _ = Describe("controller", Ordered, func() {
 			outputCm, err := cmdCm.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add fake capacity to the cluster: %s", outputCm))
 
+			time.Sleep(10 * time.Second)
+
 			By("deploying the controller-manager & controller-daemonset")
 			cmd = exec.Command(
 				"make",
@@ -162,45 +164,61 @@ var _ = Describe("controller", Ordered, func() {
 
 			finalizers, found := podObj["metadata"].(map[string]interface{})["finalizers"].([]interface{})
 			Expect(found).To(BeTrue(), "Pod does not have finalizers")
-			Expect(finalizers).To(ContainElement("org.instaslice/accelerator"), "Finalizer org.instaslice/accelerator not found on pod")
+			finalizer := utils.AppendToInstaSlicePrefix("accelerator")
+			Expect(finalizers).To(ContainElement(finalizer), "Finalizer '%s' not found on pod", finalizer)
 		})
 
 		It("should apply the pod YAML with no requests and check the allocation in instaslice object", func() {
 			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-pod-no-requests.yaml")
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
+			Eventually(func() error {
+				cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					return fmt.Errorf("Failed to get Instaslice object: %s", string(output))
+				}
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
-			output, err := cmd.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
+				var result struct {
+					Items []map[string]interface{} `json:"items"`
+				}
+				err = json.Unmarshal(output, &result)
+				if err != nil {
+					return fmt.Errorf("Failed to parse JSON output: %v", err)
+				}
 
-			// Parse the JSON output
-			var result struct {
-				Items []map[string]interface{} `json:"items"`
-			}
-			err = json.Unmarshal(output, &result)
-			Expect(err).NotTo(HaveOccurred(), "Failed to parse JSON output")
+				if len(result.Items) == 0 {
+					return fmt.Errorf("No Instaslice objects found")
+				}
 
-			// Assume we want to check the first Instaslice object if it exists
-			if len(result.Items) > 0 {
 				instaslice := result.Items[0]
 				spec, found := instaslice["spec"].(map[string]interface{})
-				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
+				if !found {
+					return fmt.Errorf("Spec not found in Instaslice object")
+				}
+
 				allocations, found := spec["allocations"].(map[string]interface{})
-				Expect(found).To(BeTrue(), "Spec.Allocations not found in Instaslice object")
+				if !found {
+					return fmt.Errorf("Spec.Allocations not found in Instaslice object")
+				}
+
 				for _, data := range allocations {
 					if allocation, ok := data.(map[string]interface{}); ok {
-						if _, ok := allocation["allocationStatus"].(string); ok {
-							Expect(ok).To(BeTrue(), "allocationStatus not found in Instaslice object")
-							notCreated := findPodName(allocations, "vectoradd-no-req")
-							Expect(notCreated).To(BeFalse(), "Spec.Allocations found in Instaslice object")
+						if _, ok := allocation["allocationStatus"].(string); !ok {
+							return fmt.Errorf("allocationStatus not found in Instaslice object")
+						}
+
+						notCreated := findPodName(allocations, "vectoradd-no-req")
+						if notCreated {
+							return fmt.Errorf("Spec.Allocations found in Instaslice object")
 						}
 					}
 				}
 
-			} else {
-				Fail("No Instaslice objects found")
-			}
+				// Everything is okay
+				return nil
+			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid allocations")
+
 		})
 
 		It("should apply the pod YAML with small requests and check the allocation in instaslice object", func() {
@@ -429,77 +447,8 @@ var _ = Describe("controller", Ordered, func() {
 			}
 		})
 
-		It("should verify nvidia.com/mig-1g.5gb is max before submitting pods, sync with running pods, and set to zero after completion", Label("non-gpu"), func() {
+		It("should verify org.instaslice/mig-1g.5gb is max before submitting pods, sync with running pods, and set to zero after completion", func() {
 			ctx := context.TODO()
-			//namespace := "default"
-			nodeName := "kind-control-plane"
-
-			setMIGResourceToMaxFor5gProfile := func() error {
-				patch := `{"status": {"capacity": {"nvidia.com/mig-1g.5gb": "14"}}}`
-				cmd := exec.CommandContext(ctx, "kubectl", "patch", "node", nodeName, "--subresource=status", "--type=merge", "-p", patch)
-				output, err := cmd.CombinedOutput()
-				if err != nil {
-					fmt.Printf("Failed to reset nvidia.com/mig-1g.5gb: %v\n", err)
-					fmt.Printf("kubectl output: %s\n", string(output))
-					return err
-				}
-				return nil
-			}
-
-			deleteInstasliceResources := func() error {
-				cmd := exec.CommandContext(ctx, "kubectl", "get", "node", nodeName, "--subresource=status", "-o", "json")
-				output, err := cmd.CombinedOutput()
-				if err != nil {
-					fmt.Printf("Failed to get node info: %v\n", err)
-					return err
-				}
-
-				var nodeResult struct {
-					Status struct {
-						Capacity map[string]string `json:"capacity"`
-					} `json:"status"`
-				}
-				err = json.Unmarshal(output, &nodeResult)
-				if err != nil {
-					fmt.Printf("Failed to parse node JSON: %v\n", err)
-					return err
-				}
-
-				patchData := map[string]interface{}{
-					"status": map[string]interface{}{
-						"capacity": map[string]interface{}{},
-					},
-				}
-
-				for resource := range nodeResult.Status.Capacity {
-					if strings.HasPrefix(resource, "org.instaslice/") {
-						patchData["status"].(map[string]interface{})["capacity"].(map[string]interface{})[resource] = nil
-					}
-				}
-
-				patchBytes, err := json.Marshal(patchData)
-				if err != nil {
-					fmt.Printf("Failed to create patch data: %v\n", err)
-					return err
-				}
-
-				cmdPatch := exec.CommandContext(ctx, "kubectl", "patch", "node", nodeName, "--subresource=status", "--type=merge", "-p", string(patchBytes))
-				outputPatch, err := cmdPatch.CombinedOutput()
-				if err != nil {
-					fmt.Printf("Failed to delete org.instaslice resources: %v\n", err)
-					fmt.Printf("kubectl output: %s\n", string(outputPatch))
-					return err
-				}
-
-				return nil
-			}
-
-			err := setMIGResourceToMaxFor5gProfile()
-			Expect(err).NotTo(HaveOccurred(), "Failed to reset nvidia.com/mig-1g.5gb to zero")
-
-			err = deleteInstasliceResources()
-			Expect(err).NotTo(HaveOccurred(), "Failed to delete org.instaslice/* resources")
-
 			checkMIG := func(expectedMIG string) bool {
 				cmd := exec.CommandContext(ctx, "kubectl", "get", "node", "kind-control-plane", "-o", "json")
 				output, err := cmd.CombinedOutput()
@@ -520,11 +469,11 @@ var _ = Describe("controller", Ordered, func() {
 					return false
 				}
 
-				migCapacity, found := nodeResult.Status.Capacity["nvidia.com/mig-1g.5gb"]
+				migCapacity, found := nodeResult.Status.Capacity["org.instaslice/mig-1g.5gb"]
 				return found && migCapacity == expectedMIG
 			}
 
-			Expect(checkMIG("14")).To(BeTrue(), "nvidia.com/mig-1g.5gb is not zero before submitting pods")
+			Expect(checkMIG("14")).To(BeTrue(), "org.instaslice/mig-1g.5gb is not zero before submitting pods")
 
 			cmdApply := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test_multiple_pods.yaml")
 			outputApply, err := cmdApply.CombinedOutput()
@@ -557,11 +506,11 @@ var _ = Describe("controller", Ordered, func() {
 					}
 				}
 
-				// All allocations are in the 'ungated' state
 				return true
 			}, "60s", "5s").Should(BeTrue(), "Not all allocations are in the 'ungated' state after the timeout")
 		})
-		It("should verify that the Kubernetes node has nvidia.com/accelerator-memory resource and matches total GPU memory", func() {
+		It("should verify that the Kubernetes node has the specified resource and matches total GPU memory", func() {
+			instasliceQuotaResourceName := "org.instaslice/accelerator-memory-quota"
 			// Step 1: Get the total GPU memory from the Instaslice object
 			By("Getting the Instaslice object")
 			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
@@ -604,7 +553,7 @@ var _ = Describe("controller", Ordered, func() {
 			}
 
 			// Step 2: Get the patched resource from the node
-			By("Verifying that node has custom resource nvidia.com/accelerator-memory")
+			By(fmt.Sprintf("Verifying that node has custom resource %s", instasliceQuotaResourceName))
 			cmd = exec.Command("kubectl", "get", "node", "-o", "json")
 			output, err = cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get node details: "+string(output))
@@ -626,8 +575,8 @@ var _ = Describe("controller", Ordered, func() {
 			capacity, found := status["capacity"].(map[string]interface{})
 			Expect(found).To(BeTrue(), "Capacity resources not found in Node object")
 
-			acceleratorMemory, found := capacity["nvidia.com/accelerator-memory"].(string)
-			Expect(found).To(BeTrue(), "nvidia.com/accelerator-memory not found in Node object")
+			acceleratorMemory, found := capacity[instasliceQuotaResourceName].(string)
+			Expect(found).To(BeTrue(), fmt.Sprintf("%s not found in Node object", instasliceQuotaResourceName))
 
 			// Extract the memory size from the acceleratorMemory
 			reMemory := regexp.MustCompile(`(\d+)Gi`)
@@ -641,8 +590,41 @@ var _ = Describe("controller", Ordered, func() {
 			}
 
 			// Step 3: Verify the node's accelerator memory matches the total GPU memory in Instaslice
-			By("Verifying that node's accelerator memory matches Instaslice total GPU memory")
-			Expect(nodeMemoryGB).To(BeNumerically("==", totalMemoryGB), "nvidia.com/accelerator-memory on node does not match total GPU memory in Instaslice object")
+			By("Verifying that node's accelerator memory quota matches Instaslice total GPU memory")
+			Expect(nodeMemoryGB).To(BeNumerically("==", totalMemoryGB), fmt.Sprintf("%s on node does not match total GPU memory in Instaslice object", instasliceQuotaResourceName))
+		})
+		// NOTE: Keep this as the last test in e2e test suite, when all workloads are deleted
+		// there should be no allocations in InstaSlice object.
+		It("should verify that there are no allocations on the Instaslice object", func() {
+			Eventually(func() error {
+				cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					return fmt.Errorf("failed to get Instaslice object: %s", string(output))
+				}
+
+				var instasliceResult struct {
+					Items []map[string]interface{} `json:"items"`
+				}
+
+				err = json.Unmarshal(output, &instasliceResult)
+				if err != nil {
+					return fmt.Errorf("failed to parse Instaslice JSON output: %s", err)
+				}
+
+				if len(instasliceResult.Items) == 0 {
+					return fmt.Errorf("no Instaslice objects found")
+				}
+
+				instaslice := instasliceResult.Items[0]
+
+				_, found := instaslice["allocations"].([]interface{})
+				if found {
+					return fmt.Errorf("allocations field found in Instaslice object")
+				}
+
+				return nil
+			}, "60s", "5s").Should(Succeed(), "Expected no allocations in the Instaslice object")
 		})
 		// NOTE: Keep this as the last test in e2e test suite, when all workloads are deleted
 		// there should be no allocations in InstaSlice object.

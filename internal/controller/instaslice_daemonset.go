@@ -132,19 +132,8 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		// delete first before creating new slice
 		if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusDeleting && allocations.Nodename == nodeName {
 			log.FromContext(ctx).Info("performing cleanup ", "pod", allocations.PodName)
-			extendedResourceName := orgInstaslicePrefix + allocations.Resourceidentifier
 			if errDeletingCm := r.deleteConfigMap(ctx, allocations.Resourceidentifier, allocations.Namespace); errDeletingCm != nil {
-				log.FromContext(ctx).Error(errDeletingCm, "error deleting configmap for ", "pod", allocations.PodName)
 				return ctrl.Result{Requeue: true}, nil
-			}
-			if errDeletingInstaSliceResource := r.cleanUpInstaSliceResource(ctx, extendedResourceName); errDeletingInstaSliceResource != nil {
-				log.FromContext(ctx).Error(errDeletingInstaSliceResource, "Error deleting InstaSlice resource object")
-				if errors.IsNotFound(errDeletingInstaSliceResource) {
-					log.FromContext(ctx).Info("InstaSlice resource not found, ignoring error", "resource", extendedResourceName)
-				} else {
-					log.FromContext(ctx).Error(errDeletingInstaSliceResource, "error deleting InstaSlice resource object")
-					return ctrl.Result{Requeue: true}, nil
-				}
 			}
 
 			if emulatorMode == emulatorModeFalse {
@@ -162,7 +151,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			}
 			err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 			if err != nil {
-				log.FromContext(ctx).Error(err, "error getting latest instaslice object")
 				return ctrl.Result{Requeue: true}, nil
 			}
 
@@ -191,13 +179,10 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			var podUUID = allocations.PodUUID
 			_, profileName, resourceIdentifier, errGettingControllerAllocation := r.getAllocation(instaslice, allocations.PodUUID)
 			if errGettingControllerAllocation != nil {
-				log.FromContext(ctx).Error(errGettingControllerAllocation, "allocation was not found, retrying will not help")
+				//allocation was not found, retrying will not help
 				return ctrl.Result{}, nil
 			}
 
-			if errCreatingInstaSliceResource := r.createInstaSliceResource(ctx, nodeName, resourceIdentifier); errCreatingInstaSliceResource != nil {
-				return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
-			}
 			existingAllocations := instaslice.Spec.Allocations[podUUID]
 
 			if emulatorMode == emulatorModeTrue {
@@ -312,7 +297,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 						gi, retCodeForGiWithPlacement = device.CreateGpuInstanceWithPlacement(&giProfileInfo, &updatedPlacement)
 						if retCodeForGiWithPlacement != nvml.SUCCESS {
 							if retCodeForGiWithPlacement == nvml.ERROR_INSUFFICIENT_RESOURCES {
-								log.FromContext(ctx).Error(retCodeForGiWithPlacement, "trying to find gi")
+								log.FromContext(ctx).Error(retCodeForGiWithPlacement, "gpu instance already exists")
 							} else {
 								log.FromContext(ctx).Error(retCodeForGiWithPlacement, "gi creation errored out with unknown error")
 								return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
@@ -367,7 +352,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				//TODO: could be merged with the deleted call below
 				err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 				if err != nil {
-					log.FromContext(ctx).Error(err, "error getting latest instaslice object")
 					return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 				}
 				updatedAllocation := updateInstasliceObject.Spec.Allocations[podUUID]
@@ -383,7 +367,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				updateInstasliceObject.Spec.Allocations[podUUID] = existingAllocations
 				errForUpdate := r.Update(ctx, &updateInstasliceObject)
 				if errForUpdate != nil {
-					log.FromContext(ctx).Error(errForUpdate, "error adding prepared statement")
 					return ctrl.Result{Requeue: true}, nil
 				}
 			}
@@ -397,23 +380,20 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 func (r *InstaSliceDaemonsetReconciler) createInstaSliceResource(ctx context.Context, nodeName string, resourceIdentifier string) error {
 	node := &v1.Node{}
 	if err := r.Get(ctx, types.NamespacedName{Name: nodeName}, node); err != nil {
-		log.FromContext(ctx).Error(err, "unable to fetch Node")
 		return err
 	}
-	capacityKey := orgInstaslicePrefix + resourceIdentifier
+	capacityKey := AppendToInstaSlicePrefix(resourceIdentifier)
 	//desiredCapacity := resource.MustParse("1")
 	if _, exists := node.Status.Capacity[v1.ResourceName(capacityKey)]; exists {
-		log.FromContext(ctx).Info("node already patched with ", "capacity", capacityKey)
+		//node already patched
 		return nil
 	}
-	patchData, err := createPatchData(orgInstaslicePrefix+resourceIdentifier, "1")
+	patchData, err := createPatchData(AppendToInstaSlicePrefix(resourceIdentifier), "1")
 	if err != nil {
-		log.FromContext(ctx).Error(err, "unable to create correct json for patching node")
 		return err
 	}
 
 	if err := r.Status().Patch(ctx, node, client.RawPatch(types.JSONPatchType, patchData)); err != nil {
-		log.FromContext(ctx).Error(err, "unable to patch Node status")
 		return err
 	}
 	return nil
@@ -448,7 +428,7 @@ func (*InstaSliceDaemonsetReconciler) getCreatedSliceDetails(ctx context.Context
 	realizedMigError := ""
 	h := &deviceHandler{}
 	h.nvml = nvml.New()
-	h.nvdevice = nvdevice.New(nvdevice.WithNvml(h.nvml))
+	h.nvdevice = nvdevice.New(h.nvml)
 
 	ret1 := h.nvml.Init()
 	if ret1 != nvml.SUCCESS {
@@ -566,37 +546,9 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, podU
 					return errDestroyingGi
 				}
 			}
-			log.FromContext(ctx).Info("done deleting MIG slice for pod", "UUID", value.PodUUID)
 		}
 	}
 
-	return nil
-}
-
-// delete custom extended resource when a pod is deleted.
-func (r *InstaSliceDaemonsetReconciler) cleanUpInstaSliceResource(ctx context.Context, resourceIdentifierName string) error {
-	nodeName := os.Getenv("NODE_NAME")
-	deletePatch, err := deletePatchData(resourceIdentifierName)
-	if err != nil {
-		log.FromContext(ctx).Error(err, "unable to create delete json patch data")
-		return err
-	}
-
-	// Apply the patch to remove the resource
-	node := &v1.Node{}
-	if err := r.Get(ctx, types.NamespacedName{Name: nodeName}, node); err != nil {
-		log.FromContext(ctx).Error(err, "unable to fetch Node")
-		return err
-	}
-	resourceName := v1.ResourceName(resourceIdentifierName)
-	if _, ok := node.Status.Capacity[resourceName]; !ok {
-		log.FromContext(ctx).Info("skipping non-existent deletion of instaslice resource for ", "identifier", resourceIdentifierName)
-		return nil
-	}
-	if err := r.Status().Patch(ctx, node, client.RawPatch(types.JSONPatchType, deletePatch)); err != nil {
-		log.FromContext(ctx).Error(err, "unable to patch Node status")
-		return err
-	}
 	return nil
 }
 
@@ -605,7 +557,7 @@ func (r *InstaSliceDaemonsetReconciler) createPreparedEntry(ctx context.Context,
 	existingPreparedDetails := instaslice.Spec.Prepared
 	checkAPreparedDetails := existingPreparedDetails[migUUID]
 	if checkAPreparedDetails.Ciinfoid == ciId && checkAPreparedDetails.Giinfoid == giId && checkAPreparedDetails.PodUUID == podUUID {
-		log.FromContext(ctx).Info("updated prepared details already exists")
+		//updated prepared details already exists
 		return nil
 	}
 	updatedAllocation := instaslice.Spec.Allocations[podUUID]
@@ -625,7 +577,6 @@ func (r *InstaSliceDaemonsetReconciler) createPreparedEntry(ctx context.Context,
 	instaslice.Spec.Prepared[migUUID] = instaslicePrepared
 	errForUpdate := r.Update(ctx, instaslice)
 	if errForUpdate != nil {
-		log.FromContext(ctx).Error(errForUpdate, "error adding prepared statement")
 		return errForUpdate
 	}
 	return nil
@@ -662,7 +613,6 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 		errRetrievingInstaSliceForSetup := r.Get(ctx, typeNamespacedName, &instaslice)
 		if errRetrievingInstaSliceForSetup != nil {
 			log.FromContext(ctx).Error(errRetrievingInstaSliceForSetup, "unable to fetch InstaSlice resource for node")
-			//TODO: should we do hard exit?
 			//os.Exit(1)
 		}
 
@@ -673,6 +623,16 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 					log.FromContext(ctx).Error(errForDiscoveringGpus, "error discovering GPUs")
 				}
 			}
+		}
+
+		errRetrievingInstaSlicePostSetup := r.Get(ctx, typeNamespacedName, &instaslice)
+		if errRetrievingInstaSlicePostSetup != nil {
+			log.FromContext(ctx).Error(errRetrievingInstaSlicePostSetup, "unable to fetch InstaSlice resource for node")
+			os.Exit(1)
+		}
+
+		if err := r.addMigCapacityToNode(ctx, &instaslice); err != nil {
+			os.Exit(1)
 		}
 
 		// Patch the node capacity with GPU memory in emulator mode
@@ -737,8 +697,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 	cpu, memory, err := r.classicalResourcesAndGPUMemOnNode(context.TODO(), nodeName, strconv.Itoa(totalMemoryGB))
 	if err != nil {
 		log.FromContext(context.TODO()).Error(err, "unable to get classical resources")
-		// should we fail here??
-		//os.Exit(1)
+		os.Exit(1)
 	}
 	log.FromContext(context.TODO()).Info("classical resources obtained are ", "cpu", cpu, "memory", memory)
 	instaslice.Spec.CpuOnNodeAtBoot = cpu
@@ -762,9 +721,6 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 
 	// Patch the node capacity to reflect the total GPU memory
 	if err := r.patchNodeStatusForNode(customCtx, nodeName, totalMemoryGB); err != nil {
-		return nil, err
-	}
-	if err := r.addMigCapacityToNode(customCtx, instaslice); err != nil {
 		return nil, err
 	}
 
@@ -791,7 +747,7 @@ func (r *InstaSliceDaemonsetReconciler) addMigCapacityToNode(ctx context.Context
 	}
 	patches := []map[string]interface{}{}
 	for profile, count := range profilePlacements {
-		resourceName := "nvidia.com/mig-" + profile
+		resourceName := orgInstaslicePrefix + "mig-" + profile
 		patches = append(patches, map[string]interface{}{
 			"op":    "replace",
 			"path":  "/status/capacity/" + strings.Replace(resourceName, "/", "~1", -1),
@@ -832,9 +788,8 @@ func (r *InstaSliceDaemonsetReconciler) patchNodeStatusForNode(ctx context.Conte
 func (r *InstaSliceDaemonsetReconciler) patchNodeStatus(ctx context.Context, node *v1.Node, memory string) error {
 	logger := log.FromContext(ctx)
 
-	// Create patch data for accelerator-memory
-	resourceIdentifier := "accelerator-memory"
-	patchData, err := createPatchData("nvidia.com/"+resourceIdentifier, memory)
+	// Create patch data for accelerator-memory-quota
+	patchData, err := createPatchData(quotaResourceName, memory)
 	if err != nil {
 		logger.Error(err, "unable to create correct json for patching node")
 		return err
@@ -857,15 +812,15 @@ func (r *InstaSliceDaemonsetReconciler) classicalResourcesAndGPUMemOnNode(ctx co
 	}
 
 	newResourceQuantity := resource.MustParse(totalGPUMemory + "Gi")
-	node.Status.Capacity["nvidia.com/accelerator-memory"] = newResourceQuantity
+	// Convert the string to ResourceName
+	resourceName := v1.ResourceName(quotaResourceName)
+	node.Status.Capacity[resourceName] = newResourceQuantity
 
-	// Step 3: Patch the Node object with the updated status
 	if err := r.Status().Update(ctx, node); err != nil {
 		log.FromContext(ctx).Error(err, "unable to patch the node with new resource")
 		return 0, 0, err
 	}
 
-	log.FromContext(ctx).Info("Successfully patched the node with new resource", "node", nodeName)
 	// Allocatable = Capacity - System Reserved - Kube Reserved - eviction hard
 	cpu := node.Status.Allocatable[v1.ResourceCPU]
 	memory := node.Status.Allocatable[v1.ResourceMemory]
@@ -957,7 +912,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*infe
 func (r *InstaSliceDaemonsetReconciler) discoverDanglingSlices(instaslice *inferencev1alpha1.Instaslice) error {
 	h := &deviceHandler{}
 	h.nvml = nvml.New()
-	h.nvdevice = nvdevice.New(nvdevice.WithNvml(h.nvml))
+	h.nvdevice = nvdevice.New(h.nvml)
 
 	errInitNvml := h.nvml.Init()
 	if errInitNvml != nvml.SUCCESS {

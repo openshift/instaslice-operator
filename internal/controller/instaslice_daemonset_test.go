@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -78,7 +79,7 @@ func TestCleanUp(t *testing.T) {
 		Status: v1.NodeStatus{
 			//TODO: add test cases for other resources
 			Capacity: v1.ResourceList{
-				"org.instaslice/uid-1": resource.MustParse("1"),
+				v1.ResourceName(AppendToInstaSlicePrefix("uid-1")): resource.MustParse("1"),
 			},
 		},
 	}
@@ -107,14 +108,11 @@ func TestCleanUp(t *testing.T) {
 	err := fakeClient.Get(context.Background(), types.NamespacedName{Name: "node-1"}, &updatedInstaslice)
 	assert.NoError(t, err)
 
-	errDeletingInstaSlice := reconciler.cleanUpInstaSliceResource(context.Background(), "org.instaslice/uid-1")
-	assert.NoError(t, errDeletingInstaSlice)
-
 	var updatedNode v1.Node
 	errVerifyingInstaSliceResource := fakeClient.Get(context.Background(), types.NamespacedName{Name: "node-1"}, &updatedNode)
 	assert.NoError(t, errVerifyingInstaSliceResource)
 
-	_, exists := updatedNode.Status.Capacity["org.instaslice/uid-1"]
-	assert.False(t, exists, "resource 'org.instaslice/uid-1' should be deleted from the node's capacity")
+	_, exists := updatedNode.Status.Capacity[v1.ResourceName(AppendToInstaSlicePrefix("uid-1"))]
+	assert.False(t, exists, fmt.Sprintf("resource '%s' should be deleted from the node's capacity", AppendToInstaSlicePrefix("uid-1")))
 
 }
