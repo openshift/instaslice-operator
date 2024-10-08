@@ -95,15 +95,8 @@ type preparedMig struct {
 
 type MigDeviceInfo struct {
 	uuid   string
-	parent *GpuInfo
 	giInfo *nvml.GpuInstanceInfo
 	ciInfo *nvml.ComputeInstanceInfo
-}
-
-type GpuInfo struct {
-	uuid        string
-	migEnabled  bool
-	memoryBytes uint64
 }
 
 // TODO: remove once we figure out NVML calls that does CI and GI discovery
