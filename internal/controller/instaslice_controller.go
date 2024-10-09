@@ -344,7 +344,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					if err := r.Update(ctx, &updateInstasliceObject); err != nil {
 						return ctrl.Result{Requeue: true}, nil
 					}
-					result, err := r.ungateIfGpuOperatorPod(ctx, pod, allocations)
+					result, err := r.addNodeSelectorAndUngatePod(ctx, pod, allocations)
 					if err != nil {
 						return result, err
 					}
@@ -352,7 +352,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				// InstaSlice object got updated with ungated status but the controller failed
 				// ungating the pod.
 				if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusUngated && allocations.PodUUID == string(pod.UID) {
-					result, err := r.ungateIfGpuOperatorPod(ctx, pod, allocations)
+					result, err := r.addNodeSelectorAndUngatePod(ctx, pod, allocations)
 					if err != nil {
 						return result, err
 					}
@@ -623,68 +623,18 @@ func (r *InstasliceReconciler) setInstasliceAllocationToDeleting(ctx context.Con
 	return ctrl.Result{}, nil
 }
 
-func (r *InstasliceReconciler) isPatternPodRunningAndHealthy(ctx context.Context, pattern string, namespace string) (bool, error) {
-	podList := &v1.PodList{}
-	listOpts := []client.ListOption{
-		client.InNamespace(namespace),
+func (r *InstasliceReconciler) addNodeSelectorAndUngatePod(ctx context.Context, pod *v1.Pod, allocations inferencev1alpha1.AllocationDetails) (ctrl.Result, error) {
+	if pod.Spec.NodeSelector == nil {
+		pod.Spec.NodeSelector = make(map[string]string)
 	}
+	pod.Spec.NodeSelector[NodeLabel] = allocations.Nodename
 
-	err := r.List(ctx, podList, listOpts...)
+	ungatedPod := r.unGatePod(pod)
+	err := r.Update(ctx, ungatedPod)
 	if err != nil {
-		log.FromContext(ctx).Error(err, "unable to list pods in namespace", "namespace", namespace)
-		return false, err
+		log.FromContext(ctx).Error(err, "error ungating pod")
+		return ctrl.Result{Requeue: true}, err
 	}
 
-	for _, pod := range podList.Items {
-		if strings.HasPrefix(pod.Name, pattern) {
-			if pod.Status.Phase != v1.PodRunning {
-				log.FromContext(ctx).Info("Pod is not in Running phase", "podName", pod.Name, "namespace", namespace)
-				return false, nil
-			}
-
-			for _, condition := range pod.Status.Conditions {
-				if condition.Type == v1.PodReady && condition.Status != v1.ConditionTrue {
-					log.FromContext(ctx).Info("Pod is not Ready", "podName", pod.Name, "namespace", namespace)
-					return false, nil
-				}
-			}
-
-			log.FromContext(ctx).Info("Pod is Running and Ready", "podName", pod.Name, "namespace", namespace)
-			return true, nil
-		}
-	}
-
-	log.FromContext(ctx).Info("No pod matching the pattern was found", "pattern", pattern, "namespace", namespace)
-	return false, nil
-}
-
-func (r *InstasliceReconciler) ungateIfGpuOperatorPod(ctx context.Context, pod *v1.Pod, allocations inferencev1alpha1.AllocationDetails) (ctrl.Result, error) {
-	gpuOperatorPodOk, err := r.isPatternPodRunningAndHealthy(ctx, "nvidia-device-plugin-daemonset", "gpu-operator")
-	if err != nil {
-		if errors.IsNotFound(err) {
-			log.FromContext(ctx).Info("gpu operator pod not found")
-			return ctrl.Result{RequeueAfter: requeueDelay}, err
-		} else {
-			log.FromContext(ctx).Error(err, "error with gpu operator deployment")
-			return ctrl.Result{RequeueAfter: requeueDelay}, err
-		}
-	}
-	if gpuOperatorPodOk {
-		// Add nodeSelector to the pod
-		if pod.Spec.NodeSelector == nil {
-			pod.Spec.NodeSelector = make(map[string]string)
-		}
-		pod.Spec.NodeSelector[NodeLabel] = allocations.Nodename
-
-		pod := r.unGatePod(pod)
-		err := r.Update(ctx, pod)
-		if err != nil {
-			log.FromContext(ctx).Error(err, "error ungating pod")
-			return ctrl.Result{Requeue: true}, err
-		}
-	} else {
-		log.FromContext(ctx).Info("gpuOperatorPod is not found waiting for it to be in state Running")
-		return ctrl.Result{RequeueAfter: requeueDelay}, nil
-	}
 	return ctrl.Result{}, nil
 }
