@@ -81,7 +81,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.FromContext(ctx).Error(err, "unable to fetch pod")
 		return ctrl.Result{}, nil
 	}
-
 	// Pods with scheduling gates other than the InstaSlice gate are not ready to be scheduled and should be ignored
 	if isPodGatedByOthers(pod) {
 		//log.FromContext(ctx).Info("Ignoring gated pod", "pod", pod.Name)
@@ -111,9 +110,9 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.FromContext(ctx).Error(err, "Error listing Instaslice")
 	}
 
-	// failed pods are not deleted by InstaSlice, finalizer is removed so that user can
+	// Failed pods and the Succeeded pods are not deleted by InstaSlice, finalizer is removed so that user can
 	// delete the pod and later InstaSlice will clean up the MIG slice.
-	if pod.Status.Phase == v1.PodFailed && controllerutil.ContainsFinalizer(pod, finalizerName) {
+	if (pod.Status.Phase == v1.PodFailed || pod.Status.Phase == v1.PodSucceeded) && controllerutil.ContainsFinalizer(pod, finalizerName) {
 		for _, instaslice := range instasliceList.Items {
 			for _, allocation := range instaslice.Spec.Allocations {
 				found, result, err := r.processInstasliceAllocation(ctx, instaslice.Name, string(pod.UID), allocation, req)
@@ -127,32 +126,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			}
 		}
 		// pod can be terminated without any allocation
-		if controllerutil.RemoveFinalizer(pod, finalizerName) {
-			if err := r.Update(ctx, pod); err != nil {
-				log.FromContext(ctx).Error(err, "unable to update removal of finalizer, retrying")
-				// requeing immediately as the finalizer removal gets lost
-				return ctrl.Result{Requeue: true}, nil
-			}
-			log.FromContext(ctx).Info("finalizer deleted")
-		}
-		return ctrl.Result{}, nil
-	}
-
-	// pod is completed move allocation to deleting state and return
-	if pod.Status.Phase == v1.PodSucceeded && controllerutil.ContainsFinalizer(pod, finalizerName) {
-		for _, instaslice := range instasliceList.Items {
-			for _, allocation := range instaslice.Spec.Allocations {
-				found, result, err := r.processInstasliceAllocation(ctx, instaslice.Name, string(pod.UID), allocation, req)
-				if err != nil {
-					return result, err
-				}
-				if found {
-					return ctrl.Result{}, nil
-				}
-			}
-		}
-
-		// pod can be terminated as allocation was deleted in previous reconcile loop
 		if controllerutil.RemoveFinalizer(pod, finalizerName) {
 			if err := r.Update(ctx, pod); err != nil {
 				log.FromContext(ctx).Error(err, "unable to update removal of finalizer, retrying")
@@ -258,41 +231,37 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// check for allocationstatus as created when daemonset is done realizing the slice on the GPU node.
 	// set allocationstatus to ungated and ungate the pod so that the workload can begin execution.
 	if isPodGated {
+		// return error if there are no containers in the pod
+		if len(pod.Spec.Containers) == 0 {
+			return ctrl.Result{}, fmt.Errorf(noContainerInsidePodErr+", pod: %v", pod.Name)
+		}
 		//Assume pod only has one container with one GPU requests
 		if len(pod.Spec.Containers) != 1 {
-			return ctrl.Result{}, fmt.Errorf("multiple containers per pod not supported")
+			return ctrl.Result{}, fmt.Errorf(multipleContainersUnsupportedErr+", pod: %v", pod.Name)
 		}
 		limits := pod.Spec.Containers[0].Resources.Limits
 		profileName := r.extractProfileName(limits)
-		podHasNodeAllocation := false
+		var podHasNodeAllocation bool
 		// search if pod has allocation in any of the instaslice object in the cluster
 		//TODO: allocations may get slower as the cluster size increases
 		for _, instaslice := range instasliceList.Items {
-			for _, allocations := range instaslice.Spec.Allocations {
-				// no matter the state if allocations exists for a pod skip such a pod
-				if allocations.PodUUID == string(pod.UID) {
-					podHasNodeAllocation = true
-				}
-			}
-		}
-		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocations := range instaslice.Spec.Allocations {
 				if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusCreated && allocations.PodUUID == string(pod.UID) {
+					podHasNodeAllocation = true
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,
-						Namespace: "default", // TODO: modify
+						Namespace: instaSliceOperatorNamespace,
 					}
 					errRetrievingInstaSlice := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 					if errRetrievingInstaSlice != nil {
-						log.FromContext(ctx).Error(err, "error getting latest instaslice object")
+						log.FromContext(ctx).Error(errRetrievingInstaSlice, "error getting latest instaslice object")
 						// In some cases the pod gets ungated but the InstaSlice object does not have the
 						// correct allocation status. It could be because we were unable to get the latest InstaSlice object
 						// hence we retry if we fail to get the latest object
 						return ctrl.Result{Requeue: true}, nil
 					}
 					allocations.Allocationstatus = inferencev1alpha1.AllocationStatusUngated
-					instaslice.Spec.Allocations[podUuid] = allocations
 					if updateInstasliceObject.Spec.Allocations == nil {
 						updateInstasliceObject.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
 					}
@@ -437,13 +406,14 @@ func isPodGatedByOthers(pod *v1.Pod) bool {
 
 // podMapFunc maps pods to instaslice created allocations
 func (r *InstasliceReconciler) podMapFunc(ctx context.Context, obj client.Object) []reconcile.Request {
-	instaslice := obj.(*inferencev1alpha1.Instaslice)
-	for _, allocation := range instaslice.Spec.Allocations {
-		if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreated || allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
-			return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: allocation.Namespace, Name: allocation.PodName}}}
+	instaslice, ok := obj.(*inferencev1alpha1.Instaslice)
+	if ok {
+		for _, allocation := range instaslice.Spec.Allocations {
+			if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreated || allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
+				return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: allocation.Namespace, Name: allocation.PodName}}}
+			}
 		}
 	}
-
 	return nil
 }
 
