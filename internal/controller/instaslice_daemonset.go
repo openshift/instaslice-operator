@@ -133,6 +133,8 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			if emulatorMode == emulatorModeFalse {
 				err := r.cleanUpCiAndGi(ctx, allocations.PodUUID, instaslice)
 				if err != nil {
+					// NVML shutdowm took time or NVML init may have failed.
+					log.FromContext(ctx).Error(err, "error cleaning up ci and gi retrying")
 					return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
 				}
 				log.FromContext(ctx).Info("done deleting ci and gi for ", "pod", allocations.PodName)
@@ -212,6 +214,10 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				// TODO: move this logic to a new vendor specific file
 				if prep, exists := cachedPreparedMig[allocations.PodUUID]; !exists || isPreparedMigEmpty(prep) {
 					placement := nvml.GpuInstancePlacement{}
+					// if the GPU is healthy DeviceGetHandleByUUID should never fail
+					// if the call fails then we look in the cache so see if we can reuse
+					// ci and gi or walk MIG devices to set allocation status to created.
+					// the keep latency low for realizing slices.
 					device, retCodeForDevice := nvml.DeviceGetHandleByUUID(allocations.GPUUUID)
 					if retCodeForDevice != nvml.SUCCESS {
 						log.FromContext(ctx).Error(ret, "error getting GPU device handle")
@@ -285,6 +291,8 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 						}
 					}
 					if err != nil {
+						// MIG walking can fail but at this point we are unsure if slices exists
+						// hence we optimistically try to create ci and gi.
 						log.FromContext(ctx).Error(err, "walking MIG devices failed")
 					}
 					if createCiAndGi {
@@ -485,6 +493,7 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, podU
 			parent, errRecievingDeviceHandle := nvml.DeviceGetHandleByUUID(value.Parent)
 			if errRecievingDeviceHandle != nvml.SUCCESS {
 				log.FromContext(ctx).Error(errRecievingDeviceHandle, "error obtaining GPU handle")
+				return errRecievingDeviceHandle
 			}
 			gi, errRetrievingGi := parent.GetGpuInstanceById(int(value.Giinfoid))
 			gIFound := true
@@ -492,6 +501,8 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, podU
 				log.FromContext(ctx).Error(errRetrievingGi, "error obtaining GPU instance for ", "poduuid", value.PodUUID)
 				if errRetrievingGi == nvml.ERROR_NOT_FOUND {
 					gIFound = false
+				} else {
+					return errRetrievingGi
 				}
 			}
 			cIFound := true
@@ -501,6 +512,8 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, podU
 					log.FromContext(ctx).Error(errRetrievingCi, "error obtaining compute instance")
 					if errRetrievingCi == nvml.ERROR_NOT_FOUND {
 						cIFound = false
+					} else {
+						return errRetrievingCi
 					}
 				}
 
@@ -586,7 +599,6 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 		errRetrievingInstaSliceForSetup := r.Get(ctx, typeNamespacedName, &instaslice)
 		if errRetrievingInstaSliceForSetup != nil {
 			log.FromContext(ctx).Error(errRetrievingInstaSliceForSetup, "unable to fetch InstaSlice resource for node")
-			//os.Exit(1)
 		}
 
 		if emulatorMode == emulatorModeFalse {
@@ -601,11 +613,12 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 		errRetrievingInstaSlicePostSetup := r.Get(ctx, typeNamespacedName, &instaslice)
 		if errRetrievingInstaSlicePostSetup != nil {
 			log.FromContext(ctx).Error(errRetrievingInstaSlicePostSetup, "unable to fetch InstaSlice resource for node")
-			os.Exit(1)
+			return errRetrievingInstaSlicePostSetup
 		}
 
 		if err := r.addMigCapacityToNode(ctx, &instaslice); err != nil {
-			os.Exit(1)
+			log.FromContext(ctx).Error(err, "error adding mig capacity to node")
+			return err
 		}
 
 		// Patch the node capacity with GPU memory in emulator mode
