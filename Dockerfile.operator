@@ -1,0 +1,25 @@
+ARG GO_VERSION=1.22
+ARG ALPINE_VERSION=3
+
+## Builder
+FROM golang:${GO_VERSION} as builder
+
+WORKDIR /workspace
+COPY go.mod go.mod
+COPY go.sum go.sum
+COPY cmd cmd/
+COPY api/ api/
+COPY internal/ internal/
+COPY vendor/ vendor/
+
+RUN go build -o bin/manager cmd/controller/main.go
+
+## Operator Image
+FROM alpine:${ALPINE_VERSION}
+
+RUN apk upgrade --no-cache && apk add ca-certificates && update-ca-certificates
+
+WORKDIR /
+COPY --from=builder /workspace/bin/manager .
+
+ENTRYPOINT ["/manager"]

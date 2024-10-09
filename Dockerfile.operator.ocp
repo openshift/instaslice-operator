@@ -1,0 +1,20 @@
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.22-openshift-4.18 as builder
+
+WORKDIR /workspace
+
+COPY go.mod go.mod
+COPY go.sum go.sum
+COPY cmd cmd/
+COPY api/ api/
+COPY internal/ internal/
+COPY vendor/ vendor/
+
+RUN go build -o bin/manager cmd/controller/main.go
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+WORKDIR /
+COPY --from=builder /workspace/bin/manager .
+RUN microdnf -y update && microdnf -y clean all
+USER 65532:65532
+
+ENTRYPOINT ["/manager"]
