@@ -663,10 +663,10 @@ func (r *InstasliceReconciler) ungateIfGpuOperatorPod(ctx context.Context, pod *
 	if err != nil {
 		if errors.IsNotFound(err) {
 			log.FromContext(ctx).Info("gpu operator pod not found")
-			return ctrl.Result{RequeueAfter: requeueDelay}, nil
+			return ctrl.Result{RequeueAfter: requeueDelay}, err
 		} else {
 			log.FromContext(ctx).Error(err, "error with gpu operator deployment")
-			return ctrl.Result{RequeueAfter: requeueDelay}, nil
+			return ctrl.Result{RequeueAfter: requeueDelay}, err
 		}
 	}
 	if gpuOperatorPodOk {
@@ -680,7 +680,7 @@ func (r *InstasliceReconciler) ungateIfGpuOperatorPod(ctx context.Context, pod *
 		err := r.Update(ctx, pod)
 		if err != nil {
 			log.FromContext(ctx).Error(err, "error ungating pod")
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{Requeue: true}, err
 		}
 	} else {
 		log.FromContext(ctx).Info("gpuOperatorPod is not found waiting for it to be in state Running")
