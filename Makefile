@@ -226,12 +226,12 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG} daemonset=${IMG_DMST}
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/$(KUSTOMIZATION) | $(KUBECTL) apply -f -
 
 .PHONY: ocp-deploy
 ocp-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG} daemonset=${IMG_DMST}
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUBECTL) apply -f config/rbac/instaslice-operator-scc.yaml
 	$(KUBECTL) apply -f config/rbac/openshift_scc_cluster_role_binding.yaml
 	$(KUBECTL) apply -f config/rbac/openshift_cluster_role.yaml

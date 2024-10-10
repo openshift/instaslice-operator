@@ -25,8 +25,10 @@ import (
 	"time"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -66,12 +68,37 @@ type FirstFitPolicy struct{}
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/finalizers,verbs=update
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;update;patch
+//+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=get;list;watch;create;update;delete
 
 func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
+	// 1. Ensure DaemonSet is deployed
+	daemonSet := &appsv1.DaemonSet{}
+	err := r.Get(ctx, types.NamespacedName{Name: "instaslice-operator-controller-daemonset", Namespace: "instaslice-operator-system"}, daemonSet)
+	if err != nil && errors.IsNotFound(err) {
+		// DaemonSet doesn't exist, so create it
+		daemonSet = createInstaSliceDaemonSet() // Add your DaemonSet creation logic here
+		err = r.Create(ctx, daemonSet)
+		if err != nil {
+			log.FromContext(ctx).Error(err, "Failed to create DaemonSet")
+			return ctrl.Result{RequeueAfter: time.Minute}, err
+		}
+		log.FromContext(ctx).Info("DaemonSet created successfully, waiting for pods to be ready")
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	} else if err != nil {
+		log.FromContext(ctx).Error(err, "Failed to get DaemonSet")
+		return ctrl.Result{RequeueAfter: time.Minute}, err
+	}
+
+	// 2. Wait for DaemonSet to be ready
+	if daemonSet.Status.DesiredNumberScheduled != daemonSet.Status.NumberReady {
+		log.FromContext(ctx).Info("DaemonSet is not ready yet, waiting...")
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+	log.FromContext(ctx).Info("Instaslice DaemonSet is ready")
 	policy := &FirstFitPolicy{}
 	pod := &v1.Pod{}
-	err := r.Get(ctx, req.NamespacedName, pod)
+	err = r.Get(ctx, req.NamespacedName, pod)
 	if err != nil {
 		// Error fetching the Pod
 		if errors.IsNotFound(err) {
@@ -374,6 +401,81 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// create the DaemonSet object
+func createInstaSliceDaemonSet() *appsv1.DaemonSet {
+	return &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "instaslice-operator-controller-daemonset",
+			Namespace: "instaslice-operator-system",
+			Labels: map[string]string{
+				"app": "controller-daemonset",
+			},
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "controller-daemonset",
+				},
+			},
+			Template: v1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": "controller-daemonset",
+					},
+					Annotations: map[string]string{
+						"kubectl.kubernetes.io/default-container": "daemonset",
+					},
+				},
+				Spec: v1.PodSpec{
+					ServiceAccountName:            "instaslice-operator-controller-manager",
+					TerminationGracePeriodSeconds: func(i int64) *int64 { return &i }(10),
+					SecurityContext: &v1.PodSecurityContext{
+						RunAsNonRoot: func(b bool) *bool { return &b }(false),
+					},
+					Containers: []v1.Container{
+						{
+							Name:            "daemonset",
+							Image:           "docker.io/mohammedmunirabdi/instaslice-daemonset:amd4.0",
+							ImagePullPolicy: v1.PullAlways,
+							Command: []string{
+								"/daemonset",
+							},
+							Args: []string{
+								"--leader-elect=false",
+							},
+							SecurityContext: &v1.SecurityContext{
+								AllowPrivilegeEscalation: func(b bool) *bool { return &b }(true),
+								Privileged:               func(b bool) *bool { return &b }(true),
+								Capabilities: &v1.Capabilities{
+									Add: []v1.Capability{"ALL"},
+								},
+							},
+							Env: []v1.EnvVar{
+								{
+									Name: "NODE_NAME",
+									ValueFrom: &v1.EnvVarSource{
+										FieldRef: &v1.ObjectFieldSelector{
+											FieldPath: "spec.nodeName",
+										},
+									},
+								},
+								{
+									Name:  "NVIDIA_MIG_CONFIG_DEVICES",
+									Value: "all",
+								},
+								{
+									Name:  "EMULATOR_MODE",
+									Value: "false",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 // Extract profile name from the container limits spec
