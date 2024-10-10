@@ -23,7 +23,7 @@ metadata:
     capabilities: Basic Install
     categories: Drivers and plugins
     containerImage: quay.io/amalvank/instaslicev2-controller:latest
-    createdAt: "2024-09-03T18:44:37Z"
+    createdAt: "2024-10-10T19:17:33Z"
     description: InstaSlice works with GPU operator to create mig slices on demand
     operators.operatorframework.io/builder: operator-sdk-v1.34.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -87,8 +87,6 @@ spec:
           resources:
           - nodes
           verbs:
-          - create
-          - delete
           - get
           - list
           - patch
@@ -112,6 +110,17 @@ spec:
           - get
           - list
           - patch
+          - update
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - daemonsets
+          verbs:
+          - create
+          - delete
+          - get
+          - list
           - update
           - watch
         - apiGroups:
@@ -249,37 +258,6 @@ spec:
               - name: cert
                 secret:
                   secretName: webhook-server-cert
-      daemonsets:          # Add the daemonset section
-      - name: instaslice-operator-daemonset
-      spec:
-        selector:
-          matchLabels:
-            app: controller-daemonset
-        template:
-          metadata:
-            labels:
-              app: controller-daemonset
-          spec:
-            containers:
-            - name: daemonset
-              image: quay.io/amalvank/instaslicev2-daemonset:latest
-              ports:
-              - containerPort: 8443
-                name: https
-                protocol: TCP
-              resources:
-                limits:
-                  cpu: 500m
-                  memory: 128Mi
-                requests:
-                  cpu: 5m
-                  memory: 64Mi
-              securityContext:
-                allowPrivilegeEscalation: true
-                privileged: true
-                capabilities:
-                  add:
-                  - "ALL"            
       permissions:
       - rules:
         - apiGroups:
@@ -346,7 +324,7 @@ spec:
     - v1
     containerPort: 443
     deploymentName: instaslice-operator-controller-manager
-    failurePolicy: Ignore
+    failurePolicy: Fail
     generateName: instaslice.codeflare.dev
     rules:
     - apiGroups:

@@ -327,8 +327,7 @@ endif
 bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
 	$(OPERATOR_SDK) generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	cd config/manager && $(KUSTOMIZE) edit set image daemonset=$(IMG_DMST)
-	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
+	$(KUSTOMIZE) build config/manifests | sed -e "s|<IMG>|$(IMG)|g" | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
 	$(OPERATOR_SDK) bundle validate ./bundle
 
 .PHONY: bundle-build

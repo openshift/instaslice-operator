@@ -49,6 +49,12 @@ spec:
                   description: Define the struct for allocation details
                   properties:
                     allocationStatus:
+                      enum:
+                      - deleted
+                      - deleting
+                      - ungated
+                      - creating
+                      - created
                       type: string
                     cpu:
                       format: int64
@@ -164,7 +170,7 @@ spec:
             description: InstasliceStatus defines the observed state of Instaslice
             properties:
               processed:
-                type: string
+                type: boolean
             type: object
         type: object
     served: true
