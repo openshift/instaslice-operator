@@ -25,6 +25,8 @@ spec:
     value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/dynamicacceleratorslicer/instaslice-operator-daemonset:{{revision}}
   - name: dockerfile
     value: Dockerfile.daemonset
+  - name: additional-tags
+    value: [ main ]
   pipelineSpec:
     finally:
     - name: show-sbom
