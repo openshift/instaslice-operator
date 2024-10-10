@@ -1,0 +1,53 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: instaslice-operator-lint
+spec:
+  params: [ ]
+  tasks:
+    - name: clone-and-lint
+      taskSpec:
+        volumes:
+          - name: source
+            emptyDir: { }
+        steps:
+          - image: docker.io/library/golang:1.23.2
+            env:
+              - name: URL
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.annotations['pac.test.appstudio.openshift.io/source-repo-url']
+              - name: REVISION
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.annotations['pac.test.appstudio.openshift.io/sha']
+            computeResources:
+              limits:
+                cpu: 8
+                memory: 4Gi
+              requests:
+                cpu: 500m
+                memory: 1Gi
+            volumeMounts:
+              - name: source
+                mountPath: /workspace
+            script: |
+              #!/bin/bash
+              set -ex
+              if [ -z "$URL" ] || [ -z "$REVISION" ]; then
+              echo "URL and REVISION not set (post test), exiting"
+              exit 0
+              fi
+              echo "Initializing the env vars"
+              echo "URL: $URL"
+              echo "REVISION: $REVISION"
+              mkdir /workspace/source
+              cd /workspace/source
+              git init
+              git remote add origin $URL
+              git fetch origin $REVISION
+              git checkout FETCH_HEAD
+              git log -1
+              git show --stat
+              make lint
+              exit $? # exit with the status of the tests
