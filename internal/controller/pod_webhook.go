@@ -28,6 +28,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -45,11 +46,39 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 	if err != nil {
 		return admission.Errored(400, fmt.Errorf("could not decode pod: %v", err))
 	}
-
+	log.FromContext(ctx).Info("webhook got pod ", "name", pod.Name)
 	if !hasMIGResource(pod) {
 		return admission.Allowed("No nvidia.com/mig-* resource found, skipping mutation.")
-	} else {
-		performQuotaArithmetic(pod, req)
+	}
+
+	performQuotaArithmetic(pod, req)
+
+	// Add extended resource to resource limits
+	if pod.Spec.Containers[0].Resources.Limits == nil {
+		pod.Spec.Containers[0].Resources.Limits = make(v1.ResourceList)
+	}
+
+	limits := pod.Spec.Containers[0].Resources.Limits
+	for resourceName, quantity := range limits {
+		if strings.HasPrefix(string(resourceName), "nvidia.com/mig-") {
+			newResourceName := strings.Replace(string(resourceName), "nvidia.com", "org.instaslice", 1)
+			delete(pod.Spec.Containers[0].Resources.Limits, resourceName)
+			limits[v1.ResourceName(newResourceName)] = quantity
+		}
+	}
+
+	if pod.Spec.Containers[0].Resources.Requests == nil {
+		pod.Spec.Containers[0].Resources.Requests = make(v1.ResourceList)
+	}
+
+	// Transform resource requests from nvidia.com/mig-* to org.instaslice/mig-*
+	requests := pod.Spec.Containers[0].Resources.Requests
+	for resourceName, quantity := range requests {
+		if strings.HasPrefix(string(resourceName), "nvidia.com/mig-") {
+			newResourceName := strings.Replace(string(resourceName), "nvidia.com", "org.instaslice", 1)
+			delete(requests, resourceName)
+			requests[v1.ResourceName(newResourceName)] = quantity
+		}
 	}
 
 	// Add scheduling
@@ -67,7 +96,6 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 
 	// Generate an extended resource name based on the pod name
 	uuidStr := uuid.New().String()
-	extendedResourceName := AppendToInstaSlicePrefix(uuidStr)
 
 	// Add envFrom with a unique ConfigMap name derived from the pod name
 	configMapName := uuidStr
@@ -78,19 +106,12 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 		},
 	})
 
-	// Add extended resource to resource limits
-	if pod.Spec.Containers[0].Resources.Limits == nil {
-		pod.Spec.Containers[0].Resources.Limits = make(v1.ResourceList)
-	}
-	pod.Spec.Containers[0].Resources.Limits[v1.ResourceName(extendedResourceName)] = resource.MustParse("1")
-
 	// Marshal the updated pod object back to JSON
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
 		return admission.Errored(500, fmt.Errorf("could not marshal pod: %v", err))
 	}
 
-	// Return the patch response
 	return admission.PatchResponseFromRaw(req.Object.Raw, marshaledPod)
 }
 

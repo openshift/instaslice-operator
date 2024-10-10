@@ -26,4 +26,5 @@ const (
 	AttributeMediaExtensions    = "me"
 	instaSliceOperatorNamespace = "default"
 	NvidiaMIGPrefix             = "nvidia.com/mig-"
+	NodeLabel                   = "kubernetes.io/hostname"
 )
