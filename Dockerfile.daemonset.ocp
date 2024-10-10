@@ -1,0 +1,42 @@
+ARG CUDA_VERSION=12.4.1
+ARG BASE_DIST=ubi8
+
+## Builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.22-openshift-4.18 as builder
+
+WORKDIR /workspace
+COPY go.mod go.mod
+COPY go.sum go.sum
+COPY cmd cmd/
+COPY api/ api/
+COPY internal/ internal/
+COPY vendor/ vendor/
+
+RUN go build -o bin/daemonset cmd/daemonset/main.go
+
+## daemonset
+FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-base-${BASE_DIST}
+
+# Remove CUDA libs(compat etc) in favor of libs installed by the NVIDIA driver
+RUN dnf remove -y cuda-*
+
+ENV NVIDIA_DISABLE_REQUIRE="true"
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+WORKDIR /
+
+COPY --from=builder /workspace/bin/daemonset .
+
+# Install / upgrade packages here that are required to resolve CVEs
+ARG CVE_UPDATES
+RUN if [ -n "${CVE_UPDATES}" ]; then \
+        yum update -y ${CVE_UPDATES} && \
+        rm -rf /var/cache/yum/*; \
+    fi
+
+
+# non-root user
+# USER 65532:65532
+
+ENTRYPOINT ["/daemonset"]
