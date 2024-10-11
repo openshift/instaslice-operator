@@ -23,7 +23,7 @@ metadata:
     capabilities: Basic Install
     categories: Drivers and plugins
     containerImage: quay.io/amalvank/instaslicev2-controller:latest
-    createdAt: "2024-10-10T19:17:33Z"
+    createdAt: "2024-10-11T23:24:17Z"
     description: InstaSlice works with GPU operator to create mig slices on demand
     operators.operatorframework.io/builder: operator-sdk-v1.34.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -192,8 +192,12 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
+                env:
+                - name: EMULATOR_MODE
+                  value: "false"
+                - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
+                  value: docker.io/mohammedmunirabdi/instaslice-daemonset:arm4.0
                 image: quay.io/amalvank/instaslicev2-controller:latest
-                imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -318,13 +322,16 @@ spec:
   provider:
     name: Codeflare
     url: https://github.com/openshift/instaslice-operator
+  relatedImages:
+  - image: docker.io/mohammedmunirabdi/instaslice-daemonset:arm4.0
+    name: instaslice-daemonset
   version: 0.0.0
   webhookdefinitions:
   - admissionReviewVersions:
     - v1
     containerPort: 443
     deploymentName: instaslice-operator-controller-manager
-    failurePolicy: Fail
+    failurePolicy: Ignore
     generateName: instaslice.codeflare.dev
     rules:
     - apiGroups:
