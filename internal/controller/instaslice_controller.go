@@ -476,7 +476,7 @@ func createInstaSliceDaemonSet() *appsv1.DaemonSet {
 					Containers: []v1.Container{
 						{
 							Name:            "daemonset",
-							Image:           "docker.io/mohammedmunirabdi/instaslice-daemonset:amd4.0",
+							Image:           "quay.io/amalvank/instaslicev2-daemonset:latest",
 							ImagePullPolicy: v1.PullAlways,
 							Command: []string{
 								"/daemonset",
