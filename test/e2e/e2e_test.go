@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -76,10 +77,14 @@ var _ = Describe("controller", Ordered, func() {
 		It("should run successfully", func() {
 			var err error
 
-			var controllerIMG = "quay.io/amalvank/instaslicev2-controller:latest"
-
-			var daemonsetIMG = "quay.io/amalvank/instaslicev2-daemonset:latest"
-
+			tag := os.Getenv("IMG_TAG")
+			if tag == "" {
+				tag = "latest"
+			}
+			var (
+				controllerIMG = "quay.io/amalvank/instaslicev2-controller:" + tag
+				daemonsetIMG  = "quay.io/amalvank/instaslicev2-daemonset:" + tag
+			)
 			By("building the Operator images")
 			cmd := exec.Command(
 				"make",
