@@ -97,6 +97,8 @@ type MigDeviceInfo struct {
 	uuid   string
 	giInfo *nvml.GpuInstanceInfo
 	ciInfo *nvml.ComputeInstanceInfo
+	start  uint32
+	size   uint32
 }
 
 // TODO: remove once we figure out NVML calls that does CI and GI discovery
@@ -279,15 +281,24 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 							uuid:   parentUuid,
 							giInfo: &giInfo,
 							ciInfo: &ciInfo,
+							start:  giInfo.Placement.Start,
+							size:   giInfo.Placement.Size,
 						}
 						return nil
 					})
 					// if ci and gi exist, we need to assign those to the respective allocation
 					for migUuid, migDevice := range migInfos {
+						// a (nvidia) GPU can get max of 7 workloads that can have same gi profile info on a GPU
+						// collect such similar profiles and bind it to allocation chosen by controller and add it to cache
 						if migDevice.giInfo.ProfileId == giProfileInfo.Id && migDevice.uuid == allocations.GPUUUID {
-							cachedPreparedMig[allocations.PodUUID] = preparedMig{gid: migDevice.giInfo.Id, miguuid: migUuid, cid: migDevice.ciInfo.Id}
-							createCiAndGi = false
-							break // Exit the loop after the first match
+							// search the slice chosen by the controller and add to cache when value is empty or does not exists
+							if existingPreparedMig, exists := cachedPreparedMig[allocations.PodUUID]; exists {
+								if existingPreparedMig.miguuid == "" && allocations.Size == migDevice.size && allocations.Start == migDevice.start {
+									cachedPreparedMig[allocations.PodUUID] = preparedMig{gid: migDevice.giInfo.Id, miguuid: migUuid, cid: migDevice.ciInfo.Id}
+									createCiAndGi = false
+									break
+								}
+							}
 						}
 					}
 					if err != nil {
@@ -489,7 +500,7 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, podU
 
 	prepared := instaslice.Spec.Prepared
 	for _, value := range prepared {
-		if value.PodUUID == podUuid || value.PodUUID == "" {
+		if value.PodUUID == podUuid {
 			parent, errRecievingDeviceHandle := nvml.DeviceGetHandleByUUID(value.Parent)
 			if errRecievingDeviceHandle != nvml.SUCCESS {
 				log.FromContext(ctx).Error(errRecievingDeviceHandle, "error obtaining GPU handle")
