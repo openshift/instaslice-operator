@@ -30,6 +30,7 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
 # codeflare.dev/instaslice-operator-bundle:$VERSION and codeflare.dev/instaslice-operator-catalog:$VERSION.
 IMAGE_TAG_BASE ?= quay.io/amalvank/instaslicev2
+IMG_TAG ?= latest
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
@@ -55,8 +56,8 @@ endif
 OPERATOR_SDK_VERSION ?= v1.34.1
 
 # Image URL to use all building/pushing image targets
-IMG ?= $(IMAGE_TAG_BASE)-controller:latest
-IMG_DMST ?= $(IMAGE_TAG_BASE)-daemonset:latest
+IMG ?= $(IMAGE_TAG_BASE)-controller:$(IMG_TAG)
+IMG_DMST ?= $(IMAGE_TAG_BASE)-daemonset:$(IMG_TAG)
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.28.3
 
@@ -139,7 +140,7 @@ test: manifests generate fmt vet envtest ## Run tests.
 # Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up.
 test-e2e:
-	go test ./test/e2e/ -v -ginkgo.v --timeout 20m
+	@export IMG_TAG=test-e2e; make docker-build; go test ./test/e2e/ -v -ginkgo.v --timeout 20m
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.61.0
