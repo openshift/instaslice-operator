@@ -82,8 +82,10 @@ var _ = Describe("controller", Ordered, func() {
 				tag = "latest"
 			}
 			var (
-				controllerIMG = "quay.io/amalvank/instaslicev2-controller:" + tag
-				daemonsetIMG  = "quay.io/amalvank/instaslicev2-daemonset:" + tag
+				// controllerIMG = "quay.io/amalvank/instaslicev2-controller:" + tag
+				controllerIMG = "docker.io/mohammedmunirabdi/instaslice-controller:arm4.0"
+				// daemonsetIMG  = "quay.io/amalvank/instaslicev2-daemonset:" + tag
+				daemonsetIMG = "docker.io/mohammedmunirabdi/instaslice-daemonset:arm4.0"
 			)
 			By("building the Operator images")
 			cmd := exec.Command(
@@ -116,12 +118,12 @@ var _ = Describe("controller", Ordered, func() {
 			outputCm, err := cmdCm.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add fake capacity to the cluster: %s", outputCm))
 
-			By("deploying the controller-manager & controller-daemonset")
+			By("deploying the controller-manager")
 			cmd = exec.Command(
 				"make",
 				"deploy-emulated",
 				fmt.Sprintf("IMG=%s", controllerIMG),
-				fmt.Sprintf("IMG_DMST=%s", daemonsetIMG),
+				// fmt.Sprintf("IMG_DMST=%s", daemonsetIMG),
 			)
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())

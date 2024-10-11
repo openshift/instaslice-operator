@@ -189,7 +189,7 @@ docker-push: ## Push docker image with the manager.
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
 # architectures. Make sure that base image in the Dockerfile/Containerfile is itself multi-platform, and includes
 # the requested plaforms. Unlike "docker buildx", for multi-platform images podman requires creating a manifest.
-PLATFORMS ?= linux/arm64,linux/amd64
+PLATFORMS ?= linux/arm64
 .PHONY: docker-buildx
 docker-buildx: ## Build and push docker images with multi-platform support
 	if [ "$(CONTAINER_TOOL)" == "podman" ]; then \

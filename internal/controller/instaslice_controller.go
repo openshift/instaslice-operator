@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -74,12 +75,15 @@ const requeueDelay = 2 * time.Second
 
 func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
+	emulatorMode := os.Getenv("EMULATOR_MODE")
+	log.FromContext(ctx).Info("EMULATOR_MODE ", "EMULATOR_MODE", emulatorMode)
+
 	// 1. Ensure DaemonSet is deployed
 	daemonSet := &appsv1.DaemonSet{}
 	err := r.Get(ctx, types.NamespacedName{Name: "instaslice-operator-controller-daemonset", Namespace: "instaslice-operator-system"}, daemonSet)
 	if err != nil && errors.IsNotFound(err) {
 		// DaemonSet doesn't exist, so create it
-		daemonSet = createInstaSliceDaemonSet() // Add your DaemonSet creation logic here
+		daemonSet = createInstaSliceDaemonSet(ctx) // Add your DaemonSet creation logic here
 		err = r.Create(ctx, daemonSet)
 		if err != nil {
 			log.FromContext(ctx).Error(err, "Failed to create DaemonSet")
@@ -443,26 +447,23 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 }
 
 // create the DaemonSet object
-func createInstaSliceDaemonSet() *appsv1.DaemonSet {
-	return &appsv1.DaemonSet{
+func createInstaSliceDaemonSet(ctx context.Context) *appsv1.DaemonSet {
+	emulatorMode := os.Getenv("EMULATOR_MODE")
+	log.FromContext(ctx).Info("EMULATOR_MODE ", "EMULATOR_MODE", emulatorMode)
+	// Base DaemonSet structure
+	daemonSet := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "instaslice-operator-controller-daemonset",
 			Namespace: "instaslice-operator-system",
-			Labels: map[string]string{
-				"app": "controller-daemonset",
-			},
+			Labels:    map[string]string{"app": "controller-daemonset"},
 		},
 		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app": "controller-daemonset",
-				},
+				MatchLabels: map[string]string{"app": "controller-daemonset"},
 			},
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app": "controller-daemonset",
-					},
+					Labels: map[string]string{"app": "controller-daemonset"},
 					Annotations: map[string]string{
 						"kubectl.kubernetes.io/default-container": "daemonset",
 					},
@@ -476,7 +477,7 @@ func createInstaSliceDaemonSet() *appsv1.DaemonSet {
 					Containers: []v1.Container{
 						{
 							Name:            "daemonset",
-							Image:           "quay.io/amalvank/instaslicev2-daemonset:latest",
+							Image:           "docker.io/mohammedmunirabdi/instaslice-daemonset:arm4.0",
 							ImagePullPolicy: v1.PullAlways,
 							Command: []string{
 								"/daemonset",
@@ -506,7 +507,7 @@ func createInstaSliceDaemonSet() *appsv1.DaemonSet {
 								},
 								{
 									Name:  "EMULATOR_MODE",
-									Value: "false",
+									Value: emulatorMode,
 								},
 							},
 						},
@@ -515,6 +516,14 @@ func createInstaSliceDaemonSet() *appsv1.DaemonSet {
 			},
 		},
 	}
+
+	if emulatorMode == emulatorModeFalse {
+		daemonSet.Spec.Template.Spec.Containers[0].Env[2].Value = "false"
+	} else if emulatorMode == emulatorModeTrue {
+		daemonSet.Spec.Template.Spec.Containers[0].Env[2].Value = "true"
+	}
+
+	return daemonSet
 }
 
 // Extract profile name from the container limits spec

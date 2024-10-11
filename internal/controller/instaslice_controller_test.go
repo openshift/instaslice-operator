@@ -19,10 +19,11 @@ package controller
 import (
 	"context"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -162,6 +163,99 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 
 }
 
+func TestInstasliceDaemonsetCreation_Reconcile(t *testing.T) {
+	var _ = Describe("InstasliceReconciler", func() {
+		var (
+			r               *InstasliceReconciler
+			fakeClient      client.Client
+			scheme          *runtime.Scheme
+			ctx             context.Context
+			req             ctrl.Request
+			daemonSet       *appsv1.DaemonSet
+			reconcileResult ctrl.Result
+			reconcileErr    error
+		)
+
+		BeforeEach(func() {
+			scheme = runtime.NewScheme()
+			_ = appsv1.AddToScheme(scheme)
+
+			Expect(inferencev1alpha1.AddToScheme(scheme)).To(Succeed())
+			Expect(v1.AddToScheme(scheme)).To(Succeed())
+			Expect(appsv1.AddToScheme(scheme)).To(Succeed()) // Ensure DaemonSet is registered
+
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+
+			r = &InstasliceReconciler{
+				Client: fakeClient,
+				Scheme: scheme,
+			}
+
+			ctx = context.Background()
+
+			// Mock DaemonSet object
+			daemonSet = &appsv1.DaemonSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "instaslice-operator-controller-daemonset",
+					Namespace: "instaslice-operator-system",
+				},
+			}
+
+			req = ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      "instaslice-operator-controller-daemonset",
+					Namespace: "instaslice-operator-system",
+				},
+			}
+		})
+
+		When("DaemonSet does not exist", func() {
+			It("should create the DaemonSet", func() {
+				reconcileResult, reconcileErr = r.Reconcile(ctx, req)
+
+				Expect(reconcileErr).NotTo(HaveOccurred())
+				Expect(reconcileResult.RequeueAfter).To(Equal(10 * time.Second))
+
+				// Check that the DaemonSet was created
+				createdDaemonSet := &appsv1.DaemonSet{}
+				err := fakeClient.Get(ctx, req.NamespacedName, createdDaemonSet)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(createdDaemonSet.Name).To(Equal("instaslice-operator-controller-daemonset"))
+			})
+		})
+
+		When("DaemonSet exists but is not ready", func() {
+			BeforeEach(func() {
+				daemonSet.Status.DesiredNumberScheduled = 3
+				daemonSet.Status.NumberReady = 1
+				_ = fakeClient.Create(ctx, daemonSet)
+			})
+
+			It("should requeue until the DaemonSet is ready", func() {
+				reconcileResult, reconcileErr = r.Reconcile(ctx, req)
+
+				Expect(reconcileErr).NotTo(HaveOccurred())
+				Expect(reconcileResult.RequeueAfter).To(Equal(10 * time.Second))
+			})
+		})
+
+		When("DaemonSet is ready", func() {
+			BeforeEach(func() {
+				daemonSet.Status.DesiredNumberScheduled = 3
+				daemonSet.Status.NumberReady = 3
+				_ = fakeClient.Create(ctx, daemonSet)
+			})
+
+			It("should not requeue", func() {
+				reconcileResult, reconcileErr = r.Reconcile(ctx, req)
+
+				Expect(reconcileErr).NotTo(HaveOccurred())
+				Expect(reconcileResult.RequeueAfter).To(BeZero())
+			})
+		})
+	})
+}
+
 func TestInstasliceReconciler_Reconcile(t *testing.T) {
 	var _ = Describe("InstasliceReconciler Reconcile Loop", func() {
 		var (
@@ -180,6 +274,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			scheme := runtime.NewScheme()
 			Expect(inferencev1alpha1.AddToScheme(scheme)).To(Succeed())
 			Expect(v1.AddToScheme(scheme)).To(Succeed())
+			Expect(appsv1.AddToScheme(scheme)).To(Succeed()) // Ensure DaemonSet is registered
 
 			//fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&v1.Pod{}).Build()
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
