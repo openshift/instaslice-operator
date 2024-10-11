@@ -17,13 +17,16 @@ limitations under the License.
 package controller
 
 const (
-	orgInstaslicePrefix         = "org.instaslice/"
-	gateName                    = orgInstaslicePrefix + "accelerator"
-	finalizerName               = gateName
-	quotaResourceName           = orgInstaslicePrefix + "accelerator-memory-quota"
-	emulatorModeFalse           = "false"
-	emulatorModeTrue            = "true"
-	AttributeMediaExtensions    = "me"
-	instaSliceOperatorNamespace = "default"
-	NvidiaMIGPrefix             = "nvidia.com/mig-"
+	orgInstaslicePrefix              = "org.instaslice/"
+	gateName                         = orgInstaslicePrefix + "accelerator"
+	finalizerName                    = gateName
+	quotaResourceName                = orgInstaslicePrefix + "accelerator-memory-quota"
+	emulatorModeFalse                = "false"
+	emulatorModeTrue                 = "true"
+	AttributeMediaExtensions         = "me"
+	instaSliceOperatorNamespace      = "default"
+	NvidiaMIGPrefix                  = "nvidia.com/mig-"
+	NodeLabel                        = "kubernetes.io/hostname"
+	multipleContainersUnsupportedErr = "multiple containers per pod not supported"
+	noContainerInsidePodErr          = "no containers present inside the pod"
 )

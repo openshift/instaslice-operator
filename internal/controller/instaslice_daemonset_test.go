@@ -18,167 +18,52 @@ package controller
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	runtimefake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestCleanUp(t *testing.T) {
-
-	// Create a fake Kubernetes client
+func TestDeleteConfigMap(t *testing.T) {
+	// Set up the scheme for the client
 	s := scheme.Scheme
-	_ = inferencev1alpha1.AddToScheme(s)
-	fakeClient := runtimefake.NewClientBuilder().WithScheme(s).Build()
+	_ = v1.AddToScheme(s)
 
+	// Create a fake client with a ConfigMap already created in the cluster
+	existingConfigMap := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-configmap",
+			Namespace: "default",
+		},
+	}
+
+	// Use the fake client
+	client := fake.NewClientBuilder().WithScheme(s).WithObjects(existingConfigMap).Build()
+
+	// Create the reconciler with the fake client
 	reconciler := &InstaSliceDaemonsetReconciler{
-		Client: fakeClient,
-		Scheme: s,
+		Client: client,
 	}
 
-	instaslice := &inferencev1alpha1.Instaslice{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "node-1",
-		},
-		Spec: inferencev1alpha1.InstasliceSpec{
-			Prepared: map[string]inferencev1alpha1.PreparedDetails{
-				"mig-uuid-1": {
-					PodUUID:  "pod-uid-1",
-					Parent:   "GPU-1",
-					Giinfoid: 1,
-					Ciinfoid: 1,
-				},
-			},
-			Allocations: map[string]inferencev1alpha1.AllocationDetails{
-				"allocation-1": {
-					PodUUID:   "pod-uid-1",
-					PodName:   "pod-name-1",
-					Namespace: "default",
-				},
-			},
-		},
-	}
-	errCreatingInstaSlice := fakeClient.Create(context.Background(), instaslice)
-	assert.NoError(t, errCreatingInstaSlice)
+	// Create a background context
+	ctx := context.TODO()
 
-	// Create a fake Node resource
-	node := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "node-1",
-		},
-		Status: v1.NodeStatus{
-			//TODO: add test cases for other resources
-			Capacity: v1.ResourceList{
-				v1.ResourceName(AppendToInstaSlicePrefix("uid-1")): resource.MustParse("1"),
-			},
-		},
-	}
-	errCreatingNode := fakeClient.Create(context.Background(), node)
-	assert.NoError(t, errCreatingNode)
+	// Test Case 1: Delete ConfigMap successfully
+	err := reconciler.deleteConfigMap(ctx, "test-configmap", "default")
+	assert.NoError(t, err, "expected no error when deleting configmap")
 
-	// Set the NODE_NAME environment variable
-	setEnvErr := os.Setenv("NODE_NAME", "node-1")
-	assert.NoError(t, setEnvErr, "error setting setenv")
-	defer func() {
-		err := os.Unsetenv("NODE_NAME")
-		assert.NoError(t, err)
-	}()
+	// Test that the ConfigMap no longer exists
+	cm := &v1.ConfigMap{}
+	err = client.Get(ctx, types.NamespacedName{Name: "test-configmap", Namespace: "default"}, cm)
+	assert.True(t, errors.IsNotFound(err), "expected configmap to be deleted")
 
-	// Keeping it around as it may be needed later
-	// Create a fake Pod resource
-	// pod := &v1.Pod{
-	//  ObjectMeta: metav1.ObjectMeta{
-	//      UID:       "pod-uid-1",
-	//      Name:      "pod-name-1",
-	//      Namespace: "default",
-	//  },
-	// }
-
-	var updatedInstaslice inferencev1alpha1.Instaslice
-	err := fakeClient.Get(context.Background(), types.NamespacedName{Name: "node-1"}, &updatedInstaslice)
-	assert.NoError(t, err)
-
-	errDeletingInstaSlice := reconciler.cleanUpInstaSliceResource(context.Background(), AppendToInstaSlicePrefix("uid-1"))
-	assert.NoError(t, errDeletingInstaSlice)
-
-	var updatedNode v1.Node
-	errVerifyingInstaSliceResource := fakeClient.Get(context.Background(), types.NamespacedName{Name: "node-1"}, &updatedNode)
-	assert.NoError(t, errVerifyingInstaSliceResource)
-
-	_, exists := updatedNode.Status.Capacity[v1.ResourceName(AppendToInstaSlicePrefix("uid-1"))]
-	assert.False(t, exists, fmt.Sprintf("resource '%s' should be deleted from the node's capacity", AppendToInstaSlicePrefix("uid-1")))
-
-}
-
-func TestUpdateNodeCapacity(t *testing.T) {
-	var _ = Describe("InstaSliceDaemonsetReconciler", func() {
-		var (
-			ctx          context.Context
-			reconciler   InstaSliceDaemonsetReconciler
-			fakeClient   client.Client
-			node         *v1.Node
-			nodeName     string
-			emulatorMode string
-		)
-		allocation := inferencev1alpha1.AllocationDetails{
-			Allocationstatus: inferencev1alpha1.AllocationStatusCreating,
-			Profile:          "test-profile",
-		}
-
-		BeforeEach(func() {
-			ctx = context.TODO()
-
-			// Setup fake client with a test node
-			nodeName = "test-node"
-			emulatorMode = "false"
-
-			node = &v1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: nodeName,
-					Labels: map[string]string{
-						"nvidia.com/device-plugin.config": "update-capacity-1",
-					},
-				},
-				Status: v1.NodeStatus{
-					Capacity:    v1.ResourceList{},
-					Allocatable: v1.ResourceList{},
-				},
-			}
-
-			fakeClient = fake.NewClientBuilder().WithObjects(node).Build()
-
-			reconciler = InstaSliceDaemonsetReconciler{
-				Client: fakeClient,
-			}
-		})
-
-		Context("when updating node capacity in emulator mode", func() {
-			It("should toggle the label and update node capacity", func() {
-
-				err := reconciler.updateNodeCapacity(ctx, nodeName, allocation, emulatorMode)
-				Expect(err).ToNot(HaveOccurred())
-
-				updatedNode := &v1.Node{}
-				err = fakeClient.Get(ctx, types.NamespacedName{Name: nodeName}, updatedNode)
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(updatedNode.Labels["nvidia.com/device-plugin.config"]).To(Equal("update-capacity"))
-			})
-		})
-
-	})
+	// Test Case 2: ConfigMap not found
+	err = reconciler.deleteConfigMap(ctx, "non-existent-configmap", "default")
+	assert.NoError(t, err, "expected no error when configmap is not found")
 }
