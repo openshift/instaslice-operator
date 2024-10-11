@@ -29,4 +29,5 @@ const (
 	NodeLabel                        = "kubernetes.io/hostname"
 	multipleContainersUnsupportedErr = "multiple containers per pod not supported"
 	noContainerInsidePodErr          = "no containers present inside the pod"
+	instasliceDaemonsetName          = "instaslice-operator-controller-daemonset"
 )

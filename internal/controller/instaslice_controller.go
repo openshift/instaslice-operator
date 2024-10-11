@@ -80,10 +80,10 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// 1. Ensure DaemonSet is deployed
 	daemonSet := &appsv1.DaemonSet{}
-	err := r.Get(ctx, types.NamespacedName{Name: "instaslice-operator-controller-daemonset", Namespace: "instaslice-operator-system"}, daemonSet)
+	err := r.Get(ctx, types.NamespacedName{Name: instasliceDaemonsetName, Namespace: req.Namespace}, daemonSet)
 	if err != nil && errors.IsNotFound(err) {
 		// DaemonSet doesn't exist, so create it
-		daemonSet = createInstaSliceDaemonSet(ctx) // Add your DaemonSet creation logic here
+		daemonSet = createInstaSliceDaemonSet(req.Namespace)
 		err = r.Create(ctx, daemonSet)
 		if err != nil {
 			log.FromContext(ctx).Error(err, "Failed to create DaemonSet")
@@ -447,14 +447,14 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 }
 
 // create the DaemonSet object
-func createInstaSliceDaemonSet(ctx context.Context) *appsv1.DaemonSet {
+func createInstaSliceDaemonSet(namespace string) *appsv1.DaemonSet {
 	emulatorMode := os.Getenv("EMULATOR_MODE")
-	log.FromContext(ctx).Info("EMULATOR_MODE ", "EMULATOR_MODE", emulatorMode)
+	instasliceDaemonsetImage := os.Getenv("RELATED_IMAGE_INSTASLICE_DAEMONSET")
 	// Base DaemonSet structure
 	daemonSet := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "instaslice-operator-controller-daemonset",
-			Namespace: "instaslice-operator-system",
+			Name:      instasliceDaemonsetName,
+			Namespace: namespace,
 			Labels:    map[string]string{"app": "controller-daemonset"},
 		},
 		Spec: appsv1.DaemonSetSpec{
@@ -477,7 +477,7 @@ func createInstaSliceDaemonSet(ctx context.Context) *appsv1.DaemonSet {
 					Containers: []v1.Container{
 						{
 							Name:            "daemonset",
-							Image:           "docker.io/mohammedmunirabdi/instaslice-daemonset:arm4.0",
+							Image:           instasliceDaemonsetImage,
 							ImagePullPolicy: v1.PullAlways,
 							Command: []string{
 								"/daemonset",
