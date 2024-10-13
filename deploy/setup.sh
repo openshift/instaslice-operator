@@ -49,13 +49,3 @@ timeout 60s bash -c "until kubectl get daemonset nvidia-device-plugin-daemonset 
 
 echo "> Waiting for device plugin daemonset to become ready"
 kubectl rollout status daemonset nvidia-device-plugin-daemonset -n ${GPU_OPERATOR_NS}
-
-echo "> Labeling nodes to use custom device plugin configuration"
-kubectl label node --all nvidia.com/device-plugin.config=update-capacity
-
-echo "> Adding custom device plugin configuration"
-kubectl apply -f ./deploy/custom-configmapwithprofiles.yaml
-
-echo "> Triggering GPU capacity update"
-kubectl patch clusterpolicies.nvidia.com/cluster-policy -n ${GPU_OPERATOR_NS} \
-    --type merge -p '{"spec": {"devicePlugin": {"config": {"name": "capacity-update-trigger"}}}}'
