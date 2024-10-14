@@ -34,7 +34,7 @@ IMG_TAG ?= latest
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
-BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
+BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:$(IMG_TAG)
 
 # BUNDLE_GEN_FLAGS are the flags passed to the operator-sdk generate bundle command
 BUNDLE_GEN_FLAGS ?= -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
@@ -189,7 +189,7 @@ docker-push: ## Push docker image with the manager.
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
 # architectures. Make sure that base image in the Dockerfile/Containerfile is itself multi-platform, and includes
 # the requested plaforms. Unlike "docker buildx", for multi-platform images podman requires creating a manifest.
-PLATFORMS ?= linux/arm64
+PLATFORMS ?= linux/arm64,linux/amd64
 .PHONY: docker-buildx
 docker-buildx: ## Build and push docker images with multi-platform support
 	if [ "$(CONTAINER_TOOL)" == "podman" ]; then \

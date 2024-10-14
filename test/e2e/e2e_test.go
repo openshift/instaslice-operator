@@ -82,10 +82,8 @@ var _ = Describe("controller", Ordered, func() {
 				tag = "latest"
 			}
 			var (
-				// controllerIMG = "quay.io/amalvank/instaslicev2-controller:" + tag
-				controllerIMG = "docker.io/mohammedmunirabdi/instaslice-controller:arm4.0"
-				// daemonsetIMG  = "quay.io/amalvank/instaslicev2-daemonset:" + tag
-				daemonsetIMG = "docker.io/mohammedmunirabdi/instaslice-daemonset:arm4.0"
+				controllerIMG = "quay.io/amalvank/instaslicev2-controller:" + tag
+				daemonsetIMG  = "quay.io/amalvank/instaslicev2-daemonset:" + tag
 			)
 			By("building the Operator images")
 			cmd := exec.Command(
@@ -123,7 +121,6 @@ var _ = Describe("controller", Ordered, func() {
 				"make",
 				"deploy-emulated",
 				fmt.Sprintf("IMG=%s", controllerIMG),
-				// fmt.Sprintf("IMG_DMST=%s", daemonsetIMG),
 			)
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -139,7 +136,7 @@ var _ = Describe("controller", Ordered, func() {
 			*/
 			// Until then, adding a sleep of 1 Minute should mitigate the intermittent failures running the e2e tests.
 
-			By("validating that the controller-daemonset pod is running as expected")
+			By("validating that the controller-daemonset resource is successfully installed by the controller and pod is running as expected")
 			EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("pod", "app=controller-daemonset", namespace).Should(BeTrue())
 
 			time.Sleep(time.Minute)

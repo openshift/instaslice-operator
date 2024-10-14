@@ -74,8 +74,8 @@ const requeueDelay = 2 * time.Second
 //+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=get;list;watch;create;update;delete
 
 func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-  log := logr.FromContext(ctx)
-  
+	log := logr.FromContext(ctx)
+
 	// 1. Ensure DaemonSet is deployed
 	daemonSet := &appsv1.DaemonSet{}
 	err := r.Get(ctx, types.NamespacedName{Name: instasliceDaemonsetName, Namespace: operatorDeployNamespace}, daemonSet)
@@ -100,7 +100,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 	log.Info("Instaslice DaemonSet is ready")
-  
+
 	policy := &FirstFitPolicy{}
 	pod := &v1.Pod{}
 	var instasliceList inferencev1alpha1.InstasliceList
