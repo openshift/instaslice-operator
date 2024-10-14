@@ -23,9 +23,8 @@ issues:
 linters:
   disable-all: true
   enable:
-#    - dupl
     - errcheck
-    - exportloopref
+    - copyloopvar
     - goconst
     - gofmt
     - goimports
