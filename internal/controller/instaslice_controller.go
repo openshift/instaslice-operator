@@ -76,13 +76,6 @@ const requeueDelay = 2 * time.Second
 func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logr.FromContext(ctx)
 
-	// Check if the request is for the DaemonSet if not don't requeue for unknown resources
-	// if req.Name != instasliceDaemonsetName {
-	// 	log.Info("Skipping reconcile for non-DaemonSet resource", "name", req.Name)
-	// 	// Return without requeueing for unknown pods or other resources
-	// 	return ctrl.Result{}, nil
-	// }
-
 	// 1. Ensure DaemonSet is deployed
 	daemonSet := &appsv1.DaemonSet{}
 	err := r.Get(ctx, types.NamespacedName{Name: instasliceDaemonsetName, Namespace: operatorDeployNamespace}, daemonSet)
