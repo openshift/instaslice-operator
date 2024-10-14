@@ -76,30 +76,38 @@ const requeueDelay = 2 * time.Second
 func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logr.FromContext(ctx)
 
+	// Check if the request is for the DaemonSet if not don't requeue for unknown resources
+	// if req.Name != instasliceDaemonsetName {
+	// 	log.Info("Skipping reconcile for non-DaemonSet resource", "name", req.Name)
+	// 	// Return without requeueing for unknown pods or other resources
+	// 	return ctrl.Result{}, nil
+	// }
+
 	// 1. Ensure DaemonSet is deployed
 	daemonSet := &appsv1.DaemonSet{}
 	err := r.Get(ctx, types.NamespacedName{Name: instasliceDaemonsetName, Namespace: operatorDeployNamespace}, daemonSet)
-	if err != nil && errors.IsNotFound(err) {
-		// DaemonSet doesn't exist, so create it
-		daemonSet = createInstaSliceDaemonSet(operatorDeployNamespace)
-		err = r.Create(ctx, daemonSet)
-		if err != nil {
-			log.Error(err, "Failed to create DaemonSet")
+	if req.Name == instasliceDaemonsetName {
+		if err != nil && errors.IsNotFound(err) {
+			// DaemonSet doesn't exist, so create it
+			daemonSet = createInstaSliceDaemonSet(operatorDeployNamespace)
+			err = r.Create(ctx, daemonSet)
+			if err != nil {
+				log.Error(err, "Failed to create DaemonSet")
+				return ctrl.Result{RequeueAfter: time.Minute}, err
+			}
+			log.Info("DaemonSet created successfully, waiting for pods to be ready")
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		} else if err != nil {
+			log.Error(err, "Failed to get DaemonSet")
 			return ctrl.Result{RequeueAfter: time.Minute}, err
 		}
-		log.Info("DaemonSet created successfully, waiting for pods to be ready")
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	} else if err != nil {
-		log.Error(err, "Failed to get DaemonSet")
-		return ctrl.Result{RequeueAfter: time.Minute}, err
+		// 2. Wait for DaemonSet to be ready
+		if daemonSet.Status.DesiredNumberScheduled != daemonSet.Status.NumberReady {
+			log.Info("DaemonSet is not ready yet, waiting...")
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+		log.Info("Instaslice DaemonSet is ready")
 	}
-
-	// 2. Wait for DaemonSet to be ready
-	if daemonSet.Status.DesiredNumberScheduled != daemonSet.Status.NumberReady {
-		log.Info("DaemonSet is not ready yet, waiting...")
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	}
-	log.Info("Instaslice DaemonSet is ready")
 
 	policy := &FirstFitPolicy{}
 	pod := &v1.Pod{}
