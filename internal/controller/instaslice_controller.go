@@ -20,13 +20,16 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
 	"regexp"
 	"strings"
 	"time"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -68,17 +71,45 @@ const requeueDelay = 2 * time.Second
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/finalizers,verbs=update
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;update;patch
+//+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=get;list;watch;create;update;delete
 
 func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logr.FromContext(ctx)
+
+	// 1. Ensure DaemonSet is deployed
+	daemonSet := &appsv1.DaemonSet{}
+	err := r.Get(ctx, types.NamespacedName{Name: instasliceDaemonsetName, Namespace: operatorDeployNamespace}, daemonSet)
+	if req.Name == instasliceDaemonsetName {
+		if err != nil && errors.IsNotFound(err) {
+			// DaemonSet doesn't exist, so create it
+			daemonSet = createInstaSliceDaemonSet(operatorDeployNamespace)
+			err = r.Create(ctx, daemonSet)
+			if err != nil {
+				log.Error(err, "Failed to create DaemonSet")
+				return ctrl.Result{RequeueAfter: time.Minute}, err
+			}
+			log.Info("DaemonSet created successfully, waiting for pods to be ready")
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		} else if err != nil {
+			log.Error(err, "Failed to get DaemonSet")
+			return ctrl.Result{RequeueAfter: time.Minute}, err
+		}
+		// 2. Wait for DaemonSet to be ready
+		if daemonSet.Status.DesiredNumberScheduled != daemonSet.Status.NumberReady {
+			log.Info("DaemonSet is not ready yet, waiting...")
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+		log.Info("Instaslice DaemonSet is ready")
+	}
+
 	policy := &FirstFitPolicy{}
 	pod := &v1.Pod{}
 	var instasliceList inferencev1alpha1.InstasliceList
-	if err := r.List(ctx, &instasliceList, &client.ListOptions{}); err != nil {
+	if err = r.List(ctx, &instasliceList, &client.ListOptions{}); err != nil {
 		log.Error(err, "Error listing Instaslice")
 		return ctrl.Result{}, err
 	}
-	err := r.Get(ctx, req.NamespacedName, pod)
+	err = r.Get(ctx, req.NamespacedName, pod)
 	if err != nil {
 		// Error fetching the Pod
 		if errors.IsNotFound(err) {
@@ -413,6 +444,86 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// create the DaemonSet object
+func createInstaSliceDaemonSet(namespace string) *appsv1.DaemonSet {
+	emulatorMode := os.Getenv("EMULATOR_MODE")
+	instasliceDaemonsetImage := os.Getenv("RELATED_IMAGE_INSTASLICE_DAEMONSET")
+	// Base DaemonSet structure
+	daemonSet := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      instasliceDaemonsetName,
+			Namespace: namespace,
+			Labels:    map[string]string{"app": "controller-daemonset"},
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": "controller-daemonset"},
+			},
+			Template: v1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": "controller-daemonset"},
+					Annotations: map[string]string{
+						"kubectl.kubernetes.io/default-container": "daemonset",
+					},
+				},
+				Spec: v1.PodSpec{
+					ServiceAccountName:            "instaslice-operator-controller-manager",
+					TerminationGracePeriodSeconds: func(i int64) *int64 { return &i }(10),
+					SecurityContext: &v1.PodSecurityContext{
+						RunAsNonRoot: func(b bool) *bool { return &b }(false),
+					},
+					Containers: []v1.Container{
+						{
+							Name:            "daemonset",
+							Image:           instasliceDaemonsetImage,
+							ImagePullPolicy: v1.PullAlways,
+							Command: []string{
+								"/daemonset",
+							},
+							Args: []string{
+								"--leader-elect=false",
+							},
+							SecurityContext: &v1.SecurityContext{
+								AllowPrivilegeEscalation: func(b bool) *bool { return &b }(true),
+								Privileged:               func(b bool) *bool { return &b }(true),
+								Capabilities: &v1.Capabilities{
+									Add: []v1.Capability{"ALL"},
+								},
+							},
+							Env: []v1.EnvVar{
+								{
+									Name: "NODE_NAME",
+									ValueFrom: &v1.EnvVarSource{
+										FieldRef: &v1.ObjectFieldSelector{
+											FieldPath: "spec.nodeName",
+										},
+									},
+								},
+								{
+									Name:  "NVIDIA_MIG_CONFIG_DEVICES",
+									Value: "all",
+								},
+								{
+									Name:  "EMULATOR_MODE",
+									Value: emulatorMode,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if emulatorMode == emulatorModeFalse {
+		daemonSet.Spec.Template.Spec.Containers[0].Env[2].Value = "false"
+	} else if emulatorMode == emulatorModeTrue {
+		daemonSet.Spec.Template.Spec.Containers[0].Env[2].Value = "true"
+	}
+
+	return daemonSet
 }
 
 // Extract profile name from the container limits spec

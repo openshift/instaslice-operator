@@ -1,13 +1,13 @@
 apiVersion: apps/v1
-kind: DaemonSet
+kind: Deployment
 metadata:
-  name: controller-daemonset
+  name: controller-manager
   namespace: system
 spec:
   template:
     spec:
       containers:
-        - name: daemonset
+        - name: manager
           env:
             - name: EMULATOR_MODE
               value: "true"

@@ -99,59 +99,10 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
-      serviceAccountName: controller-manager
-      terminationGracePeriodSeconds: 10
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: controller-daemonset
-  namespace: system
-  labels:
-    app: controller-daemonset
-spec:
-  selector:
-    matchLabels:
-      app: controller-daemonset
-  template:
-    metadata:
-      annotations:
-        kubectl.kubernetes.io/default-container: daemonset
-      labels:
-        app: controller-daemonset
-    spec:
-      securityContext:
-        runAsNonRoot: false
-      containers:
-      - command:
-        - /daemonset
-        args:
-        - --leader-elect=false
-        name: daemonset
-        image: daemonset:latest
-        #imagePullPolicy: Always
-        #imagePullPolicy: IfNotPresent
-        securityContext:
-          allowPrivilegeEscalation: true
-          privileged: true
-          capabilities:
-            add:
-            - "ALL"
-        resources:
-          limits:
-            cpu: 500m
-            memory: 128Mi
-          requests:
-            cpu: 10m
-            memory: 64Mi
         env:
-          - name: NODE_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: spec.nodeName
-          - name: NVIDIA_MIG_CONFIG_DEVICES
-            value: all
           - name: EMULATOR_MODE
             value: "false"
+          - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
+            value: quay.io/amalvank/instaslicev2-daemonset:latest
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
