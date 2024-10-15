@@ -161,14 +161,8 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusCreating && allocations.Nodename == nodeName {
 			//Assume pod only has one container with one GPU request
 			log.Info("creating allocation for ", "pod", allocations.PodName)
-			var podUUID = allocations.PodUUID
-			_, profileName, resourceIdentifier, errGettingControllerAllocation := r.getAllocation(instaslice, allocations.PodUUID)
-			if errGettingControllerAllocation != nil {
-				log.Error(errGettingControllerAllocation, "allocation was not found, retrying will not help")
-				return ctrl.Result{}, nil
-			}
 
-			existingAllocations := instaslice.Spec.Allocations[podUUID]
+			existingAllocations := instaslice.Spec.Allocations[allocations.PodUUID]
 
 			if emulatorMode == emulatorModeTrue {
 				// Emulating cost to create CI and GI on a GPU
@@ -213,7 +207,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					}
 					var giProfileId, ciProfileId int
 					for _, item := range instaslice.Spec.Migplacement {
-						if item.Profile == profileName {
+						if item.Profile == allocations.Profile {
 							giProfileId = item.Giprofileid
 							ciProfileId = item.Giprofileid
 						}
@@ -223,7 +217,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 						log.Error(retCodeForGi, "error getting GPU instance profile info", "giProfileInfo", giProfileInfo, "retCodeForGi", retCodeForGi)
 					}
 
-					log.Info("The profile id is", "giProfileInfo", giProfileInfo.Id, "Memory", giProfileInfo.MemorySizeMB, "pod", podUUID)
+					log.Info("The profile id is", "giProfileInfo", giProfileInfo.Id, "Memory", giProfileInfo.MemorySizeMB, "pod", allocations.PodUUID)
 					createCiAndGi := true
 					updatedPlacement, err := r.getAllocationsToprepare(placement, instaslice, allocations.PodUUID)
 					if err != nil {
@@ -295,18 +289,18 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			createdSliceDetails := cachedPreparedMig[allocations.PodUUID]
 			//making sure that ci, gi and migUUID are not nil or dafault for the target pod.
 			if createdSliceDetails.miguuid != "" {
-				if errCreatingConfigMap := r.createConfigMap(ctx, createdSliceDetails.miguuid, existingAllocations.Namespace, resourceIdentifier); errCreatingConfigMap != nil {
+				if errCreatingConfigMap := r.createConfigMap(ctx, createdSliceDetails.miguuid, existingAllocations.Namespace, allocations.Resourceidentifier); errCreatingConfigMap != nil {
 					return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
 				}
 
-				if errAddingPrepared := r.createPreparedEntry(ctx, profileName, podUUID, allocations.GPUUUID, createdSliceDetails.gid, createdSliceDetails.cid, &instaslice, createdSliceDetails.miguuid); errAddingPrepared != nil {
+				if errAddingPrepared := r.createPreparedEntry(ctx, allocations.Profile, allocations.PodUUID, allocations.GPUUUID, createdSliceDetails.gid, createdSliceDetails.cid, &instaslice, createdSliceDetails.miguuid); errAddingPrepared != nil {
 					return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
 				}
 				updateInstasliceObject, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
 				if err != nil {
 					return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
 				}
-				updatedAllocation := updateInstasliceObject.Spec.Allocations[podUUID]
+				updatedAllocation := updateInstasliceObject.Spec.Allocations[allocations.PodUUID]
 				// updated object is still in creating status, chances are user has not yet deleted
 				// set status to created.
 				if updatedAllocation.Allocationstatus == existingAllocations.Allocationstatus {
@@ -316,7 +310,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					log.Info("allocation status changed for ", "pod", allocations.PodName, "status", updatedAllocation.Allocationstatus)
 					existingAllocations.Allocationstatus = updatedAllocation.Allocationstatus
 				}
-				updateInstasliceObject.Spec.Allocations[podUUID] = existingAllocations
+				updateInstasliceObject.Spec.Allocations[allocations.PodUUID] = existingAllocations
 				errForUpdate := r.Update(ctx, updateInstasliceObject)
 				if errForUpdate != nil {
 					return ctrl.Result{Requeue: true}, nil
@@ -346,20 +340,6 @@ func (r *InstaSliceDaemonsetReconciler) getAllocationsToprepare(placement nvml.G
 		}
 	}
 	return placement, fmt.Errorf("got prepared slice wait for object to be updated")
-}
-
-// controller provides placement we do a read from allocation object.
-// TODO: see if this method can be removed to simplify code
-func (r *InstaSliceDaemonsetReconciler) getAllocation(instaslice inferencev1alpha1.Instaslice, podUuid string) (string, string, string, error) {
-	var gpuUUID, profile, resourceIdentifier string
-
-	for _, v := range instaslice.Spec.Allocations {
-		if v.Allocationstatus == inferencev1alpha1.AllocationStatusCreating && v.PodUUID == podUuid {
-			return v.GPUUUID, v.Profile, v.Resourceidentifier, nil
-		}
-	}
-
-	return gpuUUID, profile, resourceIdentifier, fmt.Errorf("allocation with PodUUID %s not found", podUuid)
 }
 
 // deletes CI and GI in that order.
