@@ -4,6 +4,7 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
+    categories: Drivers and plugins
     containerImage: <IMG>
     description: InstaSlice works with GPU operator to create mig slices on demand
     repository: https://github.com/openshift/instaslice-operator
