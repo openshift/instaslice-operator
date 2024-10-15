@@ -775,7 +775,7 @@ func (r *InstaSliceDaemonsetReconciler) patchNodeStatusForNode(ctx context.Conte
 	// Patch the node capacity with total GPU memory
 
 	// Create patch data for accelerator-memory-quota
-	memory := strconv.Itoa(totalMemoryGB) + "Gi"
+	memory := resource.MustParse(fmt.Sprintf("%vGi", totalMemoryGB))
 	patchData, err := createPatchData(quotaResourceName, memory)
 	if err != nil {
 		log.Error(err, "unable to create correct json for patching node")
@@ -990,11 +990,11 @@ func (r *InstaSliceDaemonsetReconciler) deleteConfigMap(ctx context.Context, con
 	return nil
 }
 
-func createPatchData(resourceName string, resourceValue string) ([]byte, error) {
+func createPatchData(resourceName string, resourceValue resource.Quantity) ([]byte, error) {
 	patch := []ResPatchOperation{
 		{Op: "add",
 			Path:  fmt.Sprintf("/status/capacity/%s", strings.ReplaceAll(resourceName, "/", "~1")),
-			Value: resourceValue,
+			Value: resourceValue.String(),
 		},
 	}
 	return json.Marshal(patch)
