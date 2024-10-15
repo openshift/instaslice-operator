@@ -572,12 +572,6 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 	}
 
 	totalMemoryGB := calculateTotalMemoryGB(gpuModelMap)
-	err := r.discoverDanglingSlices(instaslice)
-
-	if err != nil {
-		return nil, err
-	}
-
 	nodeName := os.Getenv("NODE_NAME")
 	cpu, memory, err := r.classicalResourcesAndGPUMemOnNode(context.TODO(), nodeName, strconv.Itoa(totalMemoryGB))
 	if err != nil {
@@ -794,91 +788,6 @@ func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*infe
 		}
 	}
 	return instaslice, ret, gpuModelMap, false, nil
-}
-
-// TODO: remove this logic once we are able to use clean slate GPUs from upstream GPU operator fixes
-func (r *InstaSliceDaemonsetReconciler) discoverDanglingSlices(instaslice *inferencev1alpha1.Instaslice) error {
-	h := &deviceHandler{}
-	h.nvml = nvml.New()
-	h.nvdevice = nvdevice.New(h.nvml)
-
-	errInitNvml := h.nvml.Init()
-	if errInitNvml != nvml.SUCCESS {
-		return errInitNvml
-	}
-
-	availableGpusOnNode, errObtainingDeviceCount := h.nvml.DeviceGetCount()
-	if errObtainingDeviceCount != nvml.SUCCESS {
-		return errObtainingDeviceCount
-	}
-
-	for i := 0; i < availableGpusOnNode; i++ {
-		device, errObtainingDeviceHandle := h.nvml.DeviceGetHandleByIndex(i)
-		if errObtainingDeviceHandle != nvml.SUCCESS {
-			return errObtainingDeviceHandle
-		}
-
-		uuid, errObtainingDeviceUUID := device.GetUUID()
-		if errObtainingDeviceUUID != nvml.SUCCESS {
-			return errObtainingDeviceUUID
-		}
-
-		nvlibParentDevice, errObtainingParentDevice := h.nvdevice.NewDevice(device)
-		if errObtainingParentDevice != nil {
-			return errObtainingParentDevice
-		}
-		migs, errRetrievingMigDevices := nvlibParentDevice.GetMigDevices()
-		if errRetrievingMigDevices != nil {
-			return errRetrievingMigDevices
-		}
-
-		for _, mig := range migs {
-			migUUID, _ := mig.GetUUID()
-			profile, errForProfile := mig.GetProfile()
-			if errForProfile != nil {
-				return errForProfile
-			}
-
-			giID, errForMigGid := mig.GetGpuInstanceId()
-			if errForMigGid != nvml.SUCCESS {
-				return errForMigGid
-			}
-			gpuInstance, errRetrievingDeviceGid := device.GetGpuInstanceById(giID)
-			if errRetrievingDeviceGid != nvml.SUCCESS {
-				return errRetrievingDeviceGid
-			}
-			gpuInstanceInfo, errObtainingInfo := gpuInstance.GetInfo()
-			if errObtainingInfo != nvml.SUCCESS {
-				return errObtainingInfo
-			}
-
-			ciID, ret := mig.GetComputeInstanceId()
-			if ret != nvml.SUCCESS {
-				return ret
-			}
-			ci, ret := gpuInstance.GetComputeInstanceById(ciID)
-			if ret != nvml.SUCCESS {
-				return ret
-			}
-			ciInfo, ret := ci.GetInfo()
-			if ret != nvml.SUCCESS {
-				return ret
-			}
-			prepared := inferencev1alpha1.PreparedDetails{
-				Profile:  profile.GetInfo().String(),
-				Start:    gpuInstanceInfo.Placement.Start,
-				Size:     gpuInstanceInfo.Placement.Size,
-				Parent:   uuid,
-				Giinfoid: gpuInstanceInfo.Id,
-				Ciinfoid: ciInfo.Id,
-			}
-			if instaslice.Spec.Prepared == nil {
-				instaslice.Spec.Prepared = make(map[string]inferencev1alpha1.PreparedDetails)
-			}
-			instaslice.Spec.Prepared[migUUID] = prepared
-		}
-	}
-	return nil
 }
 
 // NewMigProfile constructs a new MigProfile struct using info from the giProfiles and ciProfiles used to create it.
