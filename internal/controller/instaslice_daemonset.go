@@ -40,7 +40,6 @@ import (
 	logr "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	nvdevice "github.com/NVIDIA/go-nvlib/pkg/nvlib/device"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -60,12 +59,6 @@ type InstaSliceDaemonsetReconciler struct {
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 var discoveredGpusOnHost []string
-
-// Additional handler used for making NVML calls.
-type deviceHandler struct {
-	nvdevice nvdevice.Interface
-	nvml     nvml.Interface
-}
 
 // this struct is created to represent profiles
 // in human readable format and perform string comparison
