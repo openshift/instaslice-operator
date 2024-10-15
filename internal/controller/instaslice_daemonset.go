@@ -40,7 +40,6 @@ import (
 	logr "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	nvdevice "github.com/NVIDIA/go-nvlib/pkg/nvlib/device"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -60,12 +59,6 @@ type InstaSliceDaemonsetReconciler struct {
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 var discoveredGpusOnHost []string
-
-// Additional handler used for making NVML calls.
-type deviceHandler struct {
-	nvdevice nvdevice.Interface
-	nvml     nvml.Interface
-}
 
 // this struct is created to represent profiles
 // in human readable format and perform string comparison
@@ -141,15 +134,9 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				}
 				log.Info("done deleting ci and gi for ", "pod", allocations.PodName)
 			}
-			//TODO: could be merged with the creating call above
-			var updateInstasliceObject inferencev1alpha1.Instaslice
-			typeNamespacedName := types.NamespacedName{
-				Name:      instaslice.Name,
-				Namespace: "default", // TODO: modify
-			}
-			err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
+			updateInstasliceObject, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
 			if err != nil {
-				return ctrl.Result{Requeue: true}, nil
+				return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
 			}
 
 			// In simulator node no need to explicitly specify prepared UUID
@@ -164,7 +151,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 			allocations.Allocationstatus = inferencev1alpha1.AllocationStatusDeleted
 			updateInstasliceObject.Spec.Allocations[allocations.PodUUID] = allocations
-			errUpdatingAllocation := r.Update(ctx, &updateInstasliceObject)
+			errUpdatingAllocation := r.Update(ctx, updateInstasliceObject)
 			if errUpdatingAllocation != nil {
 				log.Error(errUpdatingAllocation, "error updating InstaSlice object for ", "pod", allocations.PodName)
 				return ctrl.Result{Requeue: true}, nil
@@ -243,49 +230,13 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 						log.Error(err, "prepared already exists will not create ci and gi for ", "pod", allocations.PodName)
 						createCiAndGi = false
 					}
-					migInfos := make(map[string]*MigDeviceInfo)
-					err = walkMigDevices(device, func(i int, migDevice nvml.Device) error {
-						parentUuid, ret := device.GetUUID()
-						if ret != nvml.SUCCESS {
-							return fmt.Errorf("error getting parent GPU UUID : %v", ret)
-						}
-						giID, ret := migDevice.GetGpuInstanceId()
-						if ret != nvml.SUCCESS {
-							return fmt.Errorf("error getting GPU instance ID for MIG device: %v", ret)
-						}
-						gi, ret := device.GetGpuInstanceById(giID)
-						if ret != nvml.SUCCESS {
-							return fmt.Errorf("error getting GPU instance for '%v': %v", giID, ret)
-						}
-						giInfo, ret := gi.GetInfo()
-						if ret != nvml.SUCCESS {
-							return fmt.Errorf("error getting GPU instance info for '%v': %v", giID, ret)
-						}
-						ciID, ret := migDevice.GetComputeInstanceId()
-						if ret != nvml.SUCCESS {
-							return fmt.Errorf("error getting Compute instance ID for MIG device: %v", ret)
-						}
-						ci, ret := gi.GetComputeInstanceById(ciID)
-						if ret != nvml.SUCCESS {
-							return fmt.Errorf("error getting Compute instance for '%v': %v", ciID, ret)
-						}
-						ciInfo, ret := ci.GetInfo()
-						if ret != nvml.SUCCESS {
-							return fmt.Errorf("error getting Compute instance info for '%v': %v", ciID, ret)
-						}
-						uuid, ret := migDevice.GetUUID()
-						if ret != nvml.SUCCESS {
-							return fmt.Errorf("error getting UUID for MIG device: %v", ret)
-						}
-						migInfos[uuid] = &MigDeviceInfo{
-							uuid:   parentUuid,
-							giInfo: &giInfo,
-							ciInfo: &ciInfo,
-							start:  giInfo.Placement.Start,
-							size:   giInfo.Placement.Size,
-						}
-						return nil
-					})
+
+					migInfos, err := populateMigDeviceInfos(device)
+					if err != nil {
+						// MIG walking can fail but at this point we are unsure if slices exists
+						// hence we optimistically try to create ci and gi.
+						log.Error(err, "walking MIG devices failed")
+					}
 					// if ci and gi exist, we need to assign those to the respective allocation
 					for migUuid, migDevice := range migInfos {
 						// a (nvidia) GPU can get max of 7 workloads that can have same gi profile info on a GPU
@@ -300,11 +251,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 								}
 							}
 						}
-					}
-					if err != nil {
-						// MIG walking can fail but at this point we are unsure if slices exists
-						// hence we optimistically try to create ci and gi.
-						log.Error(err, "walking MIG devices failed")
 					}
 					if createCiAndGi {
 						var gi nvml.GpuInstance
@@ -333,17 +279,15 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 						if retCodeForComputeInstance != nvml.SUCCESS {
 							log.Error(retCodeForComputeInstance, "error creating Compute instance for ", "ci", ci)
 						}
-
-						//get created mig details
-						// TODO replace this with walk function
-						giId, migUUID, ciId, errGettingSliceDetails := r.getCreatedSliceDetails(ctx, giInfo, device, profileName)
-						if errGettingSliceDetails != nil {
-							log.Error(errGettingSliceDetails, "slice details not found in prepared section", "pod", allocations.PodName)
-							return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
+						migInfos, err := populateMigDeviceInfos(device)
+						if err != nil {
+							log.Error(err, "unable to iterate over newly created mig devices")
 						}
-						//add ci and gi values to cache so that we avoid re-creating. if ci or gi creation fails, we need to clean up.
-						cachedPreparedMig[allocations.PodUUID] = preparedMig{gid: giId, miguuid: migUUID, cid: ciId}
-
+						for migUuid, migDevice := range migInfos {
+							if allocations.Size == migDevice.size && allocations.Start == migDevice.start && migDevice.uuid == allocations.GPUUUID {
+								cachedPreparedMig[allocations.PodUUID] = preparedMig{gid: migDevice.giInfo.Id, miguuid: migUuid, cid: migDevice.ciInfo.Id}
+							}
+						}
 					}
 
 				}
@@ -358,14 +302,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				if errAddingPrepared := r.createPreparedEntry(ctx, profileName, podUUID, allocations.GPUUUID, createdSliceDetails.gid, createdSliceDetails.cid, &instaslice, createdSliceDetails.miguuid); errAddingPrepared != nil {
 					return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
 				}
-				var updateInstasliceObject inferencev1alpha1.Instaslice
-				typeNamespacedName := types.NamespacedName{
-					Name:      instaslice.Name,
-					Namespace: "default", // TODO: modify
-				}
-
-				//TODO: could be merged with the deleted call below
-				err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
+				updateInstasliceObject, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
 				if err != nil {
 					return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
 				}
@@ -380,7 +317,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					existingAllocations.Allocationstatus = updatedAllocation.Allocationstatus
 				}
 				updateInstasliceObject.Spec.Allocations[podUUID] = existingAllocations
-				errForUpdate := r.Update(ctx, &updateInstasliceObject)
+				errForUpdate := r.Update(ctx, updateInstasliceObject)
 				if errForUpdate != nil {
 					return ctrl.Result{Requeue: true}, nil
 				}
@@ -409,65 +346,6 @@ func (r *InstaSliceDaemonsetReconciler) getAllocationsToprepare(placement nvml.G
 		}
 	}
 	return placement, fmt.Errorf("got prepared slice wait for object to be updated")
-}
-
-// when a slice is created we do a discovery again to get MIG uuid device details
-func (*InstaSliceDaemonsetReconciler) getCreatedSliceDetails(ctx context.Context, giInfo nvml.GpuInstanceInfo, device nvml.Device, profileName string) (uint32, string, uint32, error) {
-	log := logr.FromContext(ctx)
-	var giIdError, ciMigInfoError uint32
-	// setting large number to return error
-	giIdError = 1000
-	ciMigInfoError = 1000
-	realizedMigError := ""
-	h := &deviceHandler{}
-	h.nvml = nvml.New()
-	h.nvdevice = nvdevice.New(h.nvml)
-
-	ret1 := h.nvml.Init()
-	if ret1 != nvml.SUCCESS {
-		log.Error(ret1, "Unable to initialize NVML")
-	}
-	nvlibParentDevice, err := h.nvdevice.NewDevice(device)
-	if err != nil {
-		log.Error(err, "unable to get nvlib GPU parent device for MIG UUID")
-	}
-	migs, err := nvlibParentDevice.GetMigDevices()
-	if err != nil {
-		log.Error(err, "unable to get MIG devices on GPU")
-	}
-	for _, mig := range migs {
-		obtainedProfileName, _ := mig.GetProfile()
-		giID, retForMigGPU := mig.GetGpuInstanceId()
-		if retForMigGPU != nvml.SUCCESS {
-			log.Error(retForMigGPU, "error getting GPU instance ID for MIG device")
-		}
-		gpuInstance, errGettingMigGi := device.GetGpuInstanceById(giID)
-		if errGettingMigGi != nvml.SUCCESS {
-			log.Error(errGettingMigGi, "Unable to get GPU instance")
-		}
-
-		if profileName == obtainedProfileName.String() && giID == int(giInfo.Id) {
-			realizedMig, errGettingMigUid := mig.GetUUID()
-			if errGettingMigUid != nvml.SUCCESS {
-				log.Error(errGettingMigGi, "Unable to get MIG uid")
-			}
-			migCid, errGettingMigComputeid := mig.GetComputeInstanceId()
-			if errGettingMigComputeid != nvml.SUCCESS {
-				log.Error(errGettingMigComputeid, "Unable to get MIG ci")
-			}
-			ci, errGettingComputeInstanceId := gpuInstance.GetComputeInstanceById(migCid)
-			if errGettingComputeInstanceId != nvml.SUCCESS {
-				log.Error(errGettingComputeInstanceId, "Unable to get MIG cid")
-			}
-			ciMigInfo, errGettingCiInfo := ci.GetInfo()
-			if errGettingCiInfo != nvml.SUCCESS {
-				log.Error(errGettingCiInfo, "Unable to get ci info")
-			}
-			log.Info("Prepared details", "giId", giInfo.Id, "migUUID", realizedMig, "ciId", ciMigInfo.Id)
-			return giInfo.Id, realizedMig, ciMigInfo.Id, nil
-		}
-	}
-	return giIdError, realizedMigError, ciMigInfoError, fmt.Errorf("unable to get prepared details")
 }
 
 // controller provides placement we do a read from allocation object.
@@ -1037,4 +915,85 @@ func walkMigDevices(d nvml.Device, f func(i int, d nvml.Device) error) error {
 		}
 	}
 	return nil
+}
+
+func populateMigDeviceInfos(device nvml.Device) (map[string]*MigDeviceInfo, error) {
+	migInfos := make(map[string]*MigDeviceInfo)
+
+	err := walkMigDevices(device, func(i int, migDevice nvml.Device) error {
+		parentUuid, ret := device.GetUUID()
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("error getting parent GPU UUID: %v", ret)
+		}
+
+		giID, ret := migDevice.GetGpuInstanceId()
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("error getting GPU instance ID for MIG device: %v", ret)
+		}
+
+		gi, ret := device.GetGpuInstanceById(giID)
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("error getting GPU instance for '%v': %v", giID, ret)
+		}
+
+		giInfo, ret := gi.GetInfo()
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("error getting GPU instance info for '%v': %v", giID, ret)
+		}
+
+		ciID, ret := migDevice.GetComputeInstanceId()
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("error getting Compute instance ID for MIG device: %v", ret)
+		}
+
+		ci, ret := gi.GetComputeInstanceById(ciID)
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("error getting Compute instance for '%v': %v", ciID, ret)
+		}
+
+		ciInfo, ret := ci.GetInfo()
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("error getting Compute instance info for '%v': %v", ciID, ret)
+		}
+
+		uuid, ret := migDevice.GetUUID()
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("error getting UUID for MIG device: %v", ret)
+		}
+
+		migInfos[uuid] = &MigDeviceInfo{
+			uuid:   parentUuid,
+			giInfo: &giInfo,
+			ciInfo: &ciInfo,
+			start:  giInfo.Placement.Start,
+			size:   giInfo.Placement.Size,
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return migInfos, nil
+}
+
+func (r *InstaSliceDaemonsetReconciler) getInstasliceObject(ctx context.Context, instasliceName string, namespace string) (*inferencev1alpha1.Instaslice, error) {
+	log := logr.FromContext(ctx)
+
+	var updateInstasliceObject inferencev1alpha1.Instaslice
+
+	typeNamespacedName := types.NamespacedName{
+		Name:      instasliceName,
+		Namespace: namespace,
+	}
+
+	err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
+	if err != nil {
+		log.Error(err, "Failed to get Instaslice object", "instasliceName", instasliceName, "namespace", namespace)
+		return nil, err
+	}
+
+	return &updateInstasliceObject, nil
 }
