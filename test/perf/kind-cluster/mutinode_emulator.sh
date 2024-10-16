@@ -2,7 +2,7 @@
 
 # Set the number of worker nodes here
 num_workers="${NUM_WORKERS:-10}"
-namespace_instaslice="instaslice-operator-system"
+namespace_instaslice="instaslice-system"
 
 # Create the kind configuration file
 cat <<EOF > kind-config.yaml
@@ -66,10 +66,10 @@ echo "deploying InstaSlice"
 
 make deploy-emulated
 
-echo "Waiting for instaslice-operator-webhook-service to be available in namespace 'instaslice-operator-system'..."
+echo "Waiting for instaslice-operator-webhook-service to be available in namespace 'instaslice-system'..."
 
 while true; do
-  kubectl get svc instaslice-operator-webhook-service -n instaslice-operator-system > /dev/null 2>&1
+  kubectl get svc instaslice-operator-webhook-service -n instaslice-system > /dev/null 2>&1
   if [ $? -eq 0 ]; then
     echo "instaslice-operator-webhook-service is now available!"
     break

@@ -197,14 +197,14 @@ func TestInstasliceDaemonsetCreation_Reconcile(t *testing.T) {
 			daemonSet = &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "instaslice-operator-controller-daemonset",
-					Namespace: "instaslice-operator-system",
+					Namespace: operatorDeployNamespace,
 				},
 			}
 
 			req = ctrl.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      "instaslice-operator-controller-daemonset",
-					Namespace: "instaslice-operator-system",
+					Namespace: operatorDeployNamespace,
 				},
 			}
 		})
