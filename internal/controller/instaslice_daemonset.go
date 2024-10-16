@@ -113,7 +113,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 	}
 
 	emulatorMode := os.Getenv("EMULATOR_MODE")
-	log.Info("daemonset simulator mode ", "enabled", emulatorMode)
 	for _, allocations := range instaslice.Spec.Allocations {
 		//TODO: we make assumption that resources would always exists to delete
 		// if user deletes abruptly, cm, instaslice resource, ci and gi may not exists
@@ -171,12 +170,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 			}
 			if emulatorMode == emulatorModeFalse {
-				for migUUID, prepared := range instaslice.Spec.Prepared {
-					if prepared.PodUUID == allocations.PodUUID {
-						cachedPreparedMig[allocations.PodUUID] = preparedMig{gid: prepared.Giinfoid, miguuid: migUUID, cid: prepared.Ciinfoid}
-						break // Exit the loop after the first match
-					}
-				}
 				ret := nvml.Init()
 				if ret != nvml.SUCCESS {
 					log.Error(ret, "Unable to initialize NVML")
@@ -196,7 +189,10 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				// if simulator mode is on do not perform NVML calls
 				// TODO: move this logic to a new vendor specific file
 				if prep, exists := cachedPreparedMig[allocations.PodUUID]; !exists || isPreparedMigEmpty(prep) {
-					placement := nvml.GpuInstancePlacement{}
+					placement := nvml.GpuInstancePlacement{
+						Start: allocations.Start,
+						Size:  allocations.Size,
+					}
 					// if the GPU is healthy DeviceGetHandleByUUID should never fail
 					// if the call fails then we look in the cache so see if we can reuse
 					// ci and gi or walk MIG devices to set allocation status to created.
@@ -219,12 +215,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 					log.Info("The profile id is", "giProfileInfo", giProfileInfo.Id, "Memory", giProfileInfo.MemorySizeMB, "pod", allocations.PodUUID)
 					createCiAndGi := true
-					updatedPlacement, err := r.getAllocationsToprepare(placement, instaslice, allocations.PodUUID)
-					if err != nil {
-						log.Error(err, "prepared already exists will not create ci and gi for ", "pod", allocations.PodName)
-						createCiAndGi = false
-					}
-
 					migInfos, err := populateMigDeviceInfos(device)
 					if err != nil {
 						// MIG walking can fail but at this point we are unsure if slices exists
@@ -237,8 +227,9 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 						// collect such similar profiles and bind it to allocation chosen by controller and add it to cache
 						if migDevice.giInfo.ProfileId == giProfileInfo.Id && migDevice.uuid == allocations.GPUUUID {
 							// search the slice chosen by the controller and add to cache when value is empty or does not exists
-							if existingPreparedMig, exists := cachedPreparedMig[allocations.PodUUID]; exists {
-								if existingPreparedMig.miguuid == "" && allocations.Size == migDevice.size && allocations.Start == migDevice.start {
+							if _, exists := cachedPreparedMig[allocations.PodUUID]; exists {
+								if allocations.Start == migDevice.start {
+									log.Info("found existing slice for ", "pod", allocations.PodName, "migdevicestart", migDevice.start)
 									cachedPreparedMig[allocations.PodUUID] = preparedMig{gid: migDevice.giInfo.Id, miguuid: migUuid, cid: migDevice.ciInfo.Id}
 									createCiAndGi = false
 									break
@@ -247,9 +238,10 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 						}
 					}
 					if createCiAndGi {
+						log.Info("creating slice for ", "pod", allocations.PodName)
 						var gi nvml.GpuInstance
 						var retCodeForGiWithPlacement nvml.Return
-						gi, retCodeForGiWithPlacement = device.CreateGpuInstanceWithPlacement(&giProfileInfo, &updatedPlacement)
+						gi, retCodeForGiWithPlacement = device.CreateGpuInstanceWithPlacement(&giProfileInfo, &placement)
 						if retCodeForGiWithPlacement != nvml.SUCCESS {
 							if retCodeForGiWithPlacement == nvml.ERROR_INSUFFICIENT_RESOURCES {
 								log.Error(retCodeForGiWithPlacement, "gpu instance already exists")
@@ -320,26 +312,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		}
 	}
 	return ctrl.Result{}, nil
-}
-
-// controller will set allocations that need to created (prepared) on the GPU nodes.
-func (r *InstaSliceDaemonsetReconciler) getAllocationsToprepare(placement nvml.GpuInstancePlacement, instaslice inferencev1alpha1.Instaslice, podUuid string) (nvml.GpuInstancePlacement, error) {
-	allocationExists := false
-	for _, prepared := range instaslice.Spec.Prepared {
-		if prepared.PodUUID == podUuid {
-			allocationExists = true
-		}
-	}
-	for _, v := range instaslice.Spec.Allocations {
-		if !allocationExists {
-			if v.Allocationstatus == inferencev1alpha1.AllocationStatusCreating && v.PodUUID == podUuid {
-				placement.Size = v.Size
-				placement.Start = v.Start
-				return placement, nil
-			}
-		}
-	}
-	return placement, fmt.Errorf("got prepared slice wait for object to be updated")
 }
 
 // deletes CI and GI in that order.
