@@ -309,7 +309,18 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 				},
 				Status: v1.PodStatus{Phase: v1.PodPending, Conditions: []v1.PodCondition{{Message: "blocked"}}},
 			}
+			daemonSet := &appsv1.DaemonSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "instaslice-operator-controller-daemonset",
+					Namespace: operatorDeployNamespace,
+				},
+				Status: appsv1.DaemonSetStatus{
+					DesiredNumberScheduled: 3,
+					NumberReady:            3,
+				},
+			}
 
+			Expect(fakeClient.Create(ctx, daemonSet)).To(Succeed())
 			Expect(fakeClient.Create(ctx, instaslice)).To(Succeed())
 			Expect(fakeClient.Create(ctx, pod)).To(Succeed())
 

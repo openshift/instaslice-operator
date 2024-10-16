@@ -64,7 +64,9 @@ type LeftToRightPolicy struct{}
 // first fit policy is implemented at the moment
 type FirstFitPolicy struct{}
 
-const requeueDelay = 2 * time.Second
+var (
+	daemonSetlabel = map[string]string{"app": "controller-daemonset"}
+)
 
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/status,verbs=get;update;patch
@@ -79,28 +81,26 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// 1. Ensure DaemonSet is deployed
 	daemonSet := &appsv1.DaemonSet{}
 	err := r.Get(ctx, types.NamespacedName{Name: instasliceDaemonsetName, Namespace: operatorDeployNamespace}, daemonSet)
-	if req.Name == instasliceDaemonsetName {
-		if err != nil && errors.IsNotFound(err) {
-			// DaemonSet doesn't exist, so create it
-			daemonSet = createInstaSliceDaemonSet(operatorDeployNamespace)
-			err = r.Create(ctx, daemonSet)
-			if err != nil {
-				log.Error(err, "Failed to create DaemonSet")
-				return ctrl.Result{RequeueAfter: time.Minute}, err
-			}
-			log.Info("DaemonSet created successfully, waiting for pods to be ready")
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-		} else if err != nil {
-			log.Error(err, "Failed to get DaemonSet")
+	if err != nil && errors.IsNotFound(err) {
+		// DaemonSet doesn't exist, so create it
+		daemonSet = createInstaSliceDaemonSet(operatorDeployNamespace)
+		err = r.Create(ctx, daemonSet)
+		if err != nil {
+			log.Error(err, "Failed to create DaemonSet")
 			return ctrl.Result{RequeueAfter: time.Minute}, err
 		}
-		// 2. Wait for DaemonSet to be ready
-		if daemonSet.Status.DesiredNumberScheduled != daemonSet.Status.NumberReady {
-			log.Info("DaemonSet is not ready yet, waiting...")
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-		}
-		log.Info("Instaslice DaemonSet is ready")
+		log.Info("DaemonSet created successfully, waiting for pods to be ready")
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	} else if err != nil {
+		log.Error(err, "Failed to get DaemonSet")
+		return ctrl.Result{RequeueAfter: time.Minute}, err
 	}
+	// 2. Wait for DaemonSet to be ready
+	if daemonSet.Status.DesiredNumberScheduled != daemonSet.Status.NumberReady {
+		log.Info("DaemonSet is not ready yet, waiting...")
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+	log.Info("Instaslice DaemonSet is ready")
 
 	policy := &FirstFitPolicy{}
 	pod := &v1.Pod{}
@@ -449,36 +449,44 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 // create the DaemonSet object
 func createInstaSliceDaemonSet(namespace string) *appsv1.DaemonSet {
 	emulatorMode := os.Getenv("EMULATOR_MODE")
+	if emulatorMode == "" {
+		emulatorMode = emulatorModeFalse
+	}
 	instasliceDaemonsetImage := os.Getenv("RELATED_IMAGE_INSTASLICE_DAEMONSET")
+	if instasliceDaemonsetImage == "" {
+		instasliceDaemonsetImage = daemonSetImageName
+	}
 	// Base DaemonSet structure
 	daemonSet := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      instasliceDaemonsetName,
 			Namespace: namespace,
-			Labels:    map[string]string{"app": "controller-daemonset"},
+			Labels:    daemonSetlabel,
 		},
 		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "controller-daemonset"},
+				MatchLabels: daemonSetlabel,
 			},
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": "controller-daemonset"},
+					Labels: daemonSetlabel,
 					Annotations: map[string]string{
 						"kubectl.kubernetes.io/default-container": "daemonset",
 					},
 				},
 				Spec: v1.PodSpec{
-					ServiceAccountName:            "instaslice-operator-controller-manager",
+					ServiceAccountName:            serviceAccountName,
 					TerminationGracePeriodSeconds: func(i int64) *int64 { return &i }(10),
 					SecurityContext: &v1.PodSecurityContext{
 						RunAsNonRoot: func(b bool) *bool { return &b }(false),
 					},
 					Containers: []v1.Container{
 						{
-							Name:            "daemonset",
-							Image:           instasliceDaemonsetImage,
-							ImagePullPolicy: v1.PullAlways,
+							Name:  daemonSetName,
+							Image: instasliceDaemonsetImage,
+							// Commenting the image pull policy to support running e2e tests
+							// to leverage the images built using the latest code
+							// ImagePullPolicy: v1.PullAlways,
 							Command: []string{
 								"/daemonset",
 							},
@@ -515,12 +523,6 @@ func createInstaSliceDaemonSet(namespace string) *appsv1.DaemonSet {
 				},
 			},
 		},
-	}
-
-	if emulatorMode == emulatorModeFalse {
-		daemonSet.Spec.Template.Spec.Containers[0].Env[2].Value = "false"
-	} else if emulatorMode == emulatorModeTrue {
-		daemonSet.Spec.Template.Spec.Containers[0].Env[2].Value = "true"
 	}
 
 	return daemonSet
