@@ -43,7 +43,7 @@ import (
 // in state deleting
 
 var _ = Describe("controller", Ordered, func() {
-	var namespace string = "instaslice-operator-system"
+	var namespace string = "instaslice-system"
 	var defaultNamespace string = "default"
 
 	BeforeAll(func() {
