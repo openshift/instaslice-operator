@@ -142,6 +142,12 @@ test: manifests generate fmt vet envtest ## Run tests.
 test-e2e:
 	@export IMG_TAG=test-e2e; make docker-build; go test ./test/e2e/ -v -ginkgo.v --timeout 20m
 
+.PHONY: test-e2e-ocp
+# Currently setting the IMG_TAG to "latest" that pulls images from quay.io
+#(TODO) Need to run the tests on the latest built images.
+test-e2e-ocp:
+	@export OCP_MODE="true" IMG_TAG="latest"; make docker-build; go test ./test/e2e/ -v -ginkgo.v --timeout 20m
+
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.61.0
 golangci-lint:
