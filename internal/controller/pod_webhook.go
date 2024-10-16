@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-//+kubebuilder:webhook:path=/mutate-v1-pod,mutating=true,failurePolicy=ignore,sideEffects=None,groups="",resources=pods,verbs=create,versions=v1,name=instaslice.dev,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/mutate-v1-pod,mutating=true,failurePolicy=ignore,sideEffects=None,groups="",resources=pods,verbs=create,versions=v1,name=instaslice.redhat.com,admissionReviewVersions=v1
 
 type PodAnnotator struct {
 	Client  client.Client
