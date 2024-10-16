@@ -208,7 +208,7 @@ IMG=quay.io/example/instaslice2-controller:1.0 IMG_DMST=quay.io/example/instasli
 3. Verify that the InstaSlice pods are successfully running:
 
 ```console
-kubectl get pod -n instaslice-operator-system
+kubectl get pod -n instaslice-system
 ```
 
 ```

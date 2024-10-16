@@ -27,7 +27,7 @@ const (
 	emulatorModeTrue                 = "true"
 	AttributeMediaExtensions         = "me"
 	instaSliceOperatorNamespace      = "default"
-	operatorDeployNamespace          = "instaslice-operator-system"
+	operatorDeployNamespace          = "instaslice-system"
 	NvidiaMIGPrefix                  = "nvidia.com/mig-"
 	NodeLabel                        = "kubernetes.io/hostname"
 	multipleContainersUnsupportedErr = "multiple containers per pod not supported"
@@ -37,5 +37,6 @@ const (
 	daemonSetName                    = "daemonset"
 	serviceAccountName               = "instaslice-operator-controller-manager"
 
-	requeueDelay = 2 * time.Second
+	requeueDelay      = 2 * time.Second
+	requeueDelay10Sec = 10 * time.Second
 )

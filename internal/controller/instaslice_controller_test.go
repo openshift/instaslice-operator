@@ -162,7 +162,6 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 	})
 
 }
-
 func TestInstasliceDaemonsetCreation_Reconcile(t *testing.T) {
 	var _ = Describe("InstasliceReconciler", func() {
 		var (
@@ -178,8 +177,6 @@ func TestInstasliceDaemonsetCreation_Reconcile(t *testing.T) {
 
 		BeforeEach(func() {
 			scheme = runtime.NewScheme()
-			_ = appsv1.AddToScheme(scheme)
-
 			Expect(inferencev1alpha1.AddToScheme(scheme)).To(Succeed())
 			Expect(v1.AddToScheme(scheme)).To(Succeed())
 			Expect(appsv1.AddToScheme(scheme)).To(Succeed()) // Ensure DaemonSet is registered
@@ -197,14 +194,28 @@ func TestInstasliceDaemonsetCreation_Reconcile(t *testing.T) {
 			daemonSet = &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "instaslice-operator-controller-daemonset",
-					Namespace: "instaslice-operator-system",
+					Namespace: operatorDeployNamespace,
+				},
+				Spec: appsv1.DaemonSetSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "controller-daemonset",
+						},
+					},
+					Template: v1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "controller-daemonset",
+							},
+						},
+					},
 				},
 			}
 
 			req = ctrl.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      "instaslice-operator-controller-daemonset",
-					Namespace: "instaslice-operator-system",
+					Namespace: operatorDeployNamespace,
 				},
 			}
 		})
@@ -224,14 +235,32 @@ func TestInstasliceDaemonsetCreation_Reconcile(t *testing.T) {
 			})
 		})
 
-		When("DaemonSet exists but is not ready", func() {
+		When("DaemonSet exists but no pods are ready", func() {
 			BeforeEach(func() {
-				daemonSet.Status.DesiredNumberScheduled = 3
-				daemonSet.Status.NumberReady = 1
+				daemonSet.Status.DesiredNumberScheduled = 1
+				daemonSet.Status.NumberReady = 0 // No pods are ready
 				_ = fakeClient.Create(ctx, daemonSet)
+
+				// Create a pod for the DaemonSet, but it's not ready
+				pod := &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "instaslice-pod-1",
+						Namespace: "instaslice-system",
+						Labels:    daemonSet.Spec.Selector.MatchLabels,
+					},
+					Status: v1.PodStatus{
+						Phase: v1.PodRunning,
+						ContainerStatuses: []v1.ContainerStatus{
+							{
+								Ready: false, // Pod is not ready
+							},
+						},
+					},
+				}
+				_ = fakeClient.Create(ctx, pod)
 			})
 
-			It("should requeue until the DaemonSet is ready", func() {
+			It("should requeue until at least one DaemonSet pod is ready", func() {
 				reconcileResult, reconcileErr = r.Reconcile(ctx, req)
 
 				Expect(reconcileErr).NotTo(HaveOccurred())
@@ -239,11 +268,29 @@ func TestInstasliceDaemonsetCreation_Reconcile(t *testing.T) {
 			})
 		})
 
-		When("DaemonSet is ready", func() {
+		When("DaemonSet exists and at least one pod is ready", func() {
 			BeforeEach(func() {
-				daemonSet.Status.DesiredNumberScheduled = 3
-				daemonSet.Status.NumberReady = 3
+				daemonSet.Status.DesiredNumberScheduled = 1
+				daemonSet.Status.NumberReady = 1 // At least one pod is ready
 				_ = fakeClient.Create(ctx, daemonSet)
+
+				// Create a ready pod for the DaemonSet
+				pod := &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "instaslice-pod-1",
+						Namespace: "instaslice-system",
+						Labels:    daemonSet.Spec.Selector.MatchLabels,
+					},
+					Status: v1.PodStatus{
+						Phase: v1.PodRunning,
+						ContainerStatuses: []v1.ContainerStatus{
+							{
+								Ready: true, // Pod is ready
+							},
+						},
+					},
+				}
+				_ = fakeClient.Create(ctx, pod)
 			})
 
 			It("should not requeue", func() {
@@ -309,14 +356,29 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 				},
 				Status: v1.PodStatus{Phase: v1.PodPending, Conditions: []v1.PodCondition{{Message: "blocked"}}},
 			}
+
 			daemonSet := &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "instaslice-operator-controller-daemonset",
-					Namespace: operatorDeployNamespace,
+					Namespace: "instaslice-system",
+				},
+				Spec: appsv1.DaemonSetSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "controller-daemonset",
+						},
+					},
+					Template: v1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "controller-daemonset",
+							},
+						},
+					},
 				},
 				Status: appsv1.DaemonSetStatus{
 					DesiredNumberScheduled: 3,
-					NumberReady:            3,
+					NumberReady:            1, // one daemonset pod ready
 				},
 			}
 
@@ -324,12 +386,34 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			Expect(fakeClient.Create(ctx, instaslice)).To(Succeed())
 			Expect(fakeClient.Create(ctx, pod)).To(Succeed())
 
+			// Create a pod that matches the DaemonSet's selector
+			daemonSetPod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "daemonset-pod-1",
+					Namespace: "instaslice-system",
+					Labels: map[string]string{
+						"app": "controller-daemonset",
+					},
+				},
+				Status: v1.PodStatus{Phase: v1.PodRunning}, // Set the status of the DaemonSet pod
+			}
+
+			// Create the DaemonSet pod
+			Expect(fakeClient.Create(ctx, daemonSetPod)).To(Succeed())
+
 			req = ctrl.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      "test-pod",
 					Namespace: instaSliceOperatorNamespace,
 				},
 			}
+		})
+
+		It("should confirm at least one pod is present for the DaemonSet", func() {
+			var podList v1.PodList
+			err := fakeClient.List(ctx, &podList, client.InNamespace("instaslice-system"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(podList.Items)).To(BeNumerically(">", 0)) // Ensure at least one pod is present
 		})
 
 		It("should not reconcile for an unknown pod", func() {

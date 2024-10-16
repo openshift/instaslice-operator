@@ -1,5 +1,5 @@
 # Adds namespace to all resources.
-namespace: instaslice-operator-system
+namespace: instaslice-system
 
 # Value of this field is prepended to the
 # names of all resources, e.g. a deployment named
@@ -35,6 +35,9 @@ patches:
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
 # crd/kustomization.yaml
 - path: manager_webhook_patch.yaml
+
+# namespace selector patch for the instaslice mutating webhook
+- path: namespace_selector_patch.yaml
 
 # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER'.
 # Uncomment 'CERTMANAGER' sections in crd/kustomization.yaml to enable the CA injection in the admission webhooks.
