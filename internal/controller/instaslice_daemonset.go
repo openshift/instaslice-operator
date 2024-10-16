@@ -631,31 +631,21 @@ func (r *InstaSliceDaemonsetReconciler) patchNodeStatusForNode(ctx context.Conte
 	}
 
 	// Patch the node capacity with total GPU memory
-	if err := r.patchNodeStatus(ctx, node, strconv.Itoa(totalMemoryGB)+"Gi"); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// patch node with accelerator memory capacity
-func (r *InstaSliceDaemonsetReconciler) patchNodeStatus(ctx context.Context, node *v1.Node, memory string) error {
-	logger := logr.FromContext(ctx)
 
 	// Create patch data for accelerator-memory-quota
+	memory := resource.MustParse(fmt.Sprintf("%vGi", totalMemoryGB))
 	patchData, err := createPatchData(quotaResourceName, memory)
 	if err != nil {
-		logger.Error(err, "unable to create correct json for patching node")
+		log.Error(err, "unable to create correct json for patching node")
 		return err
 	}
-
 	// Apply the patch to the node capacity
 	if err := r.Status().Patch(ctx, node, client.RawPatch(types.JSONPatchType, patchData)); err != nil {
-		logger.Error(err, "unable to patch Node capacity with accelerator GPU memory custom resource")
+		log.Error(err, "unable to patch Node capacity with accelerator GPU memory custom resource")
 		return err
 	}
+	log.Info("Successfully patched node capacity with accelerator GPU memory custom resource", "Node", node.Name)
 
-	logger.Info("Successfully patched node capacity with accelerator GPU memory custom resource", "Node", node.Name)
 	return nil
 }
 
@@ -858,11 +848,11 @@ func (r *InstaSliceDaemonsetReconciler) deleteConfigMap(ctx context.Context, con
 	return nil
 }
 
-func createPatchData(resourceName string, resourceValue string) ([]byte, error) {
+func createPatchData(resourceName string, resourceValue resource.Quantity) ([]byte, error) {
 	patch := []ResPatchOperation{
 		{Op: "add",
 			Path:  fmt.Sprintf("/status/capacity/%s", strings.ReplaceAll(resourceName, "/", "~1")),
-			Value: resourceValue,
+			Value: resourceValue.String(),
 		},
 	}
 	return json.Marshal(patch)
