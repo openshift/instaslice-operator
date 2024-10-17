@@ -44,18 +44,19 @@ import (
 
 var _ = Describe("controller", Ordered, func() {
 	var (
-		namespace         string = "instaslice-system"
-		defaultNamespace  string = "default"
-		isRunningOnOCP    bool
-		kubeCli           = "kubectl"
-		ocpCli            = "oc"
-		dockerBin         = "docker"
-		podmanBin         = "podman"
-		deployEmulated    = "deploy-emulated"
-		deployOCPEmulated = "ocp-deploy-emulated"
-		clientBin         = kubeCli
-		containerTool     = dockerBin
-		deployEmulatedArg = deployEmulated
+		namespace              = "instaslice-system"
+		defaultNamespace       = "default"
+		isRunningOnOCP         = false
+		controllerManagerLabel = "control-plane=controller-manager"
+		kubeCli                = "kubectl"
+		ocpCli                 = "oc"
+		dockerBin              = "docker"
+		podmanBin              = "podman"
+		deployEmulated         = "deploy-emulated"
+		deployOCPEmulated      = "ocp-deploy-emulated"
+		clientBin              = kubeCli
+		containerTool          = dockerBin
+		deployEmulatedArg      = deployEmulated
 	)
 	ocpMode := os.Getenv("OCP_MODE")
 	if ocpMode != "" {
@@ -98,7 +99,7 @@ var _ = Describe("controller", Ordered, func() {
 			_, err := utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			utils.Run(exec.Command("make", "uninstall"))
-			utils.Run(exec.Command(clientBin, "delete", "ns", namespace, " cert-manager"))
+			utils.Run(exec.Command(clientBin, "delete", "ns", "instaslice-system", " cert-manager"))
 			fmt.Println("Finished running e2e tests on ocp")
 		}
 	})
@@ -487,7 +488,11 @@ var _ = Describe("controller", Ordered, func() {
 		It("should verify org.instaslice/mig-1g.5gb is max before submitting pods and verify the existence of pod allocation", func() {
 			ctx := context.TODO()
 			checkMIG := func(expectedMIG string) bool {
-				cmd := exec.CommandContext(ctx, clientBin, "get", "node", "kind-control-plane", "-o", "json")
+				nodeName := getNodeName(clientBin, controllerManagerLabel)
+				if nodeName == "" {
+					return false
+				}
+				cmd := exec.CommandContext(ctx, clientBin, "get", "node", nodeName, "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					fmt.Printf("Failed to execute kubectl: %v\n", err)
@@ -520,8 +525,12 @@ var _ = Describe("controller", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputApply))
 
 			Eventually(func() bool {
+				nodeName := getNodeName(clientBin, controllerManagerLabel)
+				if nodeName == "" {
+					return false
+				}
 				// Retrieve the Instaslice object
-				cmd := exec.Command(clientBin, "get", "instaslice", "kind-control-plane", "-n", "default", "-o", "json")
+				cmd := exec.Command(clientBin, "get", "instaslice", nodeName, "-n", "default", "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					fmt.Printf("Failed to retrieve the Instaslice object: %s\n", string(output))
@@ -743,6 +752,15 @@ func findPodName(allocationMap map[string]interface{}, targetPodName string) boo
 		}
 	}
 	return true
+}
+
+func getNodeName(clientBin, label string) string {
+	output, err := exec.Command(clientBin, "get", "pods", "-l", label, "-A", "-o", "jsonpath='{.spec.nodeName}'").CombinedOutput()
+	if err != nil {
+		fmt.Errorf("unable to get the node name : %v\n", err)
+		return ""
+	}
+	return string(output)
 }
 
 func isResourceReady(clientBin, resource, label, namespace string) bool {
