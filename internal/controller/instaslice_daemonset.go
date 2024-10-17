@@ -165,7 +165,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 				var shutdownErr error
 				var createdMigInfos map[string]*MigDeviceInfo
-				var errCreatingAndPolpulatingMigs error
+				var err error
 
 				defer func() {
 					if shutdownErr = nvml.Shutdown(); shutdownErr != nvml.SUCCESS {
@@ -206,17 +206,24 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 				log.Info("The profile id is", "giProfileInfo", giProfileInfo.Id, "Memory", giProfileInfo.MemorySizeMB, "pod", allocations.PodUUID)
 				createCiAndGi := true
-				createdMigInfos, errCreatingAndPolpulatingMigs = populateMigDeviceInfos(device)
-				if errCreatingAndPolpulatingMigs != nil {
+				createdMigInfos, err = populateMigDeviceInfos(device)
+				if err != nil {
 					// MIG walking can fail but at this point we are unsure if slices exists
 					// hence we optimistically try to create ci and gi.
-					log.Error(errCreatingAndPolpulatingMigs, "walking MIG devices failed")
+					log.Error(err, "walking MIG devices failed")
+				}
+				// we should skip ci and gi creation for cases where etcd update fails or configmap creation
+				// fails.
+				for _, migDevice := range createdMigInfos {
+					if migDevice.uuid == allocations.GPUUUID && migDevice.start == allocations.Start {
+						createCiAndGi = false
+					}
 				}
 				// if ci and gi exist, we need to assign those to the respective allocation
 				if createCiAndGi {
-					createdMigInfos, errCreatingAndPolpulatingMigs = r.createSliceAndPopulateMigInfos(ctx, device, allocations, giProfileInfo, placement, ciProfileId)
-					if errCreatingAndPolpulatingMigs != nil {
-						log.Error(errCreatingAndPolpulatingMigs, "mig creation not successful")
+					createdMigInfos, err = r.createSliceAndPopulateMigInfos(ctx, device, allocations, giProfileInfo, placement, ciProfileId)
+					if err != nil {
+						log.Error(err, "mig creation not successful")
 						return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
 					}
 				}
@@ -885,32 +892,32 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 
 	log.Info("creating slice for", "pod", allocations.PodName)
 
-	gi, retCodeForGiWithPlacement := device.CreateGpuInstanceWithPlacement(&giProfileInfo, &placement)
-	if retCodeForGiWithPlacement != nvml.SUCCESS {
-		if retCodeForGiWithPlacement == nvml.ERROR_INSUFFICIENT_RESOURCES {
-			log.Error(retCodeForGiWithPlacement, "GPU instance already exists")
+	gi, ret := device.CreateGpuInstanceWithPlacement(&giProfileInfo, &placement)
+	if ret != nvml.SUCCESS {
+		if ret == nvml.ERROR_INSUFFICIENT_RESOURCES {
+			log.Error(ret, "GPU instance already exists")
 		} else {
-			log.Error(retCodeForGiWithPlacement, "GPU instance creation errored out with unknown error")
+			log.Error(ret, "GPU instance creation errored out with unknown error")
 		}
-		return nil, fmt.Errorf("GPU instance creation failed: %v", retCodeForGiWithPlacement)
+		return nil, fmt.Errorf("GPU instance creation failed: %v", ret)
 	}
 
-	giInfo, retForGiInfo := gi.GetInfo()
-	if retForGiInfo != nvml.SUCCESS {
-		log.Error(retForGiInfo, "error getting GPU instance info", "giInfo", &giInfo)
-		return nil, fmt.Errorf("error getting GPU instance info: %v", retForGiInfo)
+	giInfo, ret := gi.GetInfo()
+	if ret != nvml.SUCCESS {
+		log.Error(ret, "error getting GPU instance info", "giInfo", &giInfo)
+		return nil, fmt.Errorf("error getting GPU instance info: %v", ret)
 	}
 
-	ciProfileInfo, retCodeForCiProfile := gi.GetComputeInstanceProfileInfo(ciProfileId, 0)
-	if retCodeForCiProfile != nvml.SUCCESS {
-		log.Error(retCodeForCiProfile, "error getting compute instance profile info", "pod", allocations.PodName)
-		return nil, fmt.Errorf("error getting compute instance profile info: %v", retCodeForCiProfile)
+	ciProfileInfo, ret := gi.GetComputeInstanceProfileInfo(ciProfileId, 0)
+	if ret != nvml.SUCCESS {
+		log.Error(ret, "error getting compute instance profile info", "pod", allocations.PodName)
+		return nil, fmt.Errorf("error getting compute instance profile info: %v", ret)
 	}
 
-	ci, retCodeForComputeInstance := gi.CreateComputeInstance(&ciProfileInfo)
-	if retCodeForComputeInstance != nvml.SUCCESS {
-		log.Error(retCodeForComputeInstance, "error creating Compute instance", "ci", ci)
-		return nil, fmt.Errorf("error creating compute instance: %v", retCodeForComputeInstance)
+	ci, ret := gi.CreateComputeInstance(&ciProfileInfo)
+	if ret != nvml.SUCCESS {
+		log.Error(ret, "error creating Compute instance", "ci", ci)
+		return nil, fmt.Errorf("error creating compute instance: %v", ret)
 	}
 
 	migInfos, err := populateMigDeviceInfos(device)
