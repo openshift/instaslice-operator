@@ -37,5 +37,6 @@ const (
 	daemonSetName                    = "daemonset"
 	serviceAccountName               = "instaslice-operator-controller-manager"
 
-	requeueDelay = 2 * time.Second
+	requeueDelay      = 2 * time.Second
+	requeueDelay10Sec = 10 * time.Second
 )
