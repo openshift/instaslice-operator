@@ -217,6 +217,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				for _, migDevice := range createdMigInfos {
 					if migDevice.uuid == allocations.GPUUUID && migDevice.start == allocations.Start {
 						createCiAndGi = false
+						break
 					}
 				}
 				// if ci and gi exist, we need to assign those to the respective allocation
@@ -229,11 +230,11 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				}
 				for migUuid, migDevice := range createdMigInfos {
 					if migDevice.start == allocations.Start && migDevice.uuid == allocations.GPUUUID {
-						if errCreatingConfigMap := r.createConfigMap(ctx, migUuid, existingAllocations.Namespace, allocations.Resourceidentifier); errCreatingConfigMap != nil {
+						if err := r.createConfigMap(ctx, migUuid, existingAllocations.Namespace, allocations.Resourceidentifier); err != nil {
 							return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
 						}
 
-						if errAddingPrepared := r.createPreparedEntry(ctx, allocations.Profile, allocations.PodUUID, allocations.GPUUUID, migDevice.giInfo.Id, migDevice.ciInfo.Id, &instaslice, migUuid); errAddingPrepared != nil {
+						if err := r.createPreparedEntry(ctx, allocations.Profile, allocations.PodUUID, allocations.GPUUUID, migDevice.giInfo.Id, migDevice.ciInfo.Id, &instaslice, migUuid); err != nil {
 							return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
 						}
 
