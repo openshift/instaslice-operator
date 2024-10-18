@@ -150,6 +150,10 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			existingAllocations := instaslice.Spec.Allocations[allocations.PodUUID]
 
 			if emulatorMode == emulatorModeTrue {
+				// configmap with fake MIG uuid
+				if err := r.createConfigMap(ctx, allocations.Resourceidentifier, existingAllocations.Namespace, allocations.Resourceidentifier); err != nil {
+					return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
+				}
 				// Emulating cost to create CI and GI on a GPU
 				time.Sleep(requeue1sDelay)
 			}
@@ -225,34 +229,33 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					}
 				}
 				for migUuid, migDevice := range createdMigInfos {
-					if migDevice.start == allocations.Start && migDevice.uuid == allocations.GPUUUID {
+					if migDevice.start == allocations.Start && migDevice.uuid == allocations.GPUUUID && giProfileInfo.Id == migDevice.giInfo.ProfileId {
 						if err := r.createConfigMap(ctx, migUuid, existingAllocations.Namespace, allocations.Resourceidentifier); err != nil {
 							return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
-						}
-
-						updateInstasliceObject, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
-						if err != nil {
-							return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
-						}
-
-						updatedAllocation := updateInstasliceObject.Spec.Allocations[allocations.PodUUID]
-						// updated object is still in creating status, chances are user has not yet deleted
-						// set status to created.
-						if updatedAllocation.Allocationstatus == existingAllocations.Allocationstatus {
-							existingAllocations.Allocationstatus = inferencev1alpha1.AllocationStatusCreated
-						} else {
-							// Add the new allocation status which is not created and let the daemonset handle in next reconcile
-							log.Info("allocation status changed for ", "pod", allocations.PodName, "status", updatedAllocation.Allocationstatus)
-							existingAllocations.Allocationstatus = updatedAllocation.Allocationstatus
-						}
-						updateInstasliceObject.Spec.Allocations[allocations.PodUUID] = existingAllocations
-						errForUpdate := r.Update(ctx, updateInstasliceObject)
-						if errForUpdate != nil {
-							return ctrl.Result{Requeue: true}, nil
 						}
 						break
 					}
 				}
+			}
+			updateInstasliceObject, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
+			if err != nil {
+				return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
+			}
+
+			updatedAllocation := updateInstasliceObject.Spec.Allocations[allocations.PodUUID]
+			// updated object is still in creating status, chances are user has not yet deleted
+			// set status to created.
+			if updatedAllocation.Allocationstatus == existingAllocations.Allocationstatus {
+				existingAllocations.Allocationstatus = inferencev1alpha1.AllocationStatusCreated
+			} else {
+				// Add the new allocation status which is not created and let the daemonset handle in next reconcile
+				log.Info("allocation status changed for ", "pod", allocations.PodName, "status", updatedAllocation.Allocationstatus)
+				existingAllocations.Allocationstatus = updatedAllocation.Allocationstatus
+			}
+			updateInstasliceObject.Spec.Allocations[allocations.PodUUID] = existingAllocations
+			errForUpdate := r.Update(ctx, updateInstasliceObject)
+			if errForUpdate != nil {
+				return ctrl.Result{Requeue: true}, nil
 			}
 			return ctrl.Result{}, nil
 		}
