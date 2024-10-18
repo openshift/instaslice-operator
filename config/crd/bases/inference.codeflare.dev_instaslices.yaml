@@ -131,39 +131,6 @@ spec:
                   - giprofileid
                   type: object
                 type: array
-              prepared:
-                additionalProperties:
-                  description: Define the struct for allocation details
-                  properties:
-                    ciinfo:
-                      format: int32
-                      type: integer
-                    giinfo:
-                      format: int32
-                      type: integer
-                    parent:
-                      type: string
-                    podUUID:
-                      description: Do we need POD UID here?
-                      type: string
-                    profile:
-                      type: string
-                    size:
-                      format: int32
-                      type: integer
-                    start:
-                      format: int32
-                      type: integer
-                  required:
-                  - ciinfo
-                  - giinfo
-                  - parent
-                  - podUUID
-                  - profile
-                  - size
-                  - start
-                  type: object
-                type: object
             type: object
           status:
             description: InstasliceStatus defines the observed state of Instaslice

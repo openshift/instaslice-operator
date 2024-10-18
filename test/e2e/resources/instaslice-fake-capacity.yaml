@@ -97,23 +97,6 @@ items:
       - size: 2
         start: 6
       profile: 1g.10gb
-    prepared:
-      MIG-0f1cecc2-27a4-5452-85f2-ad9c3a15f1de:
-        ciinfo: 0
-        giinfo: 2
-        parent: GPU-31cfe05c-ed13-cd17-d7aa-c63db5108c24
-        podUUID: ""
-        profile: 3g.20gb
-        size: 4
-        start: 4
-      MIG-3dc2c68a-45e6-5acb-b043-caef296e6038:
-        ciinfo: 0
-        giinfo: 2
-        parent: GPU-8d042338-e67f-9c48-92b4-5b55c7e5133c
-        podUUID: ""
-        profile: 3g.20gb
-        size: 4
-        start: 4
   status:
     processed: true
 kind: List

@@ -59,23 +59,10 @@ type AllocationDetails struct {
 	Memory             int64            `json:"memory"`
 }
 
-// Define the struct for allocation details
-type PreparedDetails struct {
-	Profile string `json:"profile"`
-	Start   uint32 `json:"start"`
-	Size    uint32 `json:"size"`
-	Parent  string `json:"parent"`
-	//Do we need POD UID here?
-	PodUUID  string `json:"podUUID"`
-	Giinfoid uint32 `json:"giinfo"`
-	Ciinfoid uint32 `json:"ciinfo"`
-}
-
 // InstasliceSpec defines the desired state of Instaslice
 type InstasliceSpec struct {
 	MigGPUUUID         map[string]string            `json:"MigGPUUUID,omitempty"`
 	Allocations        map[string]AllocationDetails `json:"allocations,omitempty"`
-	Prepared           map[string]PreparedDetails   `json:"prepared,omitempty"`
 	Migplacement       []Mig                        `json:"migplacement,omitempty"`
 	CpuOnNodeAtBoot    int64                        `json:"cpuonnodeatboot,omitempty"`
 	MemoryOnNodeAtBoot int64                        `json:"memoryonnodeatboot,omitempty"`

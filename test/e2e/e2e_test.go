@@ -232,37 +232,53 @@ var _ = Describe("controller", Ordered, func() {
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
-			output, err := cmd.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
-
-			// Parse the JSON output
 			var result struct {
 				Items []map[string]interface{} `json:"items"`
 			}
-			err = json.Unmarshal(output, &result)
-			Expect(err).NotTo(HaveOccurred(), "Failed to parse JSON output")
 
-			// Assume we want to check the first Instaslice object if it exists
-			if len(result.Items) > 0 {
+			Eventually(func() error {
+				cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					return fmt.Errorf("failed to get Instaslice object: %s", string(output))
+				}
+
+				err = json.Unmarshal(output, &result)
+				if err != nil {
+					return fmt.Errorf("failed to parse JSON output: %v", err)
+				}
+
+				if len(result.Items) == 0 {
+					return fmt.Errorf("no Instaslice objects found")
+				}
+
 				instaslice := result.Items[0]
 				spec, found := instaslice["spec"].(map[string]interface{})
-				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
+				if !found {
+					return fmt.Errorf("Spec not found in Instaslice object")
+				}
+
 				allocations, found := spec["allocations"].(map[string]interface{})
-				Expect(found).To(BeTrue(), "Spec.Allocations not found in Instaslice object")
+				if !found {
+					return fmt.Errorf("Spec.Allocations not found in Instaslice object")
+				}
+
 				for _, data := range allocations {
 					if allocation, ok := data.(map[string]interface{}); ok {
 						if _, ok := allocation["allocationStatus"].(string); ok {
-							Expect(ok).To(BeTrue(), "allocationStatus not found in Instaslice object")
 							notCreated := findPodName(allocations, "vectoradd-small-req")
-							Expect(notCreated).To(BeFalse(), "Spec.Allocations found in Instaslice object")
+							if notCreated {
+								return fmt.Errorf("Spec.Allocations found in Instaslice object")
+							}
+						} else {
+							return fmt.Errorf("allocationStatus not found in Instaslice object")
 						}
 					}
 				}
 
-			} else {
-				Fail("No Instaslice objects found")
-			}
+				return nil
+			}, "60s", "5s").Should(Succeed(), "Instaslice object should eventually have the allocation")
+
 		})
 
 		It("should apply the pod YAML with pod large memory requests and check the allocation in instaslice object", func() {
