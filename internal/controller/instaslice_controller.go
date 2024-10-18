@@ -114,18 +114,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		// Error fetching the Pod
 		if errors.IsNotFound(err) {
 			log.Info("unable to fetch pod might be deleted")
-			// TODO figure out why are allocations present post pod deletes?
-			// https://github.com/openshift/instaslice-operator/issues/150
-			for _, instaslice := range instasliceList.Items {
-				for _, allocation := range instaslice.Spec.Allocations {
-					if allocation.PodName == pod.Name {
-						result, err := r.deleteInstasliceAllocation(ctx, instaslice.Name, allocation)
-						if err != nil {
-							return result, err
-						}
-					}
-				}
-			}
 			return ctrl.Result{}, nil
 		}
 		log.Error(err, "unable to fetch pod")
@@ -403,12 +391,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					continue
 				}
 				podHasNodeAllocation = true
-				for _, item := range instaslice.Spec.Prepared {
-					if item.Parent == allocDetails.GPUUUID && item.Size == allocDetails.Size && item.Start == allocDetails.Start {
-						log.Info("prepared allocation is yet to be deleted, retrying new allocation")
-						return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
-					}
-				}
 				if podHasNodeAllocation {
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
@@ -757,4 +739,24 @@ func (r *InstasliceReconciler) addNodeSelectorAndUngatePod(ctx context.Context, 
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// TODO move this to utils and refer to common function
+func (r *InstasliceReconciler) getInstasliceObject(ctx context.Context, instasliceName string, namespace string) (*inferencev1alpha1.Instaslice, error) {
+	log := logr.FromContext(ctx)
+
+	var updateInstasliceObject inferencev1alpha1.Instaslice
+
+	typeNamespacedName := types.NamespacedName{
+		Name:      instasliceName,
+		Namespace: namespace,
+	}
+
+	err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
+	if err != nil {
+		log.Error(err, "Failed to get Instaslice object", "instasliceName", instasliceName, "namespace", namespace)
+		return nil, err
+	}
+
+	return &updateInstasliceObject, nil
 }
