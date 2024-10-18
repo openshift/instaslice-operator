@@ -114,7 +114,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Check if at least one daemonset pod is ready
 	for _, pod := range podList.Items {
 		if pod.Status.Phase == v1.PodRunning && len(pod.Status.ContainerStatuses) > 0 && pod.Status.ContainerStatuses[0].Ready {
-			// isAnyPodReady = true
 			break
 		}
 	}
