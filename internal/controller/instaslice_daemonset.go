@@ -87,9 +87,6 @@ type MigDeviceInfo struct {
 	size   uint32
 }
 
-// TODO: remove once we figure out NVML calls that does CI and GI discovery
-var cachedPreparedMig = make(map[string]preparedMig)
-
 func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logr.FromContext(ctx)
 	nodeName := os.Getenv("NODE_NAME")
