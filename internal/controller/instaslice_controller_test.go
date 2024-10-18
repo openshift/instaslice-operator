@@ -486,7 +486,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			Expect(err).NotTo(HaveOccurred())
 			// As the allocations are present in the Instaslice Object, expecting a return from
 			// the reconcile function without removing the Finalizer
-			Expect(result).To(Equal(ctrl.Result{RequeueAfter: requeueDelay}))
+			Expect(result).To(Equal(ctrl.Result{RequeueAfter: requeue2sDelay}))
 
 			// Update the podUUID and observe the Finalizer is not present inside the Failed pod
 			// as the corresponding allocation details are not present inside the Instaslice Allocations

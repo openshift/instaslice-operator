@@ -92,7 +92,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				return ctrl.Result{RequeueAfter: time.Minute}, err
 			}
 			log.Info("DaemonSet created successfully, waiting for pods to be ready")
-			return ctrl.Result{RequeueAfter: requeueDelay10Sec}, nil
+			return ctrl.Result{RequeueAfter: requeue10sDelay}, nil
 		}
 		log.Error(err, "Failed to get DaemonSet")
 		return ctrl.Result{RequeueAfter: time.Minute}, err
@@ -122,7 +122,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 	if daemonSet.Status.NumberReady == 0 && !isAnyPodReady {
 		log.Info("No DaemonSet pods are ready yet, waiting...")
-		return ctrl.Result{RequeueAfter: requeueDelay10Sec}, nil
+		return ctrl.Result{RequeueAfter: requeue10sDelay}, nil
 	}
 	log.Info("At least one Instaslice DaemonSet pod is ready, continue reconcile...")
 
@@ -187,7 +187,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				if pod.UID == types.UID(allocation.PodUUID) {
 					allocationNotFound = false
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreating {
-						return ctrl.Result{RequeueAfter: requeueDelay}, nil
+						return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
 					}
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreated || allocation.Allocationstatus == inferencev1alpha1.AllocationStatusUngated {
 						resultDeleting, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, string(pod.UID), allocation)
@@ -204,7 +204,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							return resultRemove, nil
 						}
 						// requeue for the finalizer to be removed
-						return ctrl.Result{RequeueAfter: requeueDelay}, nil
+						return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
 					}
 				}
 			}
@@ -244,7 +244,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							return result, nil
 						}
 						// requeue for the finalizer to be removed
-						return ctrl.Result{RequeueAfter: requeueDelay}, nil
+						return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
 					}
 				}
 
@@ -665,7 +665,7 @@ func (r *InstasliceReconciler) deleteInstasliceAllocation(ctx context.Context, i
 	err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 	if err != nil {
 		log.Error(err, "error getting latest instaslice object")
-		return ctrl.Result{RequeueAfter: requeueDelay}, err
+		return ctrl.Result{RequeueAfter: requeue2sDelay}, err
 	}
 	delete(updateInstasliceObject.Spec.Allocations, allocation.PodUUID)
 	errUpdatingAllocation := r.Update(ctx, &updateInstasliceObject)
