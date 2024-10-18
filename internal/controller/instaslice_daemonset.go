@@ -110,7 +110,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		// delete first before creating new slice
 		if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusDeleting && allocations.Nodename == nodeName {
 			log.Info("performing cleanup ", "pod", allocations.PodName)
-			fmt.Printf("no daemonset logging present")
 			if emulatorMode == emulatorModeFalse {
 				err := r.cleanUpCiAndGi(ctx, allocations)
 				if err != nil {
@@ -253,8 +252,8 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				existingAllocations.Allocationstatus = updatedAllocation.Allocationstatus
 			}
 			updateInstasliceObject.Spec.Allocations[allocations.PodUUID] = existingAllocations
-			errForUpdate := r.Update(ctx, updateInstasliceObject)
-			if errForUpdate != nil {
+			err = r.Update(ctx, updateInstasliceObject)
+			if err != nil {
 				return ctrl.Result{Requeue: true}, nil
 			}
 			return ctrl.Result{}, nil
@@ -277,7 +276,6 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 		return err
 	}
 	log.Info("mig uuid obtained from config map with", "value", podMigUuid)
-	fmt.Printf("abhishek new changes")
 	ret := nvml.Init()
 	if ret != nvml.SUCCESS {
 		return fmt.Errorf("unable to init NVML %v", ret)
@@ -900,14 +898,6 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 			return nil, fmt.Errorf("gpu instance creation failed: %v", ret)
 		}
 	}
-
-	// giInfo, ret := gi.GetInfo()
-	// if ret != nvml.SUCCESS {
-	// 	if ret != nvml.ERROR_INVALID_ARGUMENT {
-	// 		log.Error(ret, "error getting GPU instance info", "giInfo", &giInfo)
-	// 		return nil, fmt.Errorf("error getting GPU instance info: %v", ret)
-	// 	}
-	// }
 
 	ciProfileInfo, ret := gi.GetComputeInstanceProfileInfo(ciProfileId, 0)
 	if ret != nvml.SUCCESS {
