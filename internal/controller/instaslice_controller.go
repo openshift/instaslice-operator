@@ -111,13 +111,16 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.Error(err, "Failed to list DaemonSet pods")
 		return ctrl.Result{RequeueAfter: time.Minute}, err
 	}
+
 	// Check if at least one daemonset pod is ready
+	isAnyPodReady := false
 	for _, pod := range podList.Items {
 		if pod.Status.Phase == v1.PodRunning && len(pod.Status.ContainerStatuses) > 0 && pod.Status.ContainerStatuses[0].Ready {
+			isAnyPodReady = true
 			break
 		}
 	}
-	if daemonSet.Status.NumberReady == 0 {
+	if daemonSet.Status.NumberReady == 0 && !isAnyPodReady {
 		log.Info("No DaemonSet pods are ready yet, waiting...")
 		return ctrl.Result{RequeueAfter: requeueDelay10Sec}, nil
 	}
