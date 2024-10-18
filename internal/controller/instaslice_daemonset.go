@@ -87,9 +87,6 @@ type MigDeviceInfo struct {
 	size   uint32
 }
 
-const requeue2sDelay = 2 * time.Second
-const requeue1sDelay = 1 * time.Second
-
 func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logr.FromContext(ctx)
 	nodeName := os.Getenv("NODE_NAME")

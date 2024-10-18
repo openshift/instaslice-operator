@@ -103,6 +103,6 @@ spec:
           - name: EMULATOR_MODE
             value: "false"
           - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
-            value: quay.io/amalvank/instaslicev2-daemonset:latest
+            value: <IMG_DMST>
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

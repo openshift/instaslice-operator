@@ -30,6 +30,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -81,27 +82,51 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// 1. Ensure DaemonSet is deployed
 	daemonSet := &appsv1.DaemonSet{}
 	err := r.Get(ctx, types.NamespacedName{Name: instasliceDaemonsetName, Namespace: operatorDeployNamespace}, daemonSet)
-	if err != nil && errors.IsNotFound(err) {
-		// DaemonSet doesn't exist, so create it
-		daemonSet = createInstaSliceDaemonSet(operatorDeployNamespace)
-		err = r.Create(ctx, daemonSet)
-		if err != nil {
-			log.Error(err, "Failed to create DaemonSet")
-			return ctrl.Result{RequeueAfter: time.Minute}, err
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// DaemonSet doesn't exist, so create it
+			daemonSet = createInstaSliceDaemonSet(operatorDeployNamespace)
+			err = r.Create(ctx, daemonSet)
+			if err != nil {
+				log.Error(err, "Failed to create DaemonSet")
+				return ctrl.Result{RequeueAfter: time.Minute}, err
+			}
+			log.Info("DaemonSet created successfully, waiting for pods to be ready")
+			return ctrl.Result{RequeueAfter: requeue10sDelay}, nil
 		}
-		log.Info("DaemonSet created successfully, waiting for pods to be ready")
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	} else if err != nil {
 		log.Error(err, "Failed to get DaemonSet")
 		return ctrl.Result{RequeueAfter: time.Minute}, err
 	}
-	// 2. Wait for DaemonSet to be ready
-	if daemonSet.Status.DesiredNumberScheduled != daemonSet.Status.NumberReady {
-		log.Info("DaemonSet is not ready yet, waiting...")
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	}
-	log.Info("Instaslice DaemonSet is ready")
 
+	// 2. Check if at least one DaemonSet pod is ready
+	var podList v1.PodList
+	labelSelector := labels.SelectorFromSet(daemonSet.Spec.Selector.MatchLabels)
+
+	listOptions := &client.ListOptions{
+		LabelSelector: labelSelector,
+		Namespace:     operatorDeployNamespace,
+	}
+
+	if err := r.List(ctx, &podList, listOptions); err != nil {
+		log.Error(err, "Failed to list DaemonSet pods")
+		return ctrl.Result{RequeueAfter: time.Minute}, err
+	}
+
+	// Check if at least one daemonset pod is ready
+	isAnyPodReady := false
+	for _, pod := range podList.Items {
+		if pod.Status.Phase == v1.PodRunning && len(pod.Status.ContainerStatuses) > 0 && pod.Status.ContainerStatuses[0].Ready {
+			isAnyPodReady = true
+			break
+		}
+	}
+	if daemonSet.Status.NumberReady == 0 && !isAnyPodReady {
+		log.Info("No DaemonSet pods are ready yet, waiting...")
+		return ctrl.Result{RequeueAfter: requeue10sDelay}, nil
+	}
+	log.Info("At least one Instaslice DaemonSet pod is ready, continue reconcile...")
+
+	// Continue with the rest of the reconciliation logic
 	policy := &FirstFitPolicy{}
 	pod := &v1.Pod{}
 	var instasliceList inferencev1alpha1.InstasliceList
@@ -162,7 +187,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				if pod.UID == types.UID(allocation.PodUUID) {
 					allocationNotFound = false
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreating {
-						return ctrl.Result{RequeueAfter: requeueDelay}, nil
+						return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
 					}
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreated || allocation.Allocationstatus == inferencev1alpha1.AllocationStatusUngated {
 						resultDeleting, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, string(pod.UID), allocation)
@@ -179,7 +204,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							return resultRemove, nil
 						}
 						// requeue for the finalizer to be removed
-						return ctrl.Result{RequeueAfter: requeueDelay}, nil
+						return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
 					}
 				}
 			}
@@ -219,7 +244,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							return result, nil
 						}
 						// requeue for the finalizer to be removed
-						return ctrl.Result{RequeueAfter: requeueDelay}, nil
+						return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
 					}
 				}
 
@@ -640,7 +665,7 @@ func (r *InstasliceReconciler) deleteInstasliceAllocation(ctx context.Context, i
 	err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 	if err != nil {
 		log.Error(err, "error getting latest instaslice object")
-		return ctrl.Result{RequeueAfter: requeueDelay}, err
+		return ctrl.Result{RequeueAfter: requeue2sDelay}, err
 	}
 	delete(updateInstasliceObject.Spec.Allocations, allocation.PodUUID)
 	errUpdatingAllocation := r.Update(ctx, &updateInstasliceObject)
