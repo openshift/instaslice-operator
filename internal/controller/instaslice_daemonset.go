@@ -121,14 +121,14 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			}
 
 			err := r.deleteConfigMap(ctx, allocations.Resourceidentifier, allocations.Namespace)
-			if err != nil {
-				if !errors.IsNotFound(err) {
-					return ctrl.Result{Requeue: true}, nil
-				}
+			if err != nil && !errors.IsNotFound(err) {
+				log.Error(err, "error deleting config map for ", "pod", allocations.PodName)
+				return ctrl.Result{Requeue: true}, nil
 			}
 
 			updateInstasliceObject, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
 			if err != nil {
+				log.V(1).Error(err, "err getting latest instaslice object")
 				return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
 			}
 
@@ -241,22 +241,24 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
 			}
 
-			updatedAllocation := updateInstasliceObject.Spec.Allocations[allocations.PodUUID]
-			// updated object is still in creating status, chances are user has not yet deleted
-			// set status to created.
-			if updatedAllocation.Allocationstatus == existingAllocations.Allocationstatus {
-				existingAllocations.Allocationstatus = inferencev1alpha1.AllocationStatusCreated
-			} else {
-				// Add the new allocation status which is not created and let the daemonset handle in next reconcile
-				log.Info("allocation status changed for ", "pod", allocations.PodName, "status", updatedAllocation.Allocationstatus)
-				existingAllocations.Allocationstatus = updatedAllocation.Allocationstatus
+			if updatedAllocation, ok := updateInstasliceObject.Spec.Allocations[allocations.PodUUID]; ok {
+				// updated object is still in creating status, chances are user has not yet deleted
+				// set status to created.
+				if updatedAllocation.Allocationstatus == existingAllocations.Allocationstatus {
+					existingAllocations.Allocationstatus = inferencev1alpha1.AllocationStatusCreated
+				} else {
+					// Add the new allocation status which is not created and let the daemonset handle in next reconcile
+					log.Info("allocation status changed for ", "pod", allocations.PodName, "status", updatedAllocation.Allocationstatus)
+					existingAllocations.Allocationstatus = updatedAllocation.Allocationstatus
+				}
+				updateInstasliceObject.Spec.Allocations[allocations.PodUUID] = existingAllocations
+				err = r.Update(ctx, updateInstasliceObject)
+				if err != nil {
+					return ctrl.Result{Requeue: true}, nil
+				}
+				return ctrl.Result{}, nil
 			}
-			updateInstasliceObject.Spec.Allocations[allocations.PodUUID] = existingAllocations
-			err = r.Update(ctx, updateInstasliceObject)
-			if err != nil {
-				return ctrl.Result{Requeue: true}, nil
-			}
-			return ctrl.Result{}, nil
+
 		}
 	}
 	return ctrl.Result{}, nil
@@ -300,33 +302,34 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 	}
 
 	for migUuid, migdevice := range migInfos {
-		if podMigUuid == migUuid {
-			log.Info("deleting ci and gi for", "pod", allocation.PodName)
-			gi, ret := parent.GetGpuInstanceById(int(migdevice.giInfo.Id))
-			if ret != nvml.SUCCESS {
-				log.Error(ret, "error obtaining gpu instance for ", "poduuid", allocation.PodName)
-				if ret == nvml.ERROR_NOT_FOUND {
-					return fmt.Errorf("unable to find gi %v", ret)
-				}
-			}
-			ci, ret := gi.GetComputeInstanceById(int(migdevice.ciInfo.Id))
-			if ret != nvml.SUCCESS {
-				log.Error(ret, "error obtaining computer instance for ", "poduuid", allocation.PodName)
-				if ret == nvml.ERROR_NOT_FOUND {
-					return fmt.Errorf("unable to find gi %v", ret)
-				}
-			}
-			ret = ci.Destroy()
-			if ret != nvml.SUCCESS {
-				return fmt.Errorf("unable to destroy ci %v for %v", ret, allocation.PodName)
-			}
-
-			ret = gi.Destroy()
-			if ret != nvml.SUCCESS {
-				return fmt.Errorf("unable to destroy gi %v for %v", ret, allocation.PodName)
-			}
-			break
+		if podMigUuid != migUuid {
+			continue
 		}
+		log.Info("deleting ci and gi for", "pod", allocation.PodName)
+		gi, ret := parent.GetGpuInstanceById(int(migdevice.giInfo.Id))
+		if ret != nvml.SUCCESS {
+			log.Error(ret, "error obtaining gpu instance for ", "poduuid", allocation.PodName)
+			if ret == nvml.ERROR_NOT_FOUND {
+				return fmt.Errorf("unable to find gi %v", ret)
+			}
+		}
+		ci, ret := gi.GetComputeInstanceById(int(migdevice.ciInfo.Id))
+		if ret != nvml.SUCCESS {
+			log.Error(ret, "error obtaining computer instance for ", "poduuid", allocation.PodName)
+			if ret == nvml.ERROR_NOT_FOUND {
+				return fmt.Errorf("unable to find gi %v", ret)
+			}
+		}
+		ret = ci.Destroy()
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("unable to destroy ci %v for %v", ret, allocation.PodName)
+		}
+
+		ret = gi.Destroy()
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("unable to destroy gi %v for %v", ret, allocation.PodName)
+		}
+		break
 	}
 
 	return nil
@@ -866,23 +869,28 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 	var ret nvml.Return
 	gi, ret = device.CreateGpuInstanceWithPlacement(&giProfileInfo, &placement)
 	if ret != nvml.SUCCESS {
-		if ret == nvml.ERROR_INSUFFICIENT_RESOURCES {
+		switch ret {
+		case nvml.ERROR_INSUFFICIENT_RESOURCES:
+			// Handle insufficient resources case
 			gpuInstances, ret := device.GetGpuInstances(&giProfileInfo)
 			if ret != nvml.SUCCESS {
 				log.Error(ret, "gpu instances cannot be listed")
 				return nil, fmt.Errorf("gpu instances cannot be listed: %v", ret)
 			}
+
 			for _, gpuInstance := range gpuInstances {
 				gpuInstanceInfo, ret := gpuInstance.GetInfo()
 				if ret != nvml.SUCCESS {
 					log.Error(ret, "unable to obtain gpu instance info")
 					return nil, fmt.Errorf("unable to obtain gpu instance info: %v", ret)
 				}
+
 				parentUuid, ret := gpuInstanceInfo.Device.GetUUID()
 				if ret != nvml.SUCCESS {
 					log.Error(ret, "unable to obtain parent gpu uuuid")
 					return nil, fmt.Errorf("unable to obtain parent gpu uuuid: %v", ret)
 				}
+
 				if gpuInstanceInfo.Placement.Start == allocations.Start && parentUuid == allocations.GPUUUID {
 					gi, ret = device.GetGpuInstanceById(int(gpuInstanceInfo.Id))
 					if ret != nvml.SUCCESS {
@@ -891,9 +899,8 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 					}
 				}
 			}
-		}
-		if ret != nvml.ERROR_INSUFFICIENT_RESOURCES {
-			log.Error(ret, "gpu instance already exists")
+		default:
+			// this case is typically for scenario where ret is not equal to nvml.ERROR_INSUFFICIENT_RESOURCES
 			log.Error(ret, "gpu instance creation errored out with unknown error")
 			return nil, fmt.Errorf("gpu instance creation failed: %v", ret)
 		}
