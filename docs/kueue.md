@@ -38,7 +38,7 @@ kubectl rollout restart -n kueue-system deployment kueue-controller-manager
 The provided [kueue-manager-config.yaml](../docs/kueue/kueue-manager-config.yaml)
 enables the optional, opt-in [pod
 integration](https://kueue.sigs.k8s.io/docs/tasks/run/plain_pods/) and adds
-`org.instaslice/` and `org.instaslice/accelerator-memory-quota` to Kueue's
+`instaslice.redhat.com/` and `instaslice.redhat.com/accelerator-memory-quota` to Kueue's
 [excludeResourcePrefixes](https://kueue.sigs.k8s.io/docs/reference/kueue-config.v1beta1/#Resources).
 
 Wait for Kueue to be ready.
@@ -82,12 +82,12 @@ kubectl get node kind-control-plane -o json | jq .status.capacity
   "hugepages-32Mi": "0",
   "hugepages-64Ki": "0",
   "memory": "16351912Ki",
-  "org.instaslice/accelerator-memory-quota": "80Gi",
+  "instaslice.redhat.com/accelerator-memory-quota": "80Gi",
   "nvidia.com/mig-1g.5gb": "3",
-  "org.instaslice/358bb6d7-b65b-4a0c-9585-2567c1ce89e2": "1",
-  "org.instaslice/358d2198-eab4-4ac8-9e25-5c7b67187dac": "1",
-  "org.instaslice/79fcac9e-3be1-4fc2-892c-78238c2c405c": "1",
-  "org.instaslice/99ba54ca-dfcd-4942-a770-6e144d69fd9b": "1",
+  "instaslice.redhat.com/358bb6d7-b65b-4a0c-9585-2567c1ce89e2": "1",
+  "instaslice.redhat.com/358d2198-eab4-4ac8-9e25-5c7b67187dac": "1",
+  "instaslice.redhat.com/79fcac9e-3be1-4fc2-892c-78238c2c405c": "1",
+  "instaslice.redhat.com/99ba54ca-dfcd-4942-a770-6e144d69fd9b": "1",
   "pods": "110"
 }
 ```

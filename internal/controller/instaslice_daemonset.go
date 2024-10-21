@@ -51,9 +51,9 @@ type InstaSliceDaemonsetReconciler struct {
 	NodeName   string
 }
 
-//+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=inference.codeflare.dev,resources=instaslices/finalizers,verbs=update
+//+kubebuilder:rbac:groups=inference.redhat.com,resources=instaslices,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=inference.redhat.com,resources=instaslices/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=inference.redhat.com,resources=instaslices/finalizers,verbs=update
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=nodes/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete

@@ -18,7 +18,7 @@ spec:
     - description: Instaslice is the Schema for the instaslices API
       displayName: Instaslice
       kind: Instaslice
-      name: instaslice.inference.codeflare.dev
+      name: instaslice.inference.redhat.com
       version: v1alpha1
   description: "### Introduction\nInstaSlice works with GPU operator to create mig
     slices on demand.\n\n### Prerequisites\n\n1. Install the [NVIDIA GPU drivers and

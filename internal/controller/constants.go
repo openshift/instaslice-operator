@@ -19,7 +19,7 @@ package controller
 import "time"
 
 const (
-	orgInstaslicePrefix              = "org.instaslice/"
+	orgInstaslicePrefix              = "instaslice.redhat.com/"
 	gateName                         = orgInstaslicePrefix + "accelerator"
 	finalizerName                    = gateName
 	quotaResourceName                = orgInstaslicePrefix + "accelerator-memory-quota"

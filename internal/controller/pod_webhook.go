@@ -61,7 +61,7 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 	limits := pod.Spec.Containers[0].Resources.Limits
 	for resourceName, quantity := range limits {
 		if strings.HasPrefix(string(resourceName), "nvidia.com/mig-") {
-			newResourceName := strings.Replace(string(resourceName), "nvidia.com", "org.instaslice", 1)
+			newResourceName := strings.Replace(string(resourceName), "nvidia.com", "instaslice.redhat.com", 1)
 			delete(pod.Spec.Containers[0].Resources.Limits, resourceName)
 			limits[v1.ResourceName(newResourceName)] = quantity
 		}
@@ -71,11 +71,11 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 		pod.Spec.Containers[0].Resources.Requests = make(v1.ResourceList)
 	}
 
-	// Transform resource requests from nvidia.com/mig-* to org.instaslice/mig-*
+	// Transform resource requests from nvidia.com/mig-* to instaslice.redhat.com/mig-*
 	requests := pod.Spec.Containers[0].Resources.Requests
 	for resourceName, quantity := range requests {
 		if strings.HasPrefix(string(resourceName), "nvidia.com/mig-") {
-			newResourceName := strings.Replace(string(resourceName), "nvidia.com", "org.instaslice", 1)
+			newResourceName := strings.Replace(string(resourceName), "nvidia.com", "instaslice.redhat.com", 1)
 			delete(requests, resourceName)
 			requests[v1.ResourceName(newResourceName)] = quantity
 		}

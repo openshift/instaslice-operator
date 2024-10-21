@@ -12,7 +12,7 @@ metadata:
   name: instaslice-viewer-role
 rules:
 - apiGroups:
-  - inference.codeflare.dev
+  - inference.redhat.com
   resources:
   - instaslices
   verbs:
@@ -20,7 +20,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - inference.codeflare.dev
+  - inference.redhat.com
   resources:
   - instaslices/status
   verbs:

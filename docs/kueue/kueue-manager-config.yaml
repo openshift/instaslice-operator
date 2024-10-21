@@ -63,4 +63,4 @@ data:
     #  enable: true
     #  preemptionStrategies: [LessThanOrEqualToFinalShare, LessThanInitialShare]
     resources:
-      excludeResourcePrefixes: [ "org.instaslice/", "org.instaslice/accelerator-memory-quota" ]
+      excludeResourcePrefixes: [ "instaslice.redhat.com/", "instaslice.redhat.com/accelerator-memory-quota" ]

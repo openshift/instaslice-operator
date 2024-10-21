@@ -34,7 +34,7 @@ import (
 )
 
 func TestHandle(t *testing.T) {
-	instasliceQuotaResourceName := "org.instaslice/accelerator-memory-quota"
+	instasliceQuotaResourceName := "instaslice.redhat.com/accelerator-memory-quota"
 	scheme := runtime.NewScheme()
 	_ = v1.AddToScheme(scheme)
 

@@ -5,7 +5,7 @@ metadata:
     alm-examples: |-
       [
         {
-          "apiVersion": "inference.codeflare.dev/v1alpha1",
+          "apiVersion": "inference.redhat.com/v1alpha1",
           "kind": "Instaslice",
           "metadata": {
             "labels": {
@@ -36,7 +36,7 @@ spec:
   customresourcedefinitions:
     owned:
     - kind: Instaslice
-      name: instaslices.inference.codeflare.dev
+      name: instaslices.inference.redhat.com
       version: v1alpha1
   description: "### Introduction\nInstaSlice works with GPU operator to create mig
     slices on demand.\n\n### Prerequisites\n\n1. Install the [NVIDIA GPU drivers and
@@ -133,7 +133,7 @@ spec:
           - update
           - watch
         - apiGroups:
-          - inference.codeflare.dev
+          - inference.redhat.com
           resources:
           - instaslices
           verbs:
@@ -145,13 +145,13 @@ spec:
           - update
           - watch
         - apiGroups:
-          - inference.codeflare.dev
+          - inference.redhat.com
           resources:
           - instaslices/finalizers
           verbs:
           - update
         - apiGroups:
-          - inference.codeflare.dev
+          - inference.redhat.com
           resources:
           - instaslices/status
           verbs:

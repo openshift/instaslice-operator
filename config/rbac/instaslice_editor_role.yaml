@@ -12,7 +12,7 @@ metadata:
   name: instaslice-editor-role
 rules:
 - apiGroups:
-  - inference.codeflare.dev
+  - inference.redhat.com
   resources:
   - instaslices
   verbs:
@@ -24,7 +24,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - inference.codeflare.dev
+  - inference.redhat.com
   resources:
   - instaslices/status
   verbs:

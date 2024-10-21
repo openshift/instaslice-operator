@@ -17,11 +17,11 @@ kind: Pod
 metadata:
   name: $ORIGINAL_NAME
   finalizers:
-  - org.instaslice/accelerator
+  - instaslice.redhat.com/accelerator
 spec:
   restartPolicy: OnFailure
   schedulingGates:
-  - name: org.instaslice/accelerator
+  - name: instaslice.redhat.com/accelerator
   containers:
   - name: $ORIGINAL_NAME
     image: "quay.io/tardieu/vectoradd:0.1.0"
