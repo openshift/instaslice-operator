@@ -107,7 +107,7 @@ generate_fake_capacity() {
   cat <<EOF > fake-capacity.yaml
 apiVersion: v1
 items:
-- apiVersion: inference.codeflare.dev/v1alpha1
+- apiVersion: inference.redhat.com/v1alpha1
   kind: Instaslice
   metadata:
     name: $worker_name

@@ -1,5 +1,5 @@
 package utils
 
 const (
-	OrgInstaslicePrefix string = "org.instaslice/"
+	OrgInstaslicePrefix string = "instaslice.redhat.com/"
 )

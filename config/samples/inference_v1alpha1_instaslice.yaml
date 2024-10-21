@@ -1,4 +1,4 @@
-apiVersion: inference.codeflare.dev/v1alpha1
+apiVersion: inference.redhat.com/v1alpha1
 kind: Instaslice
 metadata:
   labels:

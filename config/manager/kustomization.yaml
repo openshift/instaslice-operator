@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: quay.io/amalvank/instaslicev2-controller
-  newTag: latest
+  newTag: test-e2e

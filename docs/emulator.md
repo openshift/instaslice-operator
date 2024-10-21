@@ -48,7 +48,7 @@ instaslice-operator-controller-manager-579bc859cf-pb9t6   2/2     Running   0   
 ```
 
 > [!IMPORTANT]
-> Make sure no dangling org.instaslice/* extended resources exist on the cluster before you submit a pod
+> Make sure no dangling instaslice.redhat.com/* extended resources exist on the cluster before you submit a pod
 
 - Submit emulator pod using command
 

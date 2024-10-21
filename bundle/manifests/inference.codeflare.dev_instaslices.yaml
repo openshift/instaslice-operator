@@ -5,9 +5,9 @@ metadata:
     cert-manager.io/inject-ca-from: instaslice-system/instaslice-operator-serving-cert
     controller-gen.kubebuilder.io/version: v0.14.0
   creationTimestamp: null
-  name: instaslices.inference.codeflare.dev
+  name: instaslices.inference.redhat.com
 spec:
-  group: inference.codeflare.dev
+  group: inference.redhat.com
   names:
     kind: Instaslice
     listKind: InstasliceList

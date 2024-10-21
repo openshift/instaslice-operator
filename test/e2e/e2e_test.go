@@ -469,7 +469,7 @@ var _ = Describe("controller", Ordered, func() {
 			}
 		})
 
-		It("should verify org.instaslice/mig-1g.5gb is max before submitting pods and verify the existence of pod allocation", func() {
+		It("should verify instaslice.redhat.com/mig-1g.5gb is max before submitting pods and verify the existence of pod allocation", func() {
 			ctx := context.TODO()
 			checkMIG := func(expectedMIG string) bool {
 				cmd := exec.CommandContext(ctx, "kubectl", "get", "node", "kind-control-plane", "-o", "json")
@@ -491,11 +491,11 @@ var _ = Describe("controller", Ordered, func() {
 					return false
 				}
 
-				migCapacity, found := nodeResult.Status.Capacity["org.instaslice/mig-1g.5gb"]
+				migCapacity, found := nodeResult.Status.Capacity["instaslice.redhat.com/mig-1g.5gb"]
 				return found && migCapacity == expectedMIG
 			}
 
-			Expect(checkMIG("14")).To(BeTrue(), "org.instaslice/mig-1g.5gb is not zero before submitting pods")
+			Expect(checkMIG("14")).To(BeTrue(), "instaslice.redhat.com/mig-1g.5gb is not zero before submitting pods")
 
 			cmdApply := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test_multiple_pods.yaml")
 			outputApply, err := cmdApply.CombinedOutput()
@@ -532,7 +532,7 @@ var _ = Describe("controller", Ordered, func() {
 			}, "60s", "5s").Should(BeTrue(), "Not all allocations are in the 'ungated' state after the timeout")
 		})
 		It("should verify that the Kubernetes node has the specified resource and matches total GPU memory", func() {
-			instasliceQuotaResourceName := "org.instaslice/accelerator-memory-quota"
+			instasliceQuotaResourceName := "instaslice.redhat.com/accelerator-memory-quota"
 			// Step 1: Get the total GPU memory from the Instaslice object
 			By("Getting the Instaslice object")
 			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "default", "-o", "json")

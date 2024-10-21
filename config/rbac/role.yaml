@@ -58,7 +58,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - inference.codeflare.dev
+  - inference.redhat.com
   resources:
   - instaslices
   verbs:
@@ -70,13 +70,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - inference.codeflare.dev
+  - inference.redhat.com
   resources:
   - instaslices/finalizers
   verbs:
   - update
 - apiGroups:
-  - inference.codeflare.dev
+  - inference.redhat.com
   resources:
   - instaslices/status
   verbs:

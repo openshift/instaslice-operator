@@ -5,4 +5,4 @@ metadata:
   namespace: default
 spec:
   hard:
-    requests.org.instaslice/accelerator-memory-quota: "5Gi"
+    requests.instaslice.redhat.com/accelerator-memory-quota: "5Gi"

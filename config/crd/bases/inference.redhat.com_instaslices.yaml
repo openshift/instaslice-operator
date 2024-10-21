@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
-  name: instaslices.inference.codeflare.dev
+  name: instaslices.inference.redhat.com
 spec:
-  group: inference.codeflare.dev
+  group: inference.redhat.com
   names:
     kind: Instaslice
     listKind: InstasliceList
