@@ -31,7 +31,11 @@ import (
 
 // find node, gpu and gpu index to place the slice
 func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, instaslice *inferencev1alpha1.Instaslice, profileName string, policy AllocationPolicy, pod *v1.Pod) (*inferencev1alpha1.AllocationDetails, error) {
-	nodeAvailableCpu, nodeAvailableMemory := r.availableClassicalResourcesOnNode(instaslice)
+	updatedInstaSliceObject, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	nodeAvailableCpu, nodeAvailableMemory := r.availableClassicalResourcesOnNode(updatedInstaSliceObject)
 	cpuRequest, ok := pod.Spec.Containers[0].Resources.Requests[v1.ResourceCPU]
 	// a user pod can never provide cpu and memory requests in that case
 	// continue with just GPU allocation
@@ -55,21 +59,21 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 	}
 	if userCpuCoresCeil < nodeAvailableCpu && userMemoryBytes < nodeAvailableMemory {
 		//TODO: discover this value, this may work for A100 and H100 for now.
-		for gpuuuid := range instaslice.Spec.MigGPUUUID {
-			if instaslice.Spec.Allocations == nil {
-				instaslice.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
+		for gpuuuid := range updatedInstaSliceObject.Spec.MigGPUUUID {
+			if updatedInstaSliceObject.Spec.Allocations == nil {
+				updatedInstaSliceObject.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
 			}
-			newStart := r.getStartIndexFromPreparedState(instaslice, gpuuuid, profileName)
+			newStart := r.getStartIndexFromPreparedState(updatedInstaSliceObject, gpuuuid, profileName)
 			//size cannot be 9 atleast for A100s 40GB/80GB and H100 variants
 			notValidIndex := uint32(9)
 			if newStart == notValidIndex {
 				//Move to next GPU
 				continue
 			}
-			size, discoveredGiprofile, Ciprofileid, Ciengprofileid := r.extractGpuProfile(instaslice, profileName)
+			size, discoveredGiprofile, Ciprofileid, Ciengprofileid := r.extractGpuProfile(updatedInstaSliceObject, profileName)
 			resourceIdentifier := pod.Spec.Containers[0].EnvFrom[0].ConfigMapRef.Name
 			allocDetails := policy.SetAllocationDetails(profileName, newStart, uint32(size),
-				string(pod.UID), instaslice.Name, string(inferencev1alpha1.AllocationStatusCreating), discoveredGiprofile,
+				string(pod.UID), updatedInstaSliceObject.Name, string(inferencev1alpha1.AllocationStatusCreating), discoveredGiprofile,
 				Ciprofileid, Ciengprofileid, pod.Namespace, pod.Name, gpuuuid, resourceIdentifier, userCpuCoresCeil, userMemoryBytes)
 			return allocDetails, nil
 		}
