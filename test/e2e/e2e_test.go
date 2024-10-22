@@ -29,6 +29,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/test/utils"
@@ -42,20 +43,25 @@ import (
 // 4. submit a test pod with 1g.20gb slice and later delete it. verify the allocation status to be
 // in state deleting
 
+const (
+	fakeInstasliceFileName = "test/e2e/resources/instaslice-fake-capacity.yaml"
+)
+
 var _ = Describe("controller", Ordered, func() {
 	var (
-		namespace         string = "instaslice-system"
-		defaultNamespace  string = "default"
-		isRunningOnOCP    bool
-		kubeCli           = "kubectl"
-		ocpCli            = "oc"
-		dockerBin         = "docker"
-		podmanBin         = "podman"
-		deployEmulated    = "deploy-emulated"
-		deployOCPEmulated = "ocp-deploy-emulated"
-		clientBin         = kubeCli
-		containerTool     = dockerBin
-		deployEmulatedArg = deployEmulated
+		namespace              = "instaslice-system"
+		defaultNamespace       = "default"
+		isRunningOnOCP         = false
+		controllerManagerLabel = "control-plane=controller-manager"
+		kubeCli                = "kubectl"
+		ocpCli                 = "oc"
+		dockerBin              = "docker"
+		podmanBin              = "podman"
+		deployEmulated         = "deploy-emulated"
+		deployOCPEmulated      = "ocp-deploy-emulated"
+		clientBin              = kubeCli
+		containerTool          = dockerBin
+		deployEmulatedArg      = deployEmulated
 	)
 	ocpMode := os.Getenv("OCP_MODE")
 	if ocpMode != "" {
@@ -68,7 +74,7 @@ var _ = Describe("controller", Ordered, func() {
 	BeforeAll(func() {
 		if !isRunningOnOCP {
 			fmt.Println("Setting up Kind cluster")
-			cmd := exec.Command(clientBin, "create", "cluster", "--image", "kindest/node:v1.30.0@sha256:047357ac0cfea04663786a612ba1eaba9702bef25227a794b52890dd8bcd692e")
+			cmd := exec.Command("kind", "create", "cluster", "--image", "kindest/node:v1.30.0@sha256:047357ac0cfea04663786a612ba1eaba9702bef25227a794b52890dd8bcd692e")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create Kind cluster: %s", output))
 		}
@@ -97,8 +103,8 @@ var _ = Describe("controller", Ordered, func() {
 			cmd := exec.Command("make", "ocp-undeploy-emulated")
 			_, err := utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-			utils.Run(exec.Command("make", "uninstall"))
-			utils.Run(exec.Command(clientBin, "delete", "ns", namespace, " cert-manager"))
+			_, _ = utils.Run(exec.Command("make", "uninstall"))
+			_, _ = utils.Run(exec.Command(clientBin, "delete", "ns", "instaslice-system", " cert-manager"))
 			fmt.Println("Finished running e2e tests on ocp")
 		}
 	})
@@ -143,11 +149,6 @@ var _ = Describe("controller", Ordered, func() {
 			// add wait before installing fake capacity
 			time.Sleep(10 * time.Second)
 
-			By("installing fake GPU capacity")
-			cmdCm := exec.Command(clientBin, "apply", "-f", "test/e2e/resources/instaslice-fake-capacity.yaml")
-			outputCm, err := cmdCm.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add fake capacity to the cluster: %s", outputCm))
-
 			By("deploying the controller-manager")
 			cmd = exec.Command(
 				"make",
@@ -163,26 +164,23 @@ var _ = Describe("controller", Ordered, func() {
 			// We don't have a reliable source to depend on to verify if the service is up and ready
 			// Issue Ref: https://github.com/kubernetes/kubernetes/issues/80828
 			// (TODO) Wait for the instaslice-operator-webhook-service to be available and Ready
-			/*
-				By("verifying that the instaslice-operator-webhook service to be ready as expected")
-				EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("service", "app.kubernetes.io/component=webhook", namespace).Should(BeTrue())
-			*/
-			// Until then, adding a sleep of 1 Minute should mitigate the intermittent failures running the e2e tests.
+
+			By("installing the instaslice object with fake capacity")
+			err = installInstasliceFromFile(clientBin, controllerManagerLabel, fakeInstasliceFileName)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			time.Sleep(time.Minute)
+
 			By("validating that the controller-daemonset resource is successfully installed by the controller and at least one pod is running as expected")
 			EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments(clientBin, "pod", "app=controller-daemonset", namespace).Should(BeTrue())
-
-			time.Sleep(time.Minute)
 
 		})
 
 		It("should apply the YAML and check if that instaslice resource exists", func() {
-
-			cmd := exec.Command(clientBin, "apply", "-f", "test/e2e/resources/instaslice-fake-capacity.yaml")
-			output, err := cmd.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", output))
+			err := installInstasliceFromFile(clientBin, controllerManagerLabel, fakeInstasliceFileName)
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %v", err))
 
 			checkCmd := exec.Command(clientBin, "describe", "instaslice", "-n", defaultNamespace)
-			output, err = checkCmd.CombinedOutput()
+			output, err := checkCmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Resource not found: %s", output))
 		})
 
@@ -503,7 +501,15 @@ var _ = Describe("controller", Ordered, func() {
 		It("should verify instaslice.redhat.com/mig-1g.5gb is max before submitting pods and verify the existence of pod allocation", func() {
 			ctx := context.TODO()
 			checkMIG := func(expectedMIG string) bool {
-				cmd := exec.CommandContext(ctx, clientBin, "get", "node", "kind-control-plane", "-o", "json")
+				nodeName, err := getNodeName(clientBin, controllerManagerLabel)
+				if err != nil {
+					fmt.Printf("Failed to retrieve node name: %v\n", err)
+					return false
+				} else if nodeName == "" {
+					fmt.Printf("Failed to retrieve node name")
+					return false
+				}
+				cmd := exec.CommandContext(ctx, clientBin, "get", "node", nodeName, "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					fmt.Printf("Failed to execute %s: %v\n", clientBin, err)
@@ -536,8 +542,16 @@ var _ = Describe("controller", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputApply))
 
 			Eventually(func() bool {
+				nodeName, err := getNodeName(clientBin, controllerManagerLabel)
+				if err != nil {
+					fmt.Printf("Failed to retrieve node name: %v\n", err)
+					return false
+				} else if nodeName == "" {
+					fmt.Printf("Failed to retrieve node name")
+					return false
+				}
 				// Retrieve the Instaslice object
-				cmd := exec.Command(clientBin, "get", "instaslice", "kind-control-plane", "-n", "default", "-o", "json")
+				cmd := exec.Command(clientBin, "get", "instaslice", nodeName, "-n", "default", "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					fmt.Printf("Failed to retrieve the Instaslice object: %s\n", string(output))
@@ -761,6 +775,25 @@ func findPodName(allocationMap map[string]interface{}, targetPodName string) boo
 	return true
 }
 
+func getNodeName(clientBin, label string) (string, error) {
+	var nodeName string
+	output, err := exec.Command(clientBin, "get", "pods", "-l", label, "-A", "-o", "json").CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("unable to get the node name : %v, output: %s\n", err, output)
+	}
+	var pods v1.PodList
+	err = json.Unmarshal(output, &pods)
+	if err != nil {
+		return "", fmt.Errorf("Error parsing JSON output: %v", err)
+	}
+	for _, pod := range pods.Items {
+		nodeName = pod.Spec.NodeName
+		// returning from here as we have the node name now
+		return nodeName, nil
+	}
+	return nodeName, nil
+}
+
 func isResourceReady(clientBin, resource, label, namespace string) bool {
 	var cmd = new(exec.Cmd)
 	switch resource {
@@ -785,4 +818,27 @@ func isResourceReady(clientBin, resource, label, namespace string) bool {
 		return false
 	}
 	return true
+}
+
+func installInstasliceFromFile(clientBin, label, filename string) error {
+	// read the sample instaslice object from the file
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("Failed to read file: %s, err: %v", filename, err)
+	}
+	nodeName, err := getNodeName(clientBin, label)
+	if err != nil {
+		return fmt.Errorf("Failed to get node name on which instaslice-controller-is-deployed : %v", err)
+	} else if nodeName == "" {
+		return fmt.Errorf("Failed to get node name")
+	}
+	newData := strings.ReplaceAll(string(data), "kind-control-plane", nodeName)
+	// apply the modified instaslice object
+	cmdCm := exec.Command(clientBin, "apply", "-f", "-")
+	cmdCm.Stdin = strings.NewReader(newData)
+	output, err := cmdCm.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Failed to add fake capacity to the cluster: %v, output: %s", err, output)
+	}
+	return nil
 }
