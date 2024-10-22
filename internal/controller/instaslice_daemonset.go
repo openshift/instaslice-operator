@@ -359,7 +359,7 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 		var instaslice inferencev1alpha1.Instaslice
 		typeNamespacedName := types.NamespacedName{
 			Name:      nodeName,
-			Namespace: "default", //TODO: change namespace
+			Namespace: instaSliceOperatorNamespace, //TODO: change namespace
 		}
 		errRetrievingInstaSliceForSetup := r.Get(ctx, typeNamespacedName, &instaslice)
 		if errRetrievingInstaSliceForSetup != nil {
