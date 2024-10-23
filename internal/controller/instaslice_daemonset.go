@@ -290,9 +290,6 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 	}
 
 	for _, migdevice := range migInfos {
-		// if podMigUuid != migUuid {
-		// 	continue
-		// }
 		if migdevice.uuid == allocation.GPUUUID && migdevice.start == allocation.Start {
 
 			log.Info("deleting ci and gi for", "pod", allocation.PodName)

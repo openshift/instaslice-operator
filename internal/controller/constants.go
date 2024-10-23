@@ -27,7 +27,6 @@ const (
 	emulatorModeTrue                 = "true"
 	AttributeMediaExtensions         = "me"
 	instaSliceOperatorNamespace      = "instaslice-system"
-	operatorDeployNamespace          = "instaslice-system"
 	NvidiaMIGPrefix                  = "nvidia.com/mig-"
 	NodeLabel                        = "kubernetes.io/hostname"
 	multipleContainersUnsupportedErr = "multiple containers per pod not supported"
