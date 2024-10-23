@@ -90,13 +90,20 @@ type MigDeviceInfo struct {
 func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logr.FromContext(ctx)
 	nodeName := os.Getenv("NODE_NAME")
+
+	if req.Name != nodeName {
+		return ctrl.Result{}, nil
+	}
+
 	nsName := types.NamespacedName{
 		Name:      nodeName,
-		Namespace: "default",
+		Namespace: instaSliceOperatorNamespace,
 	}
+
 	var instaslice inferencev1alpha1.Instaslice
 	if err := r.Get(ctx, nsName, &instaslice); err != nil {
-		log.Error(err, "Error listing Instaslice")
+		log.Error(err, "error getting Instaslice object with ", "name", nodeName)
+		return ctrl.Result{}, err
 	}
 
 	emulatorMode := os.Getenv("EMULATOR_MODE")
@@ -207,6 +214,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					// MIG walking can fail but at this point we are unsure if slices exists
 					// hence we optimistically try to create ci and gi.
 					log.Error(err, "walking MIG devices failed")
+					return ctrl.Result{}, err
 				}
 				// we should skip ci and gi creation for cases where etcd update fails or configmap creation
 				// fails.
@@ -229,6 +237,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 						if err := r.createConfigMap(ctx, migUuid, existingAllocations.Namespace, allocations.Resourceidentifier); err != nil {
 							return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
 						}
+						log.Info("done creating mig slice for ", "pod", allocations.PodName, "parentgpu", allocations.GPUUUID, "miguuid", migUuid)
 						break
 					}
 				}
@@ -239,16 +248,8 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			}
 
 			if updatedAllocation, ok := updateInstasliceObject.Spec.Allocations[allocations.PodUUID]; ok {
-				// updated object is still in creating status, chances are user has not yet deleted
-				// set status to created.
-				if updatedAllocation.Allocationstatus == existingAllocations.Allocationstatus {
-					existingAllocations.Allocationstatus = inferencev1alpha1.AllocationStatusCreated
-				} else {
-					// Add the new allocation status which is not created and let the daemonset handle in next reconcile
-					log.Info("allocation status changed for ", "pod", allocations.PodName, "status", updatedAllocation.Allocationstatus)
-					existingAllocations.Allocationstatus = updatedAllocation.Allocationstatus
-				}
-				updateInstasliceObject.Spec.Allocations[allocations.PodUUID] = existingAllocations
+				updatedAllocation.Allocationstatus = inferencev1alpha1.AllocationStatusCreated
+				updateInstasliceObject.Spec.Allocations[allocations.PodUUID] = updatedAllocation
 				err = r.Update(ctx, updateInstasliceObject)
 				if err != nil {
 					return ctrl.Result{Requeue: true}, nil
@@ -265,16 +266,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 // TODO: split this method into two methods.
 func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allocation inferencev1alpha1.AllocationDetails) error {
 	log := logr.FromContext(ctx)
-
-	podMigUuid, err := r.readConfigMap(ctx, allocation.Namespace, allocation.Resourceidentifier)
-	if err != nil {
-		// configmap deleted in previous cycle
-		if errors.IsNotFound(err) {
-			return nil
-		}
-		return err
-	}
-	log.Info("mig uuid obtained from config map with", "value", podMigUuid)
 	ret := nvml.Init()
 	if ret != nvml.SUCCESS {
 		return fmt.Errorf("unable to init NVML %v", ret)
@@ -298,37 +289,36 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 		return fmt.Errorf("unable walk migs %v", err)
 	}
 
-	for migUuid, migdevice := range migInfos {
-		if podMigUuid != migUuid {
-			continue
-		}
-		log.Info("deleting ci and gi for", "pod", allocation.PodName)
-		gi, ret := parent.GetGpuInstanceById(int(migdevice.giInfo.Id))
-		if ret != nvml.SUCCESS {
-			log.Error(ret, "error obtaining gpu instance for ", "poduuid", allocation.PodName)
-			if ret == nvml.ERROR_NOT_FOUND {
-				return fmt.Errorf("unable to find gi %v", ret)
-			}
-		}
-		ci, ret := gi.GetComputeInstanceById(int(migdevice.ciInfo.Id))
-		if ret != nvml.SUCCESS {
-			log.Error(ret, "error obtaining computer instance for ", "poduuid", allocation.PodName)
-			if ret == nvml.ERROR_NOT_FOUND {
-				return fmt.Errorf("unable to find gi %v", ret)
-			}
-		}
-		ret = ci.Destroy()
-		if ret != nvml.SUCCESS {
-			return fmt.Errorf("unable to destroy ci %v for %v", ret, allocation.PodName)
-		}
+	for _, migdevice := range migInfos {
+		if migdevice.uuid == allocation.GPUUUID && migdevice.start == allocation.Start {
 
-		ret = gi.Destroy()
-		if ret != nvml.SUCCESS {
-			return fmt.Errorf("unable to destroy gi %v for %v", ret, allocation.PodName)
+			log.Info("deleting ci and gi for", "pod", allocation.PodName)
+			gi, ret := parent.GetGpuInstanceById(int(migdevice.giInfo.Id))
+			if ret != nvml.SUCCESS {
+				log.Error(ret, "error obtaining gpu instance for ", "poduuid", allocation.PodName)
+				if ret == nvml.ERROR_NOT_FOUND {
+					return fmt.Errorf("unable to find gi %v", ret)
+				}
+			}
+			ci, ret := gi.GetComputeInstanceById(int(migdevice.ciInfo.Id))
+			if ret != nvml.SUCCESS {
+				log.Error(ret, "error obtaining computer instance for ", "poduuid", allocation.PodName)
+				if ret == nvml.ERROR_NOT_FOUND {
+					return fmt.Errorf("unable to find gi %v", ret)
+				}
+			}
+			ret = ci.Destroy()
+			if ret != nvml.SUCCESS {
+				return fmt.Errorf("unable to destroy ci %v for %v", ret, allocation.PodName)
+			}
+
+			ret = gi.Destroy()
+			if ret != nvml.SUCCESS {
+				return fmt.Errorf("unable to destroy gi %v for %v", ret, allocation.PodName)
+			}
+			break
 		}
-		break
 	}
-
 	return nil
 }
 
@@ -359,7 +349,7 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 		var instaslice inferencev1alpha1.Instaslice
 		typeNamespacedName := types.NamespacedName{
 			Name:      nodeName,
-			Namespace: "default", //TODO: change namespace
+			Namespace: instaSliceOperatorNamespace,
 		}
 		errRetrievingInstaSliceForSetup := r.Get(ctx, typeNamespacedName, &instaslice)
 		if errRetrievingInstaSliceForSetup != nil {
@@ -448,7 +438,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 	instaslice.Spec.CpuOnNodeAtBoot = cpu
 	instaslice.Spec.MemoryOnNodeAtBoot = memory
 	instaslice.Name = nodeName
-	instaslice.Namespace = "default"
+	instaslice.Namespace = instaSliceOperatorNamespace
 	instaslice.Spec.MigGPUUUID = gpuModelMap
 	instaslice.Status.Processed = true
 	//TODO: should we use context.TODO() ?
@@ -697,7 +687,7 @@ func (r *InstaSliceDaemonsetReconciler) createConfigMap(ctx context.Context, mig
 	var configMap v1.ConfigMap
 	err := r.Get(ctx, types.NamespacedName{Name: resourceIdentifier, Namespace: namespace}, &configMap)
 	if err != nil {
-		log.Info("ConfigMap not found, creating for ", "pod", resourceIdentifier, "migGPUUUID", migGPUUUID)
+		log.Info("ConfigMap not found, creating for ", "name", resourceIdentifier, "migGPUUUID", migGPUUUID)
 		configMapToCreate := &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      resourceIdentifier,
@@ -924,24 +914,4 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 	}
 
 	return migInfos, nil
-}
-
-// Read configmap and get NVIDIA_VISIBLE_DEVICES value
-func (r *InstaSliceDaemonsetReconciler) readConfigMap(ctx context.Context, namespace string, resourceIdentifier string) (string, error) {
-	log := logr.FromContext(ctx)
-	var configMap v1.ConfigMap
-
-	err := r.Get(ctx, types.NamespacedName{Name: resourceIdentifier, Namespace: namespace}, &configMap)
-	if err != nil {
-		log.Error(err, "ConfigMap not found for", "resourceIdentifier", resourceIdentifier)
-		return "", err
-	}
-
-	nvidiaVisibleDevices, exists := configMap.Data["NVIDIA_VISIBLE_DEVICES"]
-	if !exists {
-		log.Info("NVIDIA_VISIBLE_DEVICES not found in ConfigMap", "resourceIdentifier", resourceIdentifier)
-		return "", fmt.Errorf("NVIDIA_VISIBLE_DEVICES key not found in ConfigMap %s", resourceIdentifier)
-	}
-
-	return nvidiaVisibleDevices, nil
 }

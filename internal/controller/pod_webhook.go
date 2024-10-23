@@ -28,7 +28,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -46,7 +45,7 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 	if err != nil {
 		return admission.Errored(400, fmt.Errorf("could not decode pod: %v", err))
 	}
-	log.FromContext(ctx).Info("webhook got pod ", "name", pod.Name)
+
 	if !hasMIGResource(pod) {
 		return admission.Allowed("No nvidia.com/mig-* resource found, skipping mutation.")
 	}
