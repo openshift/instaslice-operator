@@ -44,7 +44,6 @@ import (
 
 var _ = Describe("controller", Ordered, func() {
 	var namespace string = "instaslice-system"
-	var defaultNamespace string = namespace
 
 	BeforeAll(func() {
 		fmt.Println("Setting up Kind cluster")
@@ -150,7 +149,7 @@ var _ = Describe("controller", Ordered, func() {
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", output))
 
-			checkCmd := exec.Command("kubectl", "describe", "instaslice", "-n", defaultNamespace)
+			checkCmd := exec.Command("kubectl", "describe", "instaslice", "-n", namespace)
 			output, err = checkCmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Resource not found: %s", output))
 		})
@@ -179,7 +178,7 @@ var _ = Describe("controller", Ordered, func() {
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 			Eventually(func() error {
-				cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
+				cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					return fmt.Errorf("Failed to get Instaslice object: %s", string(output))
@@ -237,7 +236,7 @@ var _ = Describe("controller", Ordered, func() {
 			}
 
 			Eventually(func() error {
-				cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
+				cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					return fmt.Errorf("failed to get Instaslice object: %s", string(output))
@@ -286,7 +285,7 @@ var _ = Describe("controller", Ordered, func() {
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -316,7 +315,7 @@ var _ = Describe("controller", Ordered, func() {
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -349,7 +348,7 @@ var _ = Describe("controller", Ordered, func() {
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -392,7 +391,7 @@ var _ = Describe("controller", Ordered, func() {
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -434,7 +433,7 @@ var _ = Describe("controller", Ordered, func() {
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", defaultNamespace, "-o", "json")
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -506,7 +505,7 @@ var _ = Describe("controller", Ordered, func() {
 
 			Eventually(func() bool {
 				// Retrieve the Instaslice object
-				cmd := exec.Command("kubectl", "get", "instaslice", "kind-control-plane", "-n", "instaslice-system", "-o", "json")
+				cmd := exec.Command("kubectl", "get", "instaslice", "kind-control-plane", "-n", namespace, "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					fmt.Printf("Failed to retrieve the Instaslice object: %s\n", string(output))
@@ -535,7 +534,7 @@ var _ = Describe("controller", Ordered, func() {
 			instasliceQuotaResourceName := "instaslice.redhat.com/accelerator-memory-quota"
 			// Step 1: Get the total GPU memory from the Instaslice object
 			By("Getting the Instaslice object")
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", "instaslice-system", "-o", "json")
+			cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -619,7 +618,7 @@ var _ = Describe("controller", Ordered, func() {
 		// there should be no allocations in InstaSlice object.
 		It("should verify that there are no allocations on the Instaslice object", func() {
 			Eventually(func() error {
-				cmd := exec.Command("kubectl", "get", "instaslice", "-n", "instaslice-system", "-o", "json")
+				cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					return fmt.Errorf("failed to get Instaslice object: %s", string(output))
@@ -652,7 +651,7 @@ var _ = Describe("controller", Ordered, func() {
 		// there should be no allocations in InstaSlice object.
 		It("should verify that there are no allocations on the Instaslice object", func() {
 			Eventually(func() error {
-				cmd := exec.Command("kubectl", "get", "instaslice", "-n", "instaslice-system", "-o", "json")
+				cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					return fmt.Errorf("failed to get Instaslice object: %s", string(output))
