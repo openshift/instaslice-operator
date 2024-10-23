@@ -124,21 +124,19 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.Info("No DaemonSet pods are ready yet, waiting...")
 		return ctrl.Result{RequeueAfter: requeue10sDelay}, nil
 	}
-	log.Info("At least one Instaslice DaemonSet pod is ready, continue reconcile...")
 
 	// Continue with the rest of the reconciliation logic
 	policy := &FirstFitPolicy{}
 	pod := &v1.Pod{}
 	var instasliceList inferencev1alpha1.InstasliceList
 	if err = r.List(ctx, &instasliceList, &client.ListOptions{}); err != nil {
-		log.Error(err, "Error listing Instaslice")
+		log.Error(err, "Error getting Instaslice object")
 		return ctrl.Result{}, err
 	}
 	err = r.Get(ctx, req.NamespacedName, pod)
 	if err != nil {
 		// Error fetching the Pod
 		if errors.IsNotFound(err) {
-			log.Info("unable to fetch pod might be deleted")
 			return ctrl.Result{}, nil
 		}
 		log.Error(err, "unable to fetch pod")
@@ -152,7 +150,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	isPodGated := checkIfPodGatedByInstaSlice(pod)
 
 	if !isPodGated && !controllerutil.ContainsFinalizer(pod, finalizerName) {
-		//logr.FromContext(ctx).Info("Ignoring ", "pod", pod.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -169,11 +166,9 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// failed pods are not deleted by InstaSlice, finalizer is removed so that user can
 	// delete the pod.
 	if pod.Status.Phase == v1.PodFailed && controllerutil.ContainsFinalizer(pod, finalizerName) {
-		allocationNotFound := true
 		for _, instaslice := range instasliceList.Items {
 			for _, allocation := range instaslice.Spec.Allocations {
 				if pod.UID == types.UID(allocation.PodUUID) {
-					allocationNotFound = false
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreating {
 						return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
 					}
@@ -194,11 +189,12 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						// requeue for the finalizer to be removed
 						return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
 					}
+					return ctrl.Result{}, nil
 				}
 			}
 		}
 		// pod can be terminated without any allocation
-		if allocationNotFound && controllerutil.RemoveFinalizer(pod, finalizerName) {
+		if controllerutil.RemoveFinalizer(pod, finalizerName) {
 			if err := r.Update(ctx, pod); err != nil {
 				log.Error(err, "unable to update removal of finalizer, retrying")
 				// requeing immediately as the finalizer removal gets lost
@@ -211,11 +207,9 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// pod is completed move allocation to deleting state and return
 	if pod.Status.Phase == v1.PodSucceeded && controllerutil.ContainsFinalizer(pod, finalizerName) {
-		allocationNotFound := true
 		for _, instaslice := range instasliceList.Items {
 			for _, allocation := range instaslice.Spec.Allocations {
 				if allocation.PodUUID == string(pod.UID) {
-					allocationNotFound = false
 					if allocation.Allocationstatus != inferencev1alpha1.AllocationStatusDeleted {
 						result, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, string(pod.UID), allocation)
 						if err != nil {
@@ -234,13 +228,14 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						// requeue for the finalizer to be removed
 						return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
 					}
+					return ctrl.Result{}, nil
 				}
 
 			}
 		}
 
 		// pod can be terminated as allocation was deleted in previous reconcile loop
-		if allocationNotFound && controllerutil.RemoveFinalizer(pod, finalizerName) {
+		if controllerutil.RemoveFinalizer(pod, finalizerName) {
 			if err := r.Update(ctx, pod); err != nil {
 				// requeing immediately as the finalizer removal gets lost
 				return ctrl.Result{Requeue: true}, nil
@@ -261,7 +256,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,
-						Namespace: instaSliceOperatorNamespace, // TODO: modify
+						Namespace: instaSliceOperatorNamespace,
 					}
 					err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 					if err != nil {
@@ -273,6 +268,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						log.Info("unable to set instaslice to state deleted for ungated", "pod", allocation.PodName)
 						return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 					}
+					return ctrl.Result{}, nil
 				}
 				if podUuid == string(pod.UID) && allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
 					result, err := r.removeInstasliceAllocation(ctx, instaslice.Name, allocation)
@@ -286,6 +282,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						}
 						log.Info("finalizer deleted for allocation status deleted ", "pod", pod.Name)
 					}
+					return ctrl.Result{}, nil
 				}
 			}
 		}
@@ -315,7 +312,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							var updateInstasliceObject inferencev1alpha1.Instaslice
 							typeNamespacedName := types.NamespacedName{
 								Name:      instaslice.Name,
-								Namespace: instaSliceOperatorNamespace, // TODO: modify
+								Namespace: instaSliceOperatorNamespace,
 							}
 							err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 							if err != nil {
@@ -395,6 +392,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					if err != nil {
 						return result, err
 					}
+					break
 				}
 				// InstaSlice object got updated with ungated status but the controller failed
 				// ungating the pod.
@@ -420,7 +418,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,
-						Namespace: "default", // TODO: modify
+						Namespace: instaSliceOperatorNamespace,
 					}
 					err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 					if err != nil {
@@ -642,7 +640,7 @@ func (r *InstasliceReconciler) deleteInstasliceAllocation(ctx context.Context, i
 	var updateInstasliceObject inferencev1alpha1.Instaslice
 	typeNamespacedName := types.NamespacedName{
 		Name:      instasliceName,
-		Namespace: "default", // TODO: modify
+		Namespace: instaSliceOperatorNamespace,
 	}
 	err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 	if err != nil {

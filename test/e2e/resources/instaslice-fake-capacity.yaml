@@ -4,7 +4,7 @@ items:
   kind: Instaslice
   metadata:
     name: kind-control-plane
-    namespace: default
+    namespace: instaslice-system
   spec:
     cpuonnodeatboot: 72
     memoryonnodeatboot: 1000000000

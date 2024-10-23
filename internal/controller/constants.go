@@ -26,7 +26,7 @@ const (
 	emulatorModeFalse                = "false"
 	emulatorModeTrue                 = "true"
 	AttributeMediaExtensions         = "me"
-	instaSliceOperatorNamespace      = "default"
+	instaSliceOperatorNamespace      = "instaslice-system"
 	operatorDeployNamespace          = "instaslice-system"
 	NvidiaMIGPrefix                  = "nvidia.com/mig-"
 	NodeLabel                        = "kubernetes.io/hostname"
