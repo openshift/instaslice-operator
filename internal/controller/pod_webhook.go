@@ -35,7 +35,7 @@ import (
 
 type PodAnnotator struct {
 	Client  client.Client
-	Decoder *admission.Decoder
+	Decoder admission.Decoder
 }
 
 func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admission.Response {
