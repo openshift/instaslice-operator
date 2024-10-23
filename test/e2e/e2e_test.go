@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"regexp"
@@ -34,7 +35,7 @@ import (
 	"github.com/openshift/instaslice-operator/test/utils"
 )
 
-//TODO: add more test cases -
+// TODO: add more test cases -
 // 1. delete instaslice object, fill the object with dangling slices ie no capacity available and
 // verify that allocation should not exists in instaslice object.
 // 2. check size and index value based on different mig slice profiles requested.
@@ -75,7 +76,7 @@ var _ = Describe("controller", Ordered, func() {
 	Context("Operator", func() {
 		It("should run successfully", func() {
 			var err error
-
+			var nodeName = "kind-control-plane"
 			tag := os.Getenv("IMG_TAG")
 			if tag == "" {
 				tag = "latest"
@@ -114,6 +115,19 @@ var _ = Describe("controller", Ordered, func() {
 			cmdCm := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/instaslice-fake-capacity.yaml")
 			outputCm, err := cmdCm.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add fake capacity to the cluster: %s", outputCm))
+
+			By("labeling the node with nvidia.com/mig.capable=true")
+			cmd = exec.Command(
+				"kubectl",
+				"patch",
+				"node",
+				nodeName,
+				"-p", `{"metadata":{"labels":{"nvidia.com/mig.capable":"true"}}}`,
+			)
+			err = cmd.Run()
+			if err != nil {
+				log.Fatalf("Failed to patch the node: %v", err)
+			}
 
 			By("deploying the controller-manager")
 			cmd = exec.Command(
@@ -178,7 +192,7 @@ var _ = Describe("controller", Ordered, func() {
 			outputPod, err := cmdPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 			Eventually(func() error {
-				cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
+				cmd := exec.Command("kubectl", "get", "instaslice", "-o", "json", "-n", namespace)
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					return fmt.Errorf("Failed to get Instaslice object: %s", string(output))
@@ -685,26 +699,26 @@ var _ = Describe("controller", Ordered, func() {
 
 	AfterEach(func() {
 		time.Sleep(10 * time.Second)
-		namespace = "default"
-		cmdDeleteJob := exec.Command("kubectl", "delete", "job", "--all", "-n", namespace)
+		workloadNamespace := "default"
+		cmdDeleteJob := exec.Command("kubectl", "delete", "job", "--all", "-n", workloadNamespace)
 		outputDeleteJob, err := cmdDeleteJob.CombinedOutput()
 		if err != nil {
 			fmt.Printf("Failed to delete job: %s\n", string(outputDeleteJob))
 		}
 
-		cmdDeleteDeployments := exec.Command("kubectl", "delete", "deployments", "--all", "-n", namespace)
+		cmdDeleteDeployments := exec.Command("kubectl", "delete", "deployments", "--all", "-n", workloadNamespace)
 		outputDeleteDeployments, err := cmdDeleteDeployments.CombinedOutput()
 		if err != nil {
 			fmt.Printf("Failed to delete pods: %s\n", string(outputDeleteDeployments))
 		}
 
-		cmdDeleteStatefulsets := exec.Command("kubectl", "delete", "statefulsets", "--all", "-n", namespace)
+		cmdDeleteStatefulsets := exec.Command("kubectl", "delete", "statefulsets", "--all", "-n", workloadNamespace)
 		outputDeleteStatefulsets, err := cmdDeleteStatefulsets.CombinedOutput()
 		if err != nil {
 			fmt.Printf("Failed to delete pods: %s\n", string(outputDeleteStatefulsets))
 		}
 
-		cmdDeletePods := exec.Command("kubectl", "delete", "pod", "--all", "-n", namespace)
+		cmdDeletePods := exec.Command("kubectl", "delete", "pod", "--all", "-n", workloadNamespace)
 		outputDeletePods, err := cmdDeletePods.CombinedOutput()
 		if err != nil {
 			fmt.Printf("Failed to delete pods: %s\n", string(outputDeletePods))

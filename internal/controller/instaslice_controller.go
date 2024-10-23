@@ -485,6 +485,9 @@ func createInstaSliceDaemonSet(namespace string) *appsv1.DaemonSet {
 					SecurityContext: &v1.PodSecurityContext{
 						RunAsNonRoot: func(b bool) *bool { return &b }(false),
 					},
+					NodeSelector: map[string]string{
+						"nvidia.com/mig.capable": "true",
+					},
 					Containers: []v1.Container{
 						{
 							Name:  daemonSetName,
