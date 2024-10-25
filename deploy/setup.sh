@@ -11,7 +11,7 @@ apiVersion: kind.x-k8s.io/v1alpha4
 kind: Cluster
 nodes:
 - role: control-plane
-  image: kindest/node:v1.30.0@sha256:047357ac0cfea04663786a612ba1eaba9702bef25227a794b52890dd8bcd692e
+  image: kindest/node:v1.31.1
   # required for GPU workaround
   extraMounts:
     - hostPath: /dev/null
