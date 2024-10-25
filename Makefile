@@ -328,7 +328,14 @@ endif
 bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
 	$(OPERATOR_SDK) generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | sed -e "s|<IMG>|$(IMG)|g" | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
+	$(KUSTOMIZE) build config/manifests | sed -e "s|<IMG>|$(IMG)|g" | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
+	$(OPERATOR_SDK) bundle validate ./bundle
+
+.PHONY: bundle-ocp
+bundle-ocp: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
+	$(OPERATOR_SDK) generate kustomize manifests -q
+	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	$(KUSTOMIZE) build config/manifests | sed -e "s|<IMG>|$(IMG)|g" | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS) --output-dir bundle-ocp
 	$(OPERATOR_SDK) bundle validate ./bundle
 
 .PHONY: bundle-build
