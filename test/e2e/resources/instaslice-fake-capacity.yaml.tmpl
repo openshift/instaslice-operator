@@ -3,7 +3,7 @@ items:
 - apiVersion: inference.redhat.com/v1alpha1
   kind: Instaslice
   metadata:
-    name: kind-control-plane
+    name: {{ .NodeName }}
     namespace: instaslice-system
   spec:
     cpuonnodeatboot: 72

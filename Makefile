@@ -81,6 +81,7 @@ MULTI_ARCH_OPTION=--push --provenance=false --tag
 endif
 
 KUSTOMIZATION ?= default
+KIND ?= kind
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
@@ -141,6 +142,31 @@ test: manifests generate fmt vet envtest ## Run tests.
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up.
 test-e2e:
 	@export IMG_TAG=test-e2e; make docker-build; go test ./test/e2e/ -v -ginkgo.v --timeout 20m
+
+.PHONY: test-e2e-kind-emulated
+test-e2e-kind-emulated: export IMG_TAG=test-e2e
+test-e2e-kind-emulated: export KIND_NAME=kind-e2e
+test-e2e-kind-emulated: export KIND_CONTEXT=kind-kind-e2e
+test-e2e-kind-emulated: export KIND_NODE_NAME=${KIND_NAME}-control-plane
+test-e2e-kind-emulated: export EMULATED_MODE=true
+test-e2e-kind-emulated: docker-build create-kind-cluster deploy-kind-cluster deploy-emulated
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
+		ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m ./test/e2e
+
+.PHONY: cleanup-test-e2e-kind-emulated
+cleanup-test-e2e-kind-emulated: KIND_NAME=kind-e2e
+cleanup-test-e2e-kind-emulated:
+	$(KIND) delete clusters ${KIND_NAME}
+
+.PHONY: create-kind-cluster
+create-kind-cluster:
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
+		hack/create_kind_cluster.sh
+
+.PHONY: deploy-kind-cluster
+deploy-kind-cluster:
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
+		hack/deploy-kind.sh
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.61.0
