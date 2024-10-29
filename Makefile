@@ -138,15 +138,19 @@ test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 # Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
-.PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up.
+.PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up using emulator mode
 test-e2e:
-	@export IMG_TAG=test-e2e; make docker-build; go test ./test/e2e/ -v -ginkgo.v --timeout 20m
+	@export IMG_TAG=test-e2e EMULATED="true"; make docker-build; go test ./test/e2e/ -v -ginkgo.v --timeout 20m
 
 .PHONY: test-e2e-ocp
+test-e2e-ocp:
+	@export OCP_MODE="true"; make docker-build; go test ./test/e2e/ -v -ginkgo.v --timeout 20m
+
+.PHONY: test-e2e-ocp-emulated
 # Currently setting the IMG_TAG to "latest" that pulls images from quay.io
 #(TODO) Need to run the tests on the latest built images.
-test-e2e-ocp:
-	@export OCP_MODE="true" IMG_TAG="latest"; make docker-build; go test ./test/e2e/ -v -ginkgo.v --timeout 20m
+test-e2e-ocp-emulated:
+	@export OCP_MODE="true" EMULATED="true" IMG_TAG="latest"; make docker-build; go test ./test/e2e/ -v -ginkgo.v --timeout 20m
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.61.0

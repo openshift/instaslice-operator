@@ -435,6 +435,10 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 		os.Exit(1)
 	}
 	log.Info("classical resources obtained are ", "cpu", cpu, "memory", memory)
+	if instaslice == nil {
+		err := fmt.Errorf("unable to get instaslice object")
+		return nil, err
+	}
 	instaslice.Spec.CpuOnNodeAtBoot = cpu
 	instaslice.Spec.MemoryOnNodeAtBoot = memory
 	instaslice.Name = nodeName
