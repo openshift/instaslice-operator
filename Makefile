@@ -148,7 +148,7 @@ test-e2e-kind-emulated: export IMG_TAG=test-e2e
 test-e2e-kind-emulated: export KIND_NAME=kind-e2e
 test-e2e-kind-emulated: export KIND_CONTEXT=kind-kind-e2e
 test-e2e-kind-emulated: export KIND_NODE_NAME=${KIND_NAME}-control-plane
-test-e2e-kind-emulated: export EMULATED_MODE=true
+test-e2e-kind-emulated: export EMULATOR_MODE=true
 test-e2e-kind-emulated: docker-build create-kind-cluster deploy-kind-cluster deploy-emulated
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
 		ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m ./test/e2e
