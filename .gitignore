@@ -26,3 +26,7 @@ go.work
 *.swp
 *.swo
 *~
+
+# ginkgo reports
+report.json
+report.xml

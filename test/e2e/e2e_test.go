@@ -20,12 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -34,6 +35,58 @@ import (
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/test/utils"
 )
+
+var (
+	criBin     = "docker"
+	kubectlBin = "kubectl"
+	namespace  = "instaslice-system"
+	emulated   = false
+	nodeName   = "kind-e2e-control-plane"
+
+	controllerImage string
+	daemonsetImage  string
+)
+
+type TemplateVars struct {
+	NodeName string
+}
+
+var templateVars TemplateVars
+
+func init() {
+	if env := os.Getenv("KIND_NAME"); env != "" {
+		nodeName = fmt.Sprintf("%v-control-plane", env)
+	}
+	if env := os.Getenv("IMG"); env != "" {
+		controllerImage = env
+	}
+	if env := os.Getenv("IMG_DMST"); env != "" {
+		daemonsetImage = env
+	}
+	if env := os.Getenv("EMULATOR_MODE"); env != "" {
+		emulated = true
+	}
+	if env := os.Getenv("CRI_BIN"); env != "" {
+		criBin = env
+	}
+	if env := os.Getenv("KUBECTL_BIN"); env != "" {
+		kubectlBin = env
+	}
+	if env := os.Getenv("NODE_NAME"); env != "" {
+		nodeName = env
+	}
+	templateVars.NodeName = nodeName
+}
+
+var _ = BeforeSuite(func() {
+	GinkgoWriter.Printf("cri-bin: %v\n", criBin)
+	GinkgoWriter.Printf("kubectl-bin: %v\n", kubectlBin)
+	GinkgoWriter.Printf("namespace: %v\n", namespace)
+	GinkgoWriter.Printf("emulated: %v\n", emulated)
+	GinkgoWriter.Printf("node-name: %v\n", nodeName)
+	GinkgoWriter.Printf("controller-image: %v\n", controllerImage)
+	GinkgoWriter.Printf("daemonset-image: %v\n", daemonsetImage)
+})
 
 // TODO: add more test cases -
 // 1. delete instaslice object, fill the object with dangling slices ie no capacity available and
@@ -44,136 +97,21 @@ import (
 // in state deleting
 
 var _ = Describe("controller", Ordered, func() {
-	var namespace string = "instaslice-system"
-
-	BeforeAll(func() {
-		fmt.Println("Setting up Kind cluster")
-		cmd := exec.Command("kind", "create", "cluster", "--image", "kindest/node:v1.30.0@sha256:047357ac0cfea04663786a612ba1eaba9702bef25227a794b52890dd8bcd692e")
-		output, err := cmd.CombinedOutput()
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create Kind cluster: %s", output))
-
-		By("creating manager namespace")
-		cmdNamespace := exec.Command("kubectl", "create", "ns", namespace)
-		outputNs, err := cmdNamespace.CombinedOutput()
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create namespace: %s", outputNs))
-
-		By("installing cert manager")
-		cmdCm := exec.Command("kubectl", "apply", "-f", "https://github.com/cert-manager/cert-manager/releases/download/v1.15.3/cert-manager.yaml")
-		outputCm, err := cmdCm.CombinedOutput()
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to deploy cert manager: %s", outputCm))
-
-		By("validating the cert-manager-webhook pod to be ready as expected")
-		EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("pod", "app=webhook", "cert-manager").Should(BeTrue())
-	})
-
-	AfterAll(func() {
-		fmt.Println("Deleting the cluster")
-		cmd := exec.Command("kind", "delete", "cluster")
-		output, err := cmd.CombinedOutput()
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create Kind cluster: %s", output))
-	})
-
 	Context("Operator", func() {
-		It("should run successfully", func() {
-			var err error
-			var nodeName = "kind-control-plane"
-			tag := os.Getenv("IMG_TAG")
-			if tag == "" {
-				tag = "latest"
-			}
-			var (
-				controllerIMG = "quay.io/amalvank/instaslicev2-controller:" + tag
-				daemonsetIMG  = "quay.io/amalvank/instaslicev2-daemonset:" + tag
-			)
-			By("building the Operator images")
-			cmd := exec.Command(
-				"make",
-				"docker-build",
-				fmt.Sprintf("IMG=%s", controllerIMG),
-				fmt.Sprintf("IMG_DMST=%s", daemonsetIMG),
-			)
-			_, err = utils.Run(cmd)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-			By("loading the manager(Operator) image on Kind")
-			err = utils.LoadImageToKindClusterWithName(controllerIMG)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-			By("loading the daemonSet(Operator) image on Kind")
-			err = utils.LoadImageToKindClusterWithName(daemonsetIMG)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-			By("installing CRDs")
-			cmd = exec.Command("make", "install")
-			_, err = utils.Run(cmd)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-			// add wait before installing fake capacity
-			time.Sleep(10 * time.Second)
-
-			By("installing fake GPU capacity")
-			cmdCm := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/instaslice-fake-capacity.yaml")
-			outputCm, err := cmdCm.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add fake capacity to the cluster: %s", outputCm))
-
-			By("labeling the node with nvidia.com/mig.capable=true")
-			cmd = exec.Command(
-				"kubectl",
-				"patch",
-				"node",
-				nodeName,
-				"-p", `{"metadata":{"labels":{"nvidia.com/mig.capable":"true"}}}`,
-			)
-			err = cmd.Run()
-			if err != nil {
-				log.Fatalf("Failed to patch the node: %v", err)
-			}
-
-			By("deploying the controller-manager")
-			cmd = exec.Command(
-				"make",
-				"deploy-emulated",
-				fmt.Sprintf("IMG=%s", controllerIMG),
-				fmt.Sprintf("IMG_DMST=%s", daemonsetIMG),
-			)
-			_, err = utils.Run(cmd)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-			By("validating that the controller-manager pod is running as expected")
-			EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("pod", "control-plane=controller-manager", namespace).Should(BeTrue())
-			// We don't have a reliable source to depend on to verify if the service is up and ready
-			// Issue Ref: https://github.com/kubernetes/kubernetes/issues/80828
-			// (TODO) Wait for the instaslice-operator-webhook-service to be available and Ready
-			/*
-				By("verifying that the instaslice-operator-webhook service to be ready as expected")
-				EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("service", "app.kubernetes.io/component=webhook", namespace).Should(BeTrue())
-			*/
-			// Until then, adding a sleep of 1 Minute should mitigate the intermittent failures running the e2e tests.
-
-			By("validating that the controller-daemonset resource is successfully installed by the controller and at least one pod is running as expected")
-			EventuallyWithOffset(1, isResourceReady, 2*time.Minute, time.Second).WithArguments("pod", "app=controller-daemonset", namespace).Should(BeTrue())
-
-			time.Sleep(time.Minute)
-
-		})
-
 		It("should apply the YAML and check if that instaslice resource exists", func() {
-
-			cmd := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/instaslice-fake-capacity.yaml")
-			output, err := cmd.CombinedOutput()
+			output, err := applyResource(kubectlBin, "resources/instaslice-fake-capacity.yaml.tmpl", templateVars)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", output))
 
-			checkCmd := exec.Command("kubectl", "describe", "instaslice", "-n", namespace)
+			checkCmd := exec.Command(kubectlBin, "describe", "instaslice", "-n", namespace)
 			output, err = checkCmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Resource not found: %s", output))
 		})
 
 		It("should apply the pod YAML with no requests and check if finalizer exists", func() {
-			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-finalizer.yaml")
-			outputPod, err := cmdPod.CombinedOutput()
+			outputPod, err := applyResource(kubectlBin, "resources/test-finalizer.yaml", templateVars)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmdGetPod := exec.Command("kubectl", "get", "pod", "vectoradd-finalizer", "-o", "json")
+			cmdGetPod := exec.Command(kubectlBin, "get", "pod", "vectoradd-finalizer", "-o", "json")
 			outputGetPod, err := cmdGetPod.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to get pod: %s", outputGetPod))
 
@@ -188,11 +126,10 @@ var _ = Describe("controller", Ordered, func() {
 		})
 
 		It("should apply the pod YAML with no requests and check the allocation in instaslice object", func() {
-			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-pod-no-requests.yaml")
-			outputPod, err := cmdPod.CombinedOutput()
+			outputPod, err := applyResource(kubectlBin, "resources/test-pod-no-requests.yaml", templateVars)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 			Eventually(func() error {
-				cmd := exec.Command("kubectl", "get", "instaslice", "-o", "json", "-n", namespace)
+				cmd := exec.Command(kubectlBin, "get", "instaslice", "-o", "json", "-n", namespace)
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					return fmt.Errorf("Failed to get Instaslice object: %s", string(output))
@@ -237,12 +174,10 @@ var _ = Describe("controller", Ordered, func() {
 				// Everything is okay
 				return nil
 			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid allocations")
-
 		})
 
 		It("should apply the pod YAML with small requests and check the allocation in instaslice object", func() {
-			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-pod-with-small-requests.yaml")
-			outputPod, err := cmdPod.CombinedOutput()
+			outputPod, err := applyResource(kubectlBin, "resources/test-pod-with-small-requests.yaml", templateVars)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
 			var result struct {
@@ -250,7 +185,7 @@ var _ = Describe("controller", Ordered, func() {
 			}
 
 			Eventually(func() error {
-				cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
+				cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					return fmt.Errorf("failed to get Instaslice object: %s", string(output))
@@ -291,15 +226,13 @@ var _ = Describe("controller", Ordered, func() {
 
 				return nil
 			}, "60s", "5s").Should(Succeed(), "Instaslice object should eventually have the allocation")
-
 		})
 
 		It("should apply the pod YAML with pod large memory requests and check the allocation in instaslice object", func() {
-			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-pod-with-large-memory-requests.yaml")
-			outputPod, err := cmdPod.CombinedOutput()
+			outputPod, err := applyResource(kubectlBin, "resources/test-pod-with-large-memory-requests.yaml", templateVars)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
+			cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -325,11 +258,10 @@ var _ = Describe("controller", Ordered, func() {
 		})
 
 		It("should apply the pod YAML with pod large cpu requests and check the allocation in instaslice object", func() {
-			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-pod-with-large-cpu-requests.yaml")
-			outputPod, err := cmdPod.CombinedOutput()
+			outputPod, err := applyResource(kubectlBin, "resources/test-pod-with-large-cpu-requests.yaml", templateVars)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
+			cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -356,13 +288,12 @@ var _ = Describe("controller", Ordered, func() {
 
 		It("should apply the deployment YAML and check if pod exists", func() {
 			ctx := context.TODO()
-			//deploymentName := "sleep-deployment"
+			// deploymentName := "sleep-deployment"
 			labelSelector := "app=sleep-app"
-			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-sleep-deployment.yaml")
-			outputPod, err := cmdPod.CombinedOutput()
+			outputPod, err := applyResource(kubectlBin, "resources/test-sleep-deployment.yaml", templateVars)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
+			cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -380,7 +311,7 @@ var _ = Describe("controller", Ordered, func() {
 				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
 
 				Eventually(func() bool {
-					cmd := exec.CommandContext(ctx, "kubectl", "get", "pods", "-n", namespace, "-l", labelSelector, "--no-headers")
+					cmd := exec.CommandContext(ctx, kubectlBin, "get", "pods", "-n", namespace, "-l", labelSelector, "--no-headers")
 					output, err := cmd.CombinedOutput()
 					if err != nil {
 						fmt.Printf("Failed to execute kubectl: %v\n", err)
@@ -399,13 +330,12 @@ var _ = Describe("controller", Ordered, func() {
 
 		It("should apply the statefulset YAML and check if pod exists", func() {
 			ctx := context.TODO()
-			//statefulSetName := "sleep-statefulset"
+			// statefulSetName := "sleep-statefulset"
 			labelSelector := "app=sleep-statefulset"
-			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-sleep-statefulset.yaml")
-			outputPod, err := cmdPod.CombinedOutput()
+			outputPod, err := applyResource(kubectlBin, "resources/test-sleep-statefulset.yaml", templateVars)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
+			cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -423,7 +353,7 @@ var _ = Describe("controller", Ordered, func() {
 				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
 
 				Eventually(func() bool {
-					cmd := exec.CommandContext(ctx, "kubectl", "get", "pods", "-n", namespace, "-l", labelSelector, "--no-headers")
+					cmd := exec.CommandContext(ctx, kubectlBin, "get", "pods", "-n", namespace, "-l", labelSelector, "--no-headers")
 					output, err := cmd.CombinedOutput()
 					if err != nil {
 						fmt.Printf("Failed to execute kubectl: %v\n", err)
@@ -443,11 +373,10 @@ var _ = Describe("controller", Ordered, func() {
 		It("should apply the job YAML and check if pod exists", func() {
 			ctx := context.TODO()
 			labelSelector := "app=sleep-job"
-			cmdPod := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test-sleep-job.yaml")
-			outputPod, err := cmdPod.CombinedOutput()
+			outputPod, err := applyResource(kubectlBin, "resources/test-sleep-job.yaml", templateVars)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
+			cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -465,7 +394,7 @@ var _ = Describe("controller", Ordered, func() {
 				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
 
 				Eventually(func() bool {
-					cmd := exec.CommandContext(ctx, "kubectl", "get", "pods", "-n", namespace, "-l", labelSelector, "--no-headers")
+					cmd := exec.CommandContext(ctx, kubectlBin, "get", "pods", "-n", namespace, "-l", labelSelector, "--no-headers")
 					output, err := cmd.CombinedOutput()
 					if err != nil {
 						fmt.Printf("Failed to execute kubectl: %v\n", err)
@@ -485,7 +414,7 @@ var _ = Describe("controller", Ordered, func() {
 		It("should verify instaslice.redhat.com/mig-1g.5gb is max before submitting pods and verify the existence of pod allocation", func() {
 			ctx := context.TODO()
 			checkMIG := func(expectedMIG string) bool {
-				cmd := exec.CommandContext(ctx, "kubectl", "get", "node", "kind-control-plane", "-o", "json")
+				cmd := exec.CommandContext(ctx, kubectlBin, "get", "node", nodeName, "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					fmt.Printf("Failed to execute kubectl: %v\n", err)
@@ -510,8 +439,7 @@ var _ = Describe("controller", Ordered, func() {
 
 			Expect(checkMIG("14")).To(BeTrue(), "instaslice.redhat.com/mig-1g.5gb is not zero before submitting pods")
 
-			cmdApply := exec.Command("kubectl", "apply", "-f", "test/e2e/resources/test_multiple_pods.yaml")
-			outputApply, err := cmdApply.CombinedOutput()
+			outputApply, err := applyResource(kubectlBin, "resources/test_multiple_pods.yaml", templateVars)
 			if err != nil {
 				fmt.Printf("kubectl apply error: %s\n", string(outputApply))
 			}
@@ -519,7 +447,7 @@ var _ = Describe("controller", Ordered, func() {
 
 			Eventually(func() bool {
 				// Retrieve the Instaslice object
-				cmd := exec.Command("kubectl", "get", "instaslice", "kind-control-plane", "-n", namespace, "-o", "json")
+				cmd := exec.Command(kubectlBin, "get", "instaslice", nodeName, "-n", namespace, "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					fmt.Printf("Failed to retrieve the Instaslice object: %s\n", string(output))
@@ -548,7 +476,7 @@ var _ = Describe("controller", Ordered, func() {
 			instasliceQuotaResourceName := "instaslice.redhat.com/accelerator-memory-quota"
 			// Step 1: Get the total GPU memory from the Instaslice object
 			By("Getting the Instaslice object")
-			cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
+			cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
 			output, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
 
@@ -589,7 +517,7 @@ var _ = Describe("controller", Ordered, func() {
 
 			// Step 2: Get the patched resource from the node
 			By(fmt.Sprintf("Verifying that node has custom resource %s", instasliceQuotaResourceName))
-			cmd = exec.Command("kubectl", "get", "node", "-o", "json")
+			cmd = exec.Command(kubectlBin, "get", "node", "-o", "json")
 			output, err = cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), "Failed to get node details: "+string(output))
 
@@ -632,7 +560,7 @@ var _ = Describe("controller", Ordered, func() {
 		// there should be no allocations in InstaSlice object.
 		It("should verify that there are no allocations on the Instaslice object", func() {
 			Eventually(func() error {
-				cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
+				cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					return fmt.Errorf("failed to get Instaslice object: %s", string(output))
@@ -665,7 +593,7 @@ var _ = Describe("controller", Ordered, func() {
 		// there should be no allocations in InstaSlice object.
 		It("should verify that there are no allocations on the Instaslice object", func() {
 			Eventually(func() error {
-				cmd := exec.Command("kubectl", "get", "instaslice", "-n", namespace, "-o", "json")
+				cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					return fmt.Errorf("failed to get Instaslice object: %s", string(output))
@@ -694,31 +622,30 @@ var _ = Describe("controller", Ordered, func() {
 				return nil
 			}, "60s", "5s").Should(Succeed(), "Expected no allocations in the Instaslice object")
 		})
-
 	})
 
 	AfterEach(func() {
 		time.Sleep(10 * time.Second)
 		workloadNamespace := "default"
-		cmdDeleteJob := exec.Command("kubectl", "delete", "job", "--all", "-n", workloadNamespace)
+		cmdDeleteJob := exec.Command(kubectlBin, "delete", "job", "--all", "-n", workloadNamespace)
 		outputDeleteJob, err := cmdDeleteJob.CombinedOutput()
 		if err != nil {
 			fmt.Printf("Failed to delete job: %s\n", string(outputDeleteJob))
 		}
 
-		cmdDeleteDeployments := exec.Command("kubectl", "delete", "deployments", "--all", "-n", workloadNamespace)
+		cmdDeleteDeployments := exec.Command(kubectlBin, "delete", "deployments", "--all", "-n", workloadNamespace)
 		outputDeleteDeployments, err := cmdDeleteDeployments.CombinedOutput()
 		if err != nil {
 			fmt.Printf("Failed to delete pods: %s\n", string(outputDeleteDeployments))
 		}
 
-		cmdDeleteStatefulsets := exec.Command("kubectl", "delete", "statefulsets", "--all", "-n", workloadNamespace)
+		cmdDeleteStatefulsets := exec.Command(kubectlBin, "delete", "statefulsets", "--all", "-n", workloadNamespace)
 		outputDeleteStatefulsets, err := cmdDeleteStatefulsets.CombinedOutput()
 		if err != nil {
 			fmt.Printf("Failed to delete pods: %s\n", string(outputDeleteStatefulsets))
 		}
 
-		cmdDeletePods := exec.Command("kubectl", "delete", "pod", "--all", "-n", workloadNamespace)
+		cmdDeletePods := exec.Command(kubectlBin, "delete", "pod", "--all", "-n", workloadNamespace)
 		outputDeletePods, err := cmdDeletePods.CombinedOutput()
 		if err != nil {
 			fmt.Printf("Failed to delete pods: %s\n", string(outputDeletePods))
@@ -743,28 +670,26 @@ func findPodName(allocationMap map[string]interface{}, targetPodName string) boo
 	return true
 }
 
-func isResourceReady(resource, label, namespace string) bool {
-	var cmd = new(exec.Cmd)
-	switch resource {
-	case "pod", "pods", "po":
-		cmd = exec.Command("kubectl", "wait", "--for=condition=ready", resource, "-l", label,
-			"-n", namespace, "--timeout=2m",
-		)
-	case "service", "svc", "services":
-		cmd = exec.Command("kubectl", "wait", "--for=jsonpath=spec.type=ClusterIP", resource, "-l", label,
-			"-n", namespace, "--timeout=2m",
-		)
-	default:
-		err := fmt.Errorf("unsupported resource : %s\n", resource)
+func applyResource(kubectlBin string, tmplFile string, tmplVars TemplateVars) (output []byte, err error) {
+	if filepath.Ext(tmplFile) == ".tmpl" {
+		tmpl, err := template.ParseFiles(tmplFile)
 		if err != nil {
-			fmt.Printf("error printing %s", err)
+			return nil, err
 		}
-		return false
+		fd, err := os.CreateTemp("", filepath.Base(strings.TrimSuffix(tmplFile, ".tmpl")))
+		if err != nil {
+			return nil, err
+		}
+		err = tmpl.Execute(fd, tmplVars)
+		_ = fd.Close()
+		if err != nil {
+			return nil, err
+		}
+		tmplFile = fd.Name()
+		defer func() {
+			_ = os.Remove(tmplFile)
+		}()
 	}
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		fmt.Printf("Waiting for the %s to be ready, err: %s\noutput: %s\nRetrying...\n", resource, err, output)
-		return false
-	}
-	return true
+	cmd := exec.Command(kubectlBin, "apply", "-f", tmplFile)
+	return cmd.CombinedOutput()
 }
