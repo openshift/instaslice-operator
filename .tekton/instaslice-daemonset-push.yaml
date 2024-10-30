@@ -24,7 +24,7 @@ spec:
   - name: output-image
     value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset:{{revision}}
   - name: dockerfile
-    value: Dockerfile.deamonset
+    value: Dockerfile.daemonset
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.
