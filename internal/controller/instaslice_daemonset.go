@@ -423,8 +423,14 @@ func calculateTotalMemoryGB(gpuInfoList map[string]string) int {
 func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]string, error) {
 	log := logr.FromContext(context.TODO())
 	instaslice, _, gpuModelMap, failed, errorDiscoveringProfiles := r.discoverAvailableProfilesOnGpus()
-	if failed {
+	if failed || errorDiscoveringProfiles != nil {
 		return nil, errorDiscoveringProfiles
+	}
+	if instaslice == nil {
+		// No MIG placements found while discovering profiles on GPUs
+		//Hence, returning an error without creating an Instaslice object
+		err := fmt.Errorf("unable to get instaslice object")
+		return nil, err
 	}
 
 	totalMemoryGB := calculateTotalMemoryGB(gpuModelMap)
