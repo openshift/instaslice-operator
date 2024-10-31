@@ -106,6 +106,18 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		return ctrl.Result{}, err
 	}
 
+	// Use ResourceVersion to ensure we're updating the latest version of the object
+	latestInstaslice, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
+	if err != nil {
+		log.Error(err, "Error fetching latest InstaSlice object")
+		return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
+	}
+
+	// Ensure we are not processing an outdated version of the object
+	if latestInstaslice.ResourceVersion != instaslice.ResourceVersion {
+		return ctrl.Result{}, nil
+	}
+
 	emulatorMode := os.Getenv("EMULATOR_MODE")
 	for _, allocations := range instaslice.Spec.Allocations {
 		//TODO: we make assumption that resources would always exists to delete
@@ -124,7 +136,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				log.Info("done deleting ci and gi for ", "pod", allocations.PodName)
 			}
 
-			err := r.deleteConfigMap(ctx, allocations.Resourceidentifier, allocations.Namespace)
+			err = r.deleteConfigMap(ctx, allocations.Resourceidentifier, allocations.Namespace)
 			if err != nil && !errors.IsNotFound(err) {
 				log.Error(err, "error deleting config map for ", "pod", allocations.PodName)
 				return ctrl.Result{Requeue: true}, nil
@@ -281,7 +293,7 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 	parent, ret := nvml.DeviceGetHandleByUUID(allocation.GPUUUID)
 	if ret != nvml.SUCCESS {
 		log.Error(ret, "error obtaining GPU handle")
-		return ret
+		return fmt.Errorf("unable to get device handle %v", ret)
 	}
 
 	migInfos, err := populateMigDeviceInfos(parent)
@@ -291,8 +303,6 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 
 	for _, migdevice := range migInfos {
 		if migdevice.uuid == allocation.GPUUUID && migdevice.start == allocation.Start {
-
-			log.Info("deleting ci and gi for", "pod", allocation.PodName)
 			gi, ret := parent.GetGpuInstanceById(int(migdevice.giInfo.Id))
 			if ret != nvml.SUCCESS {
 				log.Error(ret, "error obtaining gpu instance for ", "poduuid", allocation.PodName)
@@ -316,9 +326,12 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 			if ret != nvml.SUCCESS {
 				return fmt.Errorf("unable to destroy gi %v for %v", ret, allocation.PodName)
 			}
-			break
+			log.Info("deleted ci and gi for", "pod", allocation.PodName)
+			return nil
+
 		}
 	}
+	log.Info("mig walking did not discover any slice for ", "pod", allocation.PodName)
 	return nil
 }
 
@@ -379,7 +392,6 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 		// Patch the node capacity with GPU memory in emulator mode
 		if emulatorMode == emulatorModeTrue {
 			totalEmulatedGPUMemory := calculateTotalMemoryGB(instaslice.Spec.MigGPUUUID)
-			log.Info("MIG INFO: ", "MIG", instaslice.Spec.MigGPUUUID)
 			if err := r.patchNodeStatusForNode(ctx, nodeName, totalEmulatedGPUMemory); err != nil {
 				return err
 			}
