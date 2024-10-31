@@ -36,6 +36,7 @@ InstaSlice will help if
 - [Helm](https://helm.sh/docs/intro/install/) v3.0.0+
 - [Docker buildx plugin](https://github.com/docker/buildx) for building cross-platform images.
 - [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl) v1.11.3+.
+- [ginkgo](https://onsi.github.io/ginkgo/) v2+ for e2e testing
 
 ### Install and configure required NVIDIA software on the host
 
@@ -361,15 +362,19 @@ kind delete cluster
 ```
 
 ### Run InstaSlice in simulator mode
+
 Users(mainly developers) can leverage running the instaslice operator using the emulator mode as described [here](https://github.com/openshift/instaslice-operator/blob/138e5a74c6e5174ae7c597bfe5db1c99ccbecba9/docs/emulator.md)
 This has been tested on a single node cluster as of now.
 
-### Running e2e tests
+### Running e2e tests using emulated mode and kind cluster
+
 To run the e2e tests locally, run the following command:
+
 ```console
-make test-e2e
+make test-e2e-kind-emulated ; make cleanup-test-e2e-kind-emulated
 ```
-These e2e tests would be performed by creating a `kind` cluster locally
+
+These e2e tests would be performed by creating a `kind` cluster locally.
 
 ### Roadmap
 
