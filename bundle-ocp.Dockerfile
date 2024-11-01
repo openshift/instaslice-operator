@@ -18,3 +18,23 @@ LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
 COPY bundle-ocp/manifests /manifests/
 COPY bundle-ocp/metadata /metadata/
 COPY bundle-ocp/tests/scorecard /tests/scorecard/
+
+ARG NAME=instaslice-operator-bundle
+ARG DESCRIPTION="The Instaslice operator bundle."
+
+LABEL com.redhat.component=$NAME
+LABEL description=$DESCRIPTION
+LABEL io.k8s.description=$DESCRIPTION
+LABEL io.k8s.display-name=$NAME
+LABEL name=$NAME
+LABEL summary=$DESCRIPTION
+LABEL distribution-scope=public
+LABEL release="1"
+LABEL url="https://access.redhat.com/"
+LABEL vendor="Red Hat, Inc."
+LABEL version="1"
+LABEL maintainer="Red Hat"
+
+# Licenses
+
+COPY LICENSE /licenses/LICENSE
