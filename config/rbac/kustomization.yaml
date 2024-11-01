@@ -16,3 +16,6 @@ resources:
 - auth_proxy_role.yaml
 - auth_proxy_role_binding.yaml
 - auth_proxy_client_clusterrole.yaml
+- instaslice-operator-scc.yaml
+- openshift_cluster_role.yaml
+- openshift_scc_cluster_role_binding.yaml

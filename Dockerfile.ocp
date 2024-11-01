@@ -1,0 +1,51 @@
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.22 AS build
+
+#ENV GOPATH=/go
+#ENV PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
+
+WORKDIR /workspace
+# Copy the Go Modules manifests
+COPY . .
+
+# Copy the go source
+COPY cmd/controller/main.go cmd/controller/main.go
+COPY api/ api/
+COPY internal/controller/instaslice_controller.go internal/controller/instaslice_controller.go
+COPY internal/controller/pod_webhook.go internal/controller/pod_webhook.go
+COPY internal/controller/capacity.go internal/controller/capacity.go
+COPY internal/controller/constants.go internal/controller/constants.go
+COPY internal/controller/utils.go internal/controller/utils.go
+
+# Build
+# the GOARCH has not a default value to allow the binary be built according to the host where the command
+# was called. For example, if we call make docker-build in a local env which has the Apple Silicon M1 SO
+# the docker BUILDPLATFORM arg will be linux/arm64 when for Apple x86 it will be linux/amd64. Therefore,
+# by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
+RUN go build -mod=readonly -o bin/manager cmd/controller/main.go
+
+FROM registry.access.redhat.com/ubi9/ubi-micro
+WORKDIR /
+COPY --from=build /workspace/bin/manager .
+USER 65532:65532
+
+ENTRYPOINT ["/manager"]
+
+ARG NAME=instaslice-operator
+ARG DESCRIPTION="The Instaslice operator."
+
+LABEL com.redhat.component=$NAME
+LABEL description=$DESCRIPTION
+LABEL io.k8s.description=$DESCRIPTION
+LABEL io.k8s.display-name=$NAME
+LABEL name=$NAME
+LABEL summary=$DESCRIPTION
+LABEL distribution-scope=public
+LABEL release="1"
+LABEL url="https://access.redhat.com/"
+LABEL vendor="Red Hat, Inc."
+LABEL version="1"
+LABEL maintainer="Red Hat"
+
+# Licenses
+
+COPY LICENSE /licenses/LICENSE
