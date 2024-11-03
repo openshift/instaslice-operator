@@ -17,11 +17,11 @@ InstaSlice will help if
 
 # Features overview
 
-- Integration with Kubernetes [quota management](https://github.com/openshift/instaslice-operator/blob/main/docs/instaslice_kube_quota_int.md). 
+- Integration with Kubernetes [quota management](docs/instaslice_kube_quota_int.md).
 
-- [Emulator](https://github.com/openshift/instaslice-operator/blob/main/docs/emulator.md) mode to run test InstaSlice firstfit placement strategy.
+- [Emulator](docs/emulator.md) mode to run test InstaSlice firstfit placement strategy.
 
-- Integration with vLLM, Kserve, [Deployments](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_deployment.yaml), [Jobs](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_job.yaml), and [Statefulsets](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_statefulset.yaml) 
+- Integration with vLLM, Kserve, [Deployments](samples/vllm_deployment.yaml), [Jobs](samples/vllm_job.yaml), and [Statefulsets](samples/vllm_statefulset.yaml)
 
 # Demo
 
@@ -363,7 +363,7 @@ kind delete cluster
 
 ### Run InstaSlice in simulator mode
 
-Users(mainly developers) can leverage running the instaslice operator using the emulator mode as described [here](https://github.com/openshift/instaslice-operator/blob/138e5a74c6e5174ae7c597bfe5db1c99ccbecba9/docs/emulator.md)
+Users (mainly developers) can leverage running the InstaSlice operator using the emulator mode as described [here](docs/emulator.md)
 This has been tested on a single node cluster as of now.
 
 ### Running e2e tests using emulated mode and kind cluster
