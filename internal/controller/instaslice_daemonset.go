@@ -299,10 +299,8 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 	if err != nil {
 		return fmt.Errorf("unable walk migs %v", err)
 	}
-	migFound := false
 	for _, migdevice := range migInfos {
 		if migdevice.uuid == allocation.GPUUUID && migdevice.start == allocation.Start {
-			migFound = true
 			gi, ret := parent.GetGpuInstanceById(int(migdevice.giInfo.Id))
 			if ret != nvml.SUCCESS {
 				log.Error(ret, "error obtaining gpu instance for ", "poduuid", allocation.PodName)
@@ -335,12 +333,8 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 
 		}
 	}
-	if !migFound {
-		log.Error(nil, "mig walking did not discover any slice for ", "pod", allocation.PodName, migInfos, logMigInfosSingleLine(migInfos))
-		return fmt.Errorf("MIG slice not found for GPUUUID %v and Start %v", allocation.GPUUUID, allocation.Start)
-	}
-
-	return nil
+	log.Error(nil, "mig walking did not discover any slice for ", "pod", allocation.PodName, migInfos, logMigInfosSingleLine(migInfos))
+	return fmt.Errorf("MIG slice not found for GPUUUID %v and Start %v", allocation.GPUUUID, allocation.Start)
 }
 
 // SetupWithManager sets up the controller with the Manager.
