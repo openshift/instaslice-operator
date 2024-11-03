@@ -133,7 +133,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					log.Error(err, "error cleaning up ci and gi retrying")
 					return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
 				}
-				log.Info("done deleting ci and gi for ", "pod", allocations.PodName)
 			}
 
 			err = r.deleteConfigMap(ctx, allocations.Resourceidentifier, allocations.Namespace)
@@ -300,9 +299,10 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 	if err != nil {
 		return fmt.Errorf("unable walk migs %v", err)
 	}
-
+	migFound := false
 	for _, migdevice := range migInfos {
 		if migdevice.uuid == allocation.GPUUUID && migdevice.start == allocation.Start {
+			migFound = true
 			gi, ret := parent.GetGpuInstanceById(int(migdevice.giInfo.Id))
 			if ret != nvml.SUCCESS {
 				log.Error(ret, "error obtaining gpu instance for ", "poduuid", allocation.PodName)
@@ -319,19 +319,27 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 			}
 			ret = ci.Destroy()
 			if ret != nvml.SUCCESS {
+				log.Error(ret, "failed to destroy Compute Instance", "ComputeInstanceId", migdevice.ciInfo.Id, "PodUUID", allocation.PodUUID)
 				return fmt.Errorf("unable to destroy ci %v for %v", ret, allocation.PodName)
 			}
-
+			log.Info("successfully destroyed Compute Instance", "ComputeInstanceId", migdevice.ciInfo.Id)
 			ret = gi.Destroy()
 			if ret != nvml.SUCCESS {
+				log.Error(ret, "failed to destroy GPU Instance", "GpuInstanceId", migdevice.giInfo.Id, "PodUUID", allocation.PodUUID)
 				return fmt.Errorf("unable to destroy gi %v for %v", ret, allocation.PodName)
 			}
-			log.Info("deleted ci and gi for", "pod", allocation.PodName)
+			log.Info("successfully destroyed GPU Instance", "GpuInstanceId", migdevice.giInfo.Id)
+
+			log.Info("deleted ci and gi for", "pod", allocation.PodName, logMigInfosSingleLine(migInfos))
 			return nil
 
 		}
 	}
-	log.Info("mig walking did not discover any slice for ", "pod", allocation.PodName)
+	if !migFound {
+		log.Error(nil, "mig walking did not discover any slice for ", "pod", allocation.PodName, migInfos, logMigInfosSingleLine(migInfos))
+		return fmt.Errorf("MIG slice not found for GPUUUID %v and Start %v", allocation.GPUUUID, allocation.Start)
+	}
+
 	return nil
 }
 
@@ -932,4 +940,22 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 	}
 
 	return migInfos, nil
+}
+
+func logMigInfosSingleLine(migInfos map[string]*MigDeviceInfo) string {
+	var result string
+	for key, info := range migInfos {
+		giInfoStr := "nil"
+		ciInfoStr := "nil"
+		if info.giInfo != nil {
+			giInfoStr = fmt.Sprintf("GpuInstanceId: %d", info.giInfo.Id)
+		}
+		if info.ciInfo != nil {
+			ciInfoStr = fmt.Sprintf("ComputeInstanceId: %d", info.ciInfo.Id)
+		}
+		result += fmt.Sprintf("[Key: %s, UUID: %s, GI Info: %s, CI Info: %s, Start: %d, Size: %d] ",
+			key, info.uuid, giInfoStr, ciInfoStr, info.start, info.size)
+	}
+
+	return result
 }
