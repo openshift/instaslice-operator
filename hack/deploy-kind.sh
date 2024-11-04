@@ -2,7 +2,7 @@
 
 set -eou pipefail
 
-NODE_NODE_NAME=${KIND_NODE_NAME:-"kind-control-plane"}
+KIND_NODE_NAME=${KIND_NODE_NAME:-"kind-e2e-control-plane"}
 
 ${KIND} load docker-image ${IMG} --name ${KIND_NAME}
 ${KIND} load docker-image ${IMG_DMST} --name ${KIND_NAME}
