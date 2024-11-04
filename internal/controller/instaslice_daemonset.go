@@ -333,8 +333,15 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 
 		}
 	}
-	log.Error(nil, "mig walking did not discover any slice for ", "pod", allocation.PodName, migInfos, logMigInfosSingleLine(migInfos))
-	return fmt.Errorf("MIG slice not found for GPUUUID %v and Start %v", allocation.GPUUUID, allocation.Start)
+	exists, err := r.checkConfigMapExists(ctx, allocation.Resourceidentifier, allocation.Resourceidentifier)
+	if err != nil {
+		return err
+	}
+	if exists {
+		log.Error(nil, "mig walking did not discover any slice for ", "pod", "migInfos", allocation.PodName, migInfos, logMigInfosSingleLine(migInfos))
+		return fmt.Errorf("MIG slice not found for GPUUUID %v and Start %v", allocation.GPUUUID, allocation.Start)
+	}
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -952,4 +959,20 @@ func logMigInfosSingleLine(migInfos map[string]*MigDeviceInfo) string {
 	}
 
 	return result
+}
+
+func (r *InstaSliceDaemonsetReconciler) checkConfigMapExists(ctx context.Context, name, namespace string) (bool, error) {
+	log := logr.FromContext(ctx)
+	configMap := &v1.ConfigMap{}
+	err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, configMap)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("ConfigMap not found", "name", name, "namespace", namespace)
+			return false, nil
+		}
+		log.Error(err, "Error checking ConfigMap", "name", name, "namespace", namespace)
+		return false, err
+	}
+	log.Info("ConfigMap exists", "name", name, "namespace", namespace)
+	return true, nil
 }
