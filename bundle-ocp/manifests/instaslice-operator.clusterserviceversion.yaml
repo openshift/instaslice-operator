@@ -22,7 +22,7 @@ metadata:
       ]
     capabilities: Basic Install
     categories: Drivers and plugins
-    containerImage: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-operator-rhel9:0.1.0
+    containerImage: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-operator-rhel9@sha256:645c4bb9116e9dc1372630e68d90c43c189ff6e8f039fc5e424b3976f38d9308
     createdAt: "2024-11-01T14:26:33Z"
     description: InstaSlice works with GPU operator to create mig slices on demand
     operators.operatorframework.io/builder: operator-sdk-v1.34.2
@@ -202,8 +202,8 @@ spec:
                 - name: EMULATOR_MODE
                   value: "false"
                 - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
-                  value: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9:0.1.0
-                image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-operator-rhel9:0.1.0
+                  value: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:d88db3865a87c8e57413fb20e2c8bf2d0450a3bc865e26ceeab64d552cb43c21
+                image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-operator-rhel9@sha256:645c4bb9116e9dc1372630e68d90c43c189ff6e8f039fc5e424b3976f38d9308
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -329,7 +329,7 @@ spec:
     name: Codeflare
     url: https://github.com/openshift/instaslice-operator
   relatedImages:
-  - image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9:0.1.0
+  - image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:d88db3865a87c8e57413fb20e2c8bf2d0450a3bc865e26ceeab64d552cb43c21
     name: instaslice-daemonset
   version: 0.1.0
   webhookdefinitions:
