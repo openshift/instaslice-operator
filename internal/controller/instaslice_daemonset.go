@@ -434,9 +434,9 @@ func calculateTotalMemoryGB(gpuInfoList map[string]string) int {
 // This function discovers MIG devices as the plugin comes up. this is run exactly once.
 func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]string, error) {
 	log := logr.FromContext(context.TODO())
-	instaslice, _, gpuModelMap, failed, errorDiscoveringProfiles := r.discoverAvailableProfilesOnGpus()
-	if failed || errorDiscoveringProfiles != nil {
-		return nil, errorDiscoveringProfiles
+	instaslice, _, gpuModelMap, failed, err := r.discoverAvailableProfilesOnGpus()
+	if failed || err != nil {
+		return nil, err
 	}
 	if instaslice == nil {
 		// No MIG placements found while discovering profiles on GPUs
