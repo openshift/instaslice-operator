@@ -105,6 +105,10 @@ var _ = Describe("controller", Ordered, func() {
 			checkCmd := exec.Command(kubectlBin, "describe", "instaslice", "-n", namespace)
 			output, err = checkCmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Resource not found: %s", output))
+			// Wait for the daemonset to be ready
+			dsCmd := exec.Command(kubectlBin, "rollout", "status", "daemonset", "instaslice-operator-controller-daemonset", "-n", "instaslice-system", "--timeout", "120s")
+			output, err = dsCmd.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Instaslice daemonset not yet ready: %s", output))
 		})
 
 		It("should apply the pod YAML with no requests and check if finalizer exists", func() {

@@ -149,7 +149,7 @@ test-e2e-kind-emulated: export KIND_NAME=kind-e2e
 test-e2e-kind-emulated: export KIND_CONTEXT=kind-kind-e2e
 test-e2e-kind-emulated: export KIND_NODE_NAME=${KIND_NAME}-control-plane
 test-e2e-kind-emulated: export EMULATOR_MODE=true
-test-e2e-kind-emulated: docker-build create-kind-cluster deploy-kind-cluster deploy-emulated
+test-e2e-kind-emulated: docker-build create-kind-cluster deploy-cert-manager deploy-instaslice-emulated-on-kind
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
 		ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m ./test/e2e
 
@@ -161,12 +161,22 @@ cleanup-test-e2e-kind-emulated:
 .PHONY: create-kind-cluster
 create-kind-cluster:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
-		hack/create_kind_cluster.sh
+		hack/create-kind-cluster.sh
 
-.PHONY: deploy-kind-cluster
-deploy-kind-cluster:
+.PHONY: destroy-kind-cluster
+destroy-kind-cluster:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
-		hack/deploy-kind.sh
+                hack/destroy-kind-cluster.sh
+
+.PHONY: deploy-cert-manager
+deploy-cert-manager:
+	export KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
+                hack/deploy-cert-manager.sh
+
+.PHONY: deploy-instaslice-emulated-on-kind
+deploy-instaslice-emulated-on-kind:
+	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
+		hack/deploy-instaslice-emulated-on-kind.sh
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.61.0
