@@ -1,39 +1,42 @@
 ARG CUDA_VERSION=12.4.1
-ARG BASE_DIST=ubi8
-FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-base-${BASE_DIST} AS build
+ARG BASE_DIST=ubi9
+# FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-runtime-${BASE_DIST} AS build
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.22 AS build
 
-ARG GOLANG_VERSION=1.22.2
-RUN yum install -y wget make git gcc
+# ARG GOLANG_VERSION=1.22.2
+# RUN yum install -y wget make git gcc
 
-RUN set -eux; \
-    \
-    arch="$(uname -m)"; \
-    case "${arch##*-}" in \
-        x86_64 | amd64) ARCH='amd64' ;; \
-        ppc64el | ppc64le) ARCH='ppc64le' ;; \
-        aarch64) ARCH='arm64' ;; \
-        *) echo "unsupported architecture" ; exit 1 ;; \
-    esac; \
-    wget -nv -O - https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-${ARCH}.tar.gz \
-    | tar -C /usr/local -xz
+# RUN set -eux; \
+#     \
+#     arch="$(uname -m)"; \
+#     case "${arch##*-}" in \
+#         x86_64 | amd64) ARCH='amd64' ;; \
+#         ppc64el | ppc64le) ARCH='ppc64le' ;; \
+#         aarch64) ARCH='arm64' ;; \
+#         *) echo "unsupported architecture" ; exit 1 ;; \
+#     esac; \
+#     wget -nv -O - https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-${ARCH}.tar.gz \
+#     | tar -C /usr/local -xz
 
-ENV GOPATH=/go
-ENV PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
+#ENV GOPATH=/go
+#ENV PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
-COPY go.mod go.mod
-COPY go.sum go.sum
-# cache deps before building and copying source so that we don't need to re-download as much
-# and so that source changes don't invalidate our downloaded layer
-RUN go mod download
+# COPY go.mod go.mod
+# COPY go.sum go.sum
+# # cache deps before building and copying source so that we don't need to re-download as much
+# # and so that source changes don't invalidate our downloaded layer
+# RUN go mod download
 
-# Copy the go source
-COPY cmd/daemonset/main.go cmd/daemonset/main.go
-COPY api/ api/
-COPY internal/controller/instaslice_daemonset.go internal/controller/instaslice_daemonset.go
-COPY internal/controller/constants.go internal/controller/constants.go
-COPY internal/controller/utils.go internal/controller/utils.go
+# # Copy the go source
+# COPY cmd/daemonset/main.go cmd/daemonset/main.go
+# COPY api/ api/
+# COPY internal/controller/instaslice_daemonset.go internal/controller/instaslice_daemonset.go
+# COPY internal/controller/constants.go internal/controller/constants.go
+# COPY internal/controller/utils.go internal/controller/utils.go
+
+COPY . .
 
 # Build
 # the GOARCH has not a default value to allow the binary be built according to the host where the command
@@ -43,7 +46,7 @@ COPY internal/controller/utils.go internal/controller/utils.go
 RUN go build -o bin/daemonset cmd/daemonset/main.go
 
 ARG CUDA_VERSION=12.4.1
-ARG BASE_DIST=ubi8
+ARG BASE_DIST=ubi9
 FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-base-${BASE_DIST}
 
 # Remove CUDA libs(compat etc) in favor of libs installed by the NVIDIA driver
