@@ -1,8 +1,6 @@
-# Note - Kubecon EU 2024 code (DRA code) is now available in the legacy branch
-
 # InstaSlice
 
-InstaSlice works with GPU operator to create mig slices on demand.
+InstaSlice uses stable APIs and works with GPU operator to create mig slices on demand.
 
 # Why InstaSlice
 
@@ -17,9 +15,11 @@ InstaSlice will help if
 
 # Features overview
 
-- Integration with Kubernetes [quota management](docs/instaslice_kube_quota_int.md).
+- Integration with Kubernetes [quota management](docs/instaslice_kube_quota_int.md)
 
-- [Emulator](docs/emulator.md) mode to run test InstaSlice firstfit placement strategy.
+- Integration with project [Kueue](docs/kueue.md)
+
+- [Emulator](docs/emulator.md) mode to run test InstaSlice firstfit placement strategy
 
 - Integration with vLLM, Kserve, [Deployments](samples/vllm_deployment.yaml), [Jobs](samples/vllm_job.yaml), and [Statefulsets](samples/vllm_statefulset.yaml)
 
@@ -376,14 +376,18 @@ make test-e2e-kind-emulated ; make cleanup-test-e2e-kind-emulated
 
 These e2e tests would be performed by creating a `kind` cluster locally.
 
+### InstaSlice and OperatorHub
+
+InstaSlice has been published on [OperatorHub](https://operatorhub.io/operator/instaslice-operator).
+
 ### Roadmap
 
-High level overview of the main priorities for 2024:
+High level overview of the main priorities for 2024/2025:
 
 - Allocate MIG slices on Nvidia GPUs on demand
-- Configire allocated slices on GPUs and bind containers to slices
+- Configure allocated slices on GPUs and bind containers to slices
 - Release and unconfigure slices when pods are completed or deleted
-- Ability to graceful termination of slices
+- Ability to graceful termination of workload on slice deletion
 - Account for node classical resources when selecting a node
 - Schedule pods in average of 10 seconds when resources are available
 - Kubernetes quota system integration
@@ -399,6 +403,7 @@ Future tasks:
 - Leverage DRA implementation
 
 
+### Note - Kubecon EU 2024 code (DRA code) is now available in the legacy branch
 
 ## License
 
