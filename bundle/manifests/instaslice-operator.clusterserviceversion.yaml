@@ -22,8 +22,8 @@ metadata:
       ]
     capabilities: Basic Install
     categories: Drivers and plugins
-    containerImage: quay.io/amalvank/instaslicev2-controller:latest
-    createdAt: "2024-10-15T17:39:16Z"
+    containerImage: quay.io/ibm/instaslice-controller:kubecon
+    createdAt: "2024-11-06T17:06:29Z"
     description: InstaSlice works with GPU operator to create mig slices on demand
     operators.operatorframework.io/builder: operator-sdk-v1.34.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -38,9 +38,9 @@ spec:
     - kind: Instaslice
       name: instaslices.inference.redhat.com
       version: v1alpha1
-  description: "### Introduction\nInstaSlice works with GPU operator to create mig
-    slices on demand.\n\n### Prerequisites\n\n1. Install the [NVIDIA GPU drivers and
-    CUDA toolkit](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#driver-installation)
+  description: "### Introduction\nInstaSlice uses stable APIs and works with GPU operator
+    to create mig slices on demand.\n\n### Prerequisites\n\n1. Install the [NVIDIA
+    GPU drivers and CUDA toolkit](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#driver-installation)
     on the host.\n2. Install the [NVIDIA Container Toolkit (CTK)](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).\n3.
     Configure the NVIDIA Container Runtime as the default Docker runtime:\n      `sudo
     nvidia-ctk runtime configure --runtime=docker --set-as-default`\n4. Restart Docker
@@ -67,9 +67,23 @@ spec:
     `0.1.0` by\nfollowing [uninstall operator section](https://github.com/openshift/instaslice-operator)\nand
     install the new version.\n\nChanges to patch version (major.minor.patch) indicates
     that no breaking changes\nare introduced, thus upgrade can be done without uninstalling
-    and reinstalling\nthe operator.\n\n### Documentation\nDocumentation and installation
-    guide can be found below:\n  * [Installation Guide](https://github.com/openshift/instaslice-operator)\n
-    \ * [Instaslice Operator](https://github.com/openshift/instaslice-operator/blob/main/README.md)\n\n###
+    and reinstalling\nthe operator.\n\n### Why Instaslice\n\nPartitionable accelerators
+    provided by vendors need partition to be created at node boot-time or to change
+    partitions one would have to evict all the workloads at the node level to create
+    new set of partitions.\n\nInstaSlice will help if:\n\n- user does not know all
+    the accelerators partitions needed a priori on every node on the cluster\n\n-
+    user partition requirements change at the workload level rather than the node
+    level\n\n- user does not want to learn or use new API to request accelerators
+    slices\n\n- user prefers to use stable device plugins APIs for creating partitions\n\n###Features
+    Overview\n\n- Integration with Kubernetes [quota management](https://github.com/openshift/instaslice-operator/blob/main/docs/instaslice_kube_quota_int.md)\n\n-
+    Integration with project [Kueue](https://github.com/openshift/instaslice-operator/blob/main/docs/kueue.md)\n\n-
+    [Emulator](https://github.com/openshift/instaslice-operator/blob/main/docs/emulator.md)
+    mode to run test InstaSlice firstfit placement strategy\n\n- Integration with
+    vLLM, Kserve, [Deployments](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_deployment.yaml),
+    [Jobs](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_job.yaml),
+    and [Statefulsets](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_statefulset.yaml)\n\n###
+    Documentation\nDocumentation and installation guide can be found below:\n  * [Installation
+    Guide](https://github.com/openshift/instaslice-operator)\n  * [Instaslice Operator](https://github.com/openshift/instaslice-operator/blob/main/README.md)\n\n###
     License\ninstaslice-operator is licensed under the Apache 2.0 license"
   displayName: Instaslice
   icon:
@@ -83,6 +97,7 @@ spec:
           - ""
           resources:
           - configmaps
+          - pods
           verbs:
           - create
           - delete
@@ -109,18 +124,6 @@ spec:
           - get
           - patch
           - update
-        - apiGroups:
-          - ""
-          resources:
-          - pods
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
         - apiGroups:
           - apps
           resources:
@@ -205,8 +208,8 @@ spec:
                 - name: EMULATOR_MODE
                   value: "false"
                 - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
-                  value: quay.io/amalvank/instaslicev2-daemonset:latest
-                image: quay.io/amalvank/instaslicev2-controller:latest
+                  value: quay.io/ibm/instaslice-daemonset:kubecon
+                image: quay.io/ibm/instaslice-controller:kubecon
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -232,7 +235,7 @@ spec:
                     cpu: 10m
                     memory: 64Mi
                 securityContext:
-                  allowPrivilegeEscalation: true
+                  allowPrivilegeEscalation: false
                   capabilities:
                     drop:
                     - ALL
@@ -324,24 +327,40 @@ spec:
   maintainers:
   - email: amalvank@redhat.com
     name: Abhishek Malvankar
+  - email: cmeadors@redhat.com
+    name: Cameron Meadors
+  - email: harpatil@redhat.com
+    name: Harshal Patil
+  - email: kehannon@redhat.com
+    name: Kevin Hannon
   - email: mmunirab@redhat.com
     name: Mohammed Abdi
+  - email: mpatel@redhat.com
+    name: Mrunal Patel
+  - email: tardieu@us.ibm.com
+    name: Olivier Tardieu
+  - email: rphillip@redhat.com
+    name: Ryan Phillips
+  - email: svanka@redhat.com
+    name: Sai Ramesh Vanka
+  - email: vemporop@redhat.com
+    name: Vitaliy Emporopulo
   maturity: alpha
   minKubeVersion: 1.16.0
   provider:
     name: Codeflare
     url: https://github.com/openshift/instaslice-operator
   relatedImages:
-  - image: quay.io/amalvank/instaslicev2-daemonset:latest
+  - image: quay.io/ibm/instaslice-daemonset:kubecon
     name: instaslice-daemonset
-  version: 0.0.1
+  version: 0.0.2
   webhookdefinitions:
   - admissionReviewVersions:
     - v1
     containerPort: 443
     deploymentName: instaslice-operator-controller-manager
     failurePolicy: Ignore
-    generateName: instaslice.codeflare.dev
+    generateName: instaslice.redhat.com
     rules:
     - apiGroups:
       - ""
