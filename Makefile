@@ -158,6 +158,17 @@ cleanup-test-e2e-kind-emulated: KIND_NAME=kind-e2e
 cleanup-test-e2e-kind-emulated:
 	$(KIND) delete clusters ${KIND_NAME}
 
+.PHONY: test-e2e-ocp-emulated
+test-e2e-ocp-emulated: export IMG_TAG=latest
+test-e2e-ocp-emulated: export EMULATOR_MODE=true
+test-e2e-ocp-emulated: docker-build deploy-cert-manager deploy-instaslice-emulated-on-ocp
+	export KUBECTL=oc IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
+                ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m ./test/e2e
+PHONY: cleanup-test-e2e-ocp-emulated
+cleanup-test-e2e-ocp-emulated: KUBECTL=oc
+cleanup-test-e2e-ocp-emulated: ocp-undeploy-emulated uninstall
+	${KUBECTL} delete ns instaslice-system
+
 .PHONY: create-kind-cluster
 create-kind-cluster:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
@@ -177,6 +188,11 @@ deploy-cert-manager:
 deploy-instaslice-emulated-on-kind:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
 		hack/deploy-instaslice-emulated-on-kind.sh
+
+.PHONY: deploy-instaslice-emulated-on-ocp
+deploy-instaslice-emulated-on-ocp:
+	export  KUBECTL=oc IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
+                hack/deploy-instaslice-emulated-on-ocp.sh
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.61.0

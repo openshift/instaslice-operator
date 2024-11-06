@@ -26,7 +26,9 @@ echo "Installing instaslice CRD"
 make install
 sleep 10
 ${KUBECTL} config set-context ${KIND_CONTEXT}
-_kubectl patch node ${KIND_NODE_NAME} -p '{"metadata":{"labels":{"nvidia.com/mig.capable":"true"}}}'
-echo "Deploying Instaslice controller-manager and daemonset"
+echo "Deploying Instaslice controller-manager"
 make deploy-emulated
 _kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n ${NAMESPACE} --timeout=${WEBHOOK_TIMEOUT}
+
+echo "Patching node ${KIND_NODE_NAME}"
+_kubectl patch node ${KIND_NODE_NAME} -p '{"metadata":{"labels":{"nvidia.com/mig.capable":"true"}}}'
