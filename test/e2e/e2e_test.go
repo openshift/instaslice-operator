@@ -29,6 +29,8 @@ import (
 	"text/template"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -37,11 +39,12 @@ import (
 )
 
 var (
-	criBin     = "docker"
-	kubectlBin = "kubectl"
-	namespace  = "instaslice-system"
-	emulated   = false
-	nodeName   = "kind-e2e-control-plane"
+	criBin                 = "docker"
+	kubectlBin             = "kubectl"
+	namespace              = "instaslice-system"
+	emulated               = false
+	nodeName               = "kind-e2e-control-plane"
+	controllerManagerLabel = "control-plane=controller-manager"
 
 	controllerImage string
 	daemonsetImage  string
@@ -72,10 +75,13 @@ func init() {
 	if env := os.Getenv("KUBECTL_BIN"); env != "" {
 		kubectlBin = env
 	}
-	if env := os.Getenv("NODE_NAME"); env != "" {
-		nodeName = env
+	node, err := getNodeName(kubectlBin, controllerManagerLabel)
+	if node != "" && err == nil {
+		nodeName = node
+		templateVars.NodeName = node
+	} else {
+		templateVars.NodeName = nodeName
 	}
-	templateVars.NodeName = nodeName
 }
 
 var _ = BeforeSuite(func() {
@@ -105,6 +111,10 @@ var _ = Describe("controller", Ordered, func() {
 			checkCmd := exec.Command(kubectlBin, "describe", "instaslice", "-n", namespace)
 			output, err = checkCmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Resource not found: %s", output))
+			// Wait for the daemonset to be ready
+			dsCmd := exec.Command(kubectlBin, "rollout", "status", "daemonset", "instaslice-operator-controller-daemonset", "-n", "instaslice-system", "--timeout", "120s")
+			output, err = dsCmd.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Instaslice daemonset not yet ready: %s", output))
 		})
 
 		It("should apply the pod YAML with no requests and check if finalizer exists", func() {
@@ -692,4 +702,23 @@ func applyResource(kubectlBin string, tmplFile string, tmplVars TemplateVars) (o
 	}
 	cmd := exec.Command(kubectlBin, "apply", "-f", tmplFile)
 	return cmd.CombinedOutput()
+}
+
+func getNodeName(clientBin, label string) (string, error) {
+	var nodeName string
+	output, err := exec.Command(clientBin, "get", "pods", "-l", label, "-A", "-o", "json").CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("unable to get the node name : %v, output: %s\n", err, output)
+	}
+	var pods v1.PodList
+	err = json.Unmarshal(output, &pods)
+	if err != nil {
+		return "", fmt.Errorf("Error parsing JSON output: %v", err)
+	}
+	for _, pod := range pods.Items {
+		nodeName = pod.Spec.NodeName
+		// returning from here as we have the node name now
+		return nodeName, nil
+	}
+	return nodeName, nil
 }
