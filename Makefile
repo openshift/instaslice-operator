@@ -161,7 +161,7 @@ cleanup-test-e2e-kind-emulated:
 .PHONY: test-e2e-ocp-emulated
 test-e2e-ocp-emulated: export IMG_TAG=latest
 test-e2e-ocp-emulated: export EMULATOR_MODE=true
-test-e2e-ocp-emulated: docker-build deploy-cert-manager deploy-instaslice-emulated-on-ocp
+test-e2e-ocp-emulated: docker-build docker-push deploy-cert-manager deploy-instaslice-emulated-on-ocp
 	export KUBECTL=oc IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
                 ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m ./test/e2e
 PHONY: cleanup-test-e2e-ocp-emulated
