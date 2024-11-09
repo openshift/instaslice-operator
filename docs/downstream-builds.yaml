@@ -12,7 +12,7 @@ Update the version is necessary
 export VERSION=0.1.0
 
 Set the image urls for the offical repos
-export IMG=registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-operator-rhel9:$VERSION
+export IMG=registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator:$VERSION
 export IMG_DMST=registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9:$VERSION
 
 Regenerate the bundle
