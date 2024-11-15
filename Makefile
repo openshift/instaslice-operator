@@ -233,6 +233,11 @@ docker-build: ## Build docker image with the manager.
 	$(CONTAINER_TOOL) build -t ${IMG} -f Dockerfile.controller .
 	$(CONTAINER_TOOL) build -t ${IMG_DMST} -f Dockerfile.daemonset .
 
+.PHONY: container-build-ocp
+container-build-ocp: ## Build docker image with the manager.
+	$(CONTAINER_TOOL) build -t ${IMG} -f Dockerfile.ocp .
+	$(CONTAINER_TOOL) build -t ${IMG_DMST} -f Dockerfile.daemonset-ocp .
+
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
@@ -392,7 +397,11 @@ bundle-ocp: manifests kustomize operator-sdk ## Generate bundle manifests and me
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	$(CONTAINER_TOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+
+.PHONY: bundle-build-ocp
+bundle-build-ocp: ## Build the bundle image.
+	$(CONTAINER_TOOL) build -f bundle-ocp.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
