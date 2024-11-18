@@ -37,7 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
-	"github.com/openshift/instaslice-operator/internal/controller"
+	"github.com/openshift/instaslice-operator/internal/controller/daemonset"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -133,7 +133,7 @@ func main() {
 	// 	os.Exit(1)
 	// }
 
-	if err = (&controller.InstaSliceDaemonsetReconciler{
+	if err = (&daemonset.InstaSliceDaemonsetReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {

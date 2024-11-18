@@ -19,14 +19,14 @@ package controller
 import "time"
 
 const (
-	orgInstaslicePrefix              = "instaslice.redhat.com/"
-	gateName                         = orgInstaslicePrefix + "accelerator"
+	OrgInstaslicePrefix              = "instaslice.redhat.com/"
+	gateName                         = OrgInstaslicePrefix + "accelerator"
 	finalizerName                    = gateName
-	quotaResourceName                = orgInstaslicePrefix + "accelerator-memory-quota"
-	emulatorModeFalse                = "false"
-	emulatorModeTrue                 = "true"
+	QuotaResourceName                = OrgInstaslicePrefix + "accelerator-memory-quota"
+	EmulatorModeFalse                = "false"
+	EmulatorModeTrue                 = "true"
 	AttributeMediaExtensions         = "me"
-	instaSliceOperatorNamespace      = "instaslice-system"
+	InstaSliceOperatorNamespace      = "instaslice-system"
 	NvidiaMIGPrefix                  = "nvidia.com/mig-"
 	NodeLabel                        = "kubernetes.io/hostname"
 	multipleContainersUnsupportedErr = "multiple containers per pod not supported"
@@ -36,7 +36,7 @@ const (
 	daemonSetName                    = "daemonset"
 	serviceAccountName               = "instaslice-operator-controller-manager"
 
-	requeue1sDelay  = 1 * time.Second
-	requeue2sDelay  = 2 * time.Second
+	Requeue1sDelay  = 1 * time.Second
+	Requeue2sDelay  = 2 * time.Second
 	requeue10sDelay = 10 * time.Second
 )

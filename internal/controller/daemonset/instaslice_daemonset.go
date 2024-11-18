@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package daemonset
 
 import (
 	"context"
@@ -29,6 +29,7 @@ import (
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
+	"github.com/openshift/instaslice-operator/internal/controller"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -97,7 +98,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 	nsName := types.NamespacedName{
 		Name:      nodeName,
-		Namespace: instaSliceOperatorNamespace,
+		Namespace: controller.InstaSliceOperatorNamespace,
 	}
 
 	var instaslice inferencev1alpha1.Instaslice
@@ -110,7 +111,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 	latestInstaslice, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
 	if err != nil {
 		log.Error(err, "Error fetching latest InstaSlice object")
-		return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
+		return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
 	}
 
 	// Ensure we are not processing an outdated version of the object
@@ -126,12 +127,12 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		// delete first before creating new slice
 		if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusDeleting && allocations.Nodename == nodeName {
 			log.Info("performing cleanup ", "pod", allocations.PodName)
-			if emulatorMode == emulatorModeFalse {
+			if emulatorMode == controller.EmulatorModeFalse {
 				err := r.cleanUpCiAndGi(ctx, allocations)
 				if err != nil {
 					// NVML shutdowm took time or NVML init may have failed.
 					log.Error(err, "error cleaning up ci and gi retrying")
-					return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
+					return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, nil
 				}
 			}
 
@@ -144,7 +145,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			updateInstasliceObject, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
 			if err != nil {
 				log.V(1).Error(err, "err getting latest instaslice object")
-				return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
+				return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
 			}
 
 			allocations.Allocationstatus = inferencev1alpha1.AllocationStatusDeleted
@@ -163,15 +164,15 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 			existingAllocations := instaslice.Spec.Allocations[allocations.PodUUID]
 
-			if emulatorMode == emulatorModeTrue {
+			if emulatorMode == controller.EmulatorModeTrue {
 				// configmap with fake MIG uuid
 				if err := r.createConfigMap(ctx, allocations.Resourceidentifier, existingAllocations.Namespace, allocations.Resourceidentifier); err != nil {
-					return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
+					return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
 				}
 				// Emulating cost to create CI and GI on a GPU
-				time.Sleep(requeue1sDelay)
+				time.Sleep(controller.Requeue1sDelay)
 			}
-			if emulatorMode == emulatorModeFalse {
+			if emulatorMode == controller.EmulatorModeFalse {
 				ret := nvml.Init()
 				if ret != nvml.SUCCESS {
 					log.Error(ret, "Unable to initialize NVML")
@@ -240,13 +241,13 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					createdMigInfos, err = r.createSliceAndPopulateMigInfos(ctx, device, allocations, giProfileInfo, placement, ciProfileId)
 					if err != nil {
 						log.Error(err, "mig creation not successful")
-						return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
+						return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, nil
 					}
 				}
 				for migUuid, migDevice := range createdMigInfos {
 					if migDevice.start == allocations.Start && migDevice.uuid == allocations.GPUUUID && giProfileInfo.Id == migDevice.giInfo.ProfileId {
 						if err := r.createConfigMap(ctx, migUuid, existingAllocations.Namespace, allocations.Resourceidentifier); err != nil {
-							return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
+							return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
 						}
 						log.Info("done creating mig slice for ", "pod", allocations.PodName, "parentgpu", allocations.GPUUUID, "miguuid", migUuid)
 						break
@@ -255,7 +256,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			}
 			updateInstasliceObject, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
 			if err != nil {
-				return ctrl.Result{RequeueAfter: requeue1sDelay}, nil
+				return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
 			}
 
 			if updatedAllocation, ok := updateInstasliceObject.Spec.Allocations[allocations.PodUUID]; ok {
@@ -371,14 +372,14 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 		var instaslice inferencev1alpha1.Instaslice
 		typeNamespacedName := types.NamespacedName{
 			Name:      nodeName,
-			Namespace: instaSliceOperatorNamespace,
+			Namespace: controller.InstaSliceOperatorNamespace,
 		}
 		errRetrievingInstaSliceForSetup := r.Get(ctx, typeNamespacedName, &instaslice)
 		if errRetrievingInstaSliceForSetup != nil {
 			log.Error(errRetrievingInstaSliceForSetup, "unable to fetch InstaSlice resource for node")
 		}
 
-		if emulatorMode == emulatorModeFalse {
+		if emulatorMode == controller.EmulatorModeFalse {
 			if !instaslice.Status.Processed || (instaslice.Name == "" && instaslice.Namespace == "") {
 				_, errForDiscoveringGpus := r.discoverMigEnabledGpuWithSlices()
 				if errForDiscoveringGpus != nil {
@@ -399,7 +400,7 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 		}
 
 		// Patch the node capacity with GPU memory in emulator mode
-		if emulatorMode == emulatorModeTrue {
+		if emulatorMode == controller.EmulatorModeTrue {
 			totalEmulatedGPUMemory := calculateTotalMemoryGB(instaslice.Spec.MigGPUUUID)
 			if err := r.patchNodeStatusForNode(ctx, nodeName, totalEmulatedGPUMemory); err != nil {
 				return err
@@ -465,7 +466,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 	instaslice.Spec.CpuOnNodeAtBoot = cpu
 	instaslice.Spec.MemoryOnNodeAtBoot = memory
 	instaslice.Name = nodeName
-	instaslice.Namespace = instaSliceOperatorNamespace
+	instaslice.Namespace = controller.InstaSliceOperatorNamespace
 	instaslice.Spec.MigGPUUUID = gpuModelMap
 	instaslice.Status.Processed = true
 	//TODO: should we use context.TODO() ?
@@ -510,7 +511,7 @@ func (r *InstaSliceDaemonsetReconciler) addMigCapacityToNode(ctx context.Context
 	}
 	patches := []map[string]interface{}{}
 	for profile, count := range profilePlacements {
-		resourceName := orgInstaslicePrefix + "mig-" + profile
+		resourceName := controller.OrgInstaslicePrefix + "mig-" + profile
 		patches = append(patches, map[string]interface{}{
 			"op":    "replace",
 			"path":  "/status/capacity/" + strings.Replace(resourceName, "/", "~1", -1),
@@ -544,7 +545,7 @@ func (r *InstaSliceDaemonsetReconciler) patchNodeStatusForNode(ctx context.Conte
 
 	// Create patch data for accelerator-memory-quota
 	memory := resource.MustParse(fmt.Sprintf("%vGi", totalMemoryGB))
-	patchData, err := createPatchData(quotaResourceName, memory)
+	patchData, err := createPatchData(controller.QuotaResourceName, memory)
 	if err != nil {
 		log.Error(err, "unable to create correct json for patching node")
 		return err
@@ -568,7 +569,7 @@ func (r *InstaSliceDaemonsetReconciler) classicalResourcesAndGPUMemOnNode(ctx co
 
 	newResourceQuantity := resource.MustParse(totalGPUMemory + "Gi")
 	// Convert the string to ResourceName
-	resourceName := v1.ResourceName(quotaResourceName)
+	resourceName := v1.ResourceName(controller.QuotaResourceName)
 	node.Status.Capacity[resourceName] = newResourceQuantity
 
 	if err := r.Status().Update(ctx, node); err != nil {
@@ -703,7 +704,7 @@ func (m MigProfile) Attributes() []string {
 	var attr []string
 	switch m.GIProfileID {
 	case nvml.GPU_INSTANCE_PROFILE_1_SLICE_REV1:
-		attr = append(attr, AttributeMediaExtensions)
+		attr = append(attr, controller.AttributeMediaExtensions)
 	}
 	return attr
 }

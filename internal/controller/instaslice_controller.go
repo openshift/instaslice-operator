@@ -81,11 +81,11 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// 1. Ensure DaemonSet is deployed
 	daemonSet := &appsv1.DaemonSet{}
-	err := r.Get(ctx, types.NamespacedName{Name: instasliceDaemonsetName, Namespace: instaSliceOperatorNamespace}, daemonSet)
+	err := r.Get(ctx, types.NamespacedName{Name: instasliceDaemonsetName, Namespace: InstaSliceOperatorNamespace}, daemonSet)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// DaemonSet doesn't exist, so create it
-			daemonSet = createInstaSliceDaemonSet(instaSliceOperatorNamespace)
+			daemonSet = createInstaSliceDaemonSet(InstaSliceOperatorNamespace)
 			err = r.Create(ctx, daemonSet)
 			if err != nil {
 				log.Error(err, "Failed to create DaemonSet")
@@ -104,7 +104,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	listOptions := &client.ListOptions{
 		LabelSelector: labelSelector,
-		Namespace:     instaSliceOperatorNamespace,
+		Namespace:     InstaSliceOperatorNamespace,
 	}
 
 	if err := r.List(ctx, &podList, listOptions); err != nil {
@@ -170,7 +170,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			for _, allocation := range instaslice.Spec.Allocations {
 				if pod.UID == types.UID(allocation.PodUUID) {
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreating {
-						return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
+						return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
 					}
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreated || allocation.Allocationstatus == inferencev1alpha1.AllocationStatusUngated {
 						resultDeleting, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, string(pod.UID), allocation)
@@ -187,7 +187,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							return resultRemove, nil
 						}
 						// requeue for the finalizer to be removed
-						return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
+						return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
 					}
 					return ctrl.Result{}, nil
 				}
@@ -226,7 +226,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							return result, nil
 						}
 						// requeue for the finalizer to be removed
-						return ctrl.Result{RequeueAfter: requeue2sDelay}, nil
+						return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
 					}
 					return ctrl.Result{}, nil
 				}
@@ -256,7 +256,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,
-						Namespace: instaSliceOperatorNamespace,
+						Namespace: InstaSliceOperatorNamespace,
 					}
 					err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 					if err != nil {
@@ -312,7 +312,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							var updateInstasliceObject inferencev1alpha1.Instaslice
 							typeNamespacedName := types.NamespacedName{
 								Name:      instaslice.Name,
-								Namespace: instaSliceOperatorNamespace,
+								Namespace: InstaSliceOperatorNamespace,
 							}
 							err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 							if err != nil {
@@ -370,7 +370,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,
-						Namespace: instaSliceOperatorNamespace,
+						Namespace: InstaSliceOperatorNamespace,
 					}
 					errRetrievingInstaSlice := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 					if errRetrievingInstaSlice != nil {
@@ -418,7 +418,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					var updateInstasliceObject inferencev1alpha1.Instaslice
 					typeNamespacedName := types.NamespacedName{
 						Name:      instaslice.Name,
-						Namespace: instaSliceOperatorNamespace,
+						Namespace: InstaSliceOperatorNamespace,
 					}
 					err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 					if err != nil {
@@ -455,7 +455,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 func createInstaSliceDaemonSet(namespace string) *appsv1.DaemonSet {
 	emulatorMode := os.Getenv("EMULATOR_MODE")
 	if emulatorMode == "" {
-		emulatorMode = emulatorModeFalse
+		emulatorMode = EmulatorModeFalse
 	}
 	instasliceDaemonsetImage := os.Getenv("RELATED_IMAGE_INSTASLICE_DAEMONSET")
 	if instasliceDaemonsetImage == "" {
@@ -643,12 +643,12 @@ func (r *InstasliceReconciler) deleteInstasliceAllocation(ctx context.Context, i
 	var updateInstasliceObject inferencev1alpha1.Instaslice
 	typeNamespacedName := types.NamespacedName{
 		Name:      instasliceName,
-		Namespace: instaSliceOperatorNamespace,
+		Namespace: InstaSliceOperatorNamespace,
 	}
 	err := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 	if err != nil {
 		log.Error(err, "error getting latest instaslice object")
-		return ctrl.Result{RequeueAfter: requeue2sDelay}, err
+		return ctrl.Result{RequeueAfter: Requeue2sDelay}, err
 	}
 	delete(updateInstasliceObject.Spec.Allocations, allocation.PodUUID)
 	errUpdatingAllocation := r.Update(ctx, &updateInstasliceObject)
@@ -733,7 +733,7 @@ func (r *InstasliceReconciler) setInstasliceAllocationToDeleting(ctx context.Con
 	var updateInstasliceObject inferencev1alpha1.Instaslice
 	typeNamespacedName := types.NamespacedName{
 		Name:      instasliceName,
-		Namespace: instaSliceOperatorNamespace, // TODO: modify if needed
+		Namespace: InstaSliceOperatorNamespace, // TODO: modify if needed
 	}
 	errRetrievingInstaSlice := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 	if errRetrievingInstaSlice != nil {
