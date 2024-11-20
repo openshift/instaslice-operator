@@ -9,7 +9,7 @@ COPY vendor vendor
 # Copy the go source
 COPY cmd/daemonset/main.go cmd/daemonset/main.go
 COPY api/ api/
-COPY internal/controller/instaslice_daemonset.go internal/controller/instaslice_daemonset.go
+COPY internal/controller/daemonset/instaslice_daemonset.go internal/controller/daemonset/instaslice_daemonset.go
 COPY internal/controller/constants.go internal/controller/constants.go
 COPY internal/controller/utils.go internal/controller/utils.go
 
@@ -51,6 +51,7 @@ LABEL vendor="Red Hat, Inc."
 LABEL version="1"
 LABEL maintainer="Red Hat"
 
+LABEL io.openshift.tags=""
 # Licenses
 
 COPY LICENSE /licenses/LICENSE
