@@ -154,7 +154,7 @@ func performQuotaArithmetic(pod *v1.Pod, req admission.Request) admission.Respon
 				acceleratorMemory := memoryValue * int(quantity.Value())
 				// assume 1 container workload
 				// Convert the string to ResourceName
-				resourceName := v1.ResourceName(quotaResourceName)
+				resourceName := v1.ResourceName(QuotaResourceName)
 				pod.Spec.Containers[0].Resources.Limits[resourceName] = resource.MustParse(fmt.Sprintf("%dGi", acceleratorMemory))
 			}
 		}

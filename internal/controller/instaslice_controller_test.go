@@ -78,11 +78,11 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 				},
 			}
 			instaslice.Name = "test-instaslice"
-			instaslice.Namespace = instaSliceOperatorNamespace
+			instaslice.Namespace = InstaSliceOperatorNamespace
 			pod = &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pod",
-					Namespace: instaSliceOperatorNamespace,
+					Namespace: InstaSliceOperatorNamespace,
 					UID:       types.UID(podUUID),
 					Finalizers: []string{
 						finalizerName,
@@ -96,7 +96,7 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 			req = ctrl.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      "test-pod",
-					Namespace: instaSliceOperatorNamespace,
+					Namespace: InstaSliceOperatorNamespace,
 				},
 			}
 		})
@@ -115,7 +115,7 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 			Expect(result).To(Equal(ctrl.Result{}))
 
 			updatedInstaSlice := &inferencev1alpha1.Instaslice{}
-			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: instaslice.Name, Namespace: instaSliceOperatorNamespace}, updatedInstaSlice)).To(Succeed())
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: instaslice.Name, Namespace: InstaSliceOperatorNamespace}, updatedInstaSlice)).To(Succeed())
 			_, allocationExists := updatedInstaSlice.Spec.Allocations[podUUID]
 			Expect(allocationExists).To(BeFalse())
 		})
@@ -144,7 +144,7 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 			Expect(err).NotTo(HaveOccurred())
 
 			updatedInstaSlice := &inferencev1alpha1.Instaslice{}
-			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: instaslice.Name, Namespace: instaSliceOperatorNamespace}, updatedInstaSlice)).To(Succeed())
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: instaslice.Name, Namespace: InstaSliceOperatorNamespace}, updatedInstaSlice)).To(Succeed())
 
 			Expect(updatedInstaSlice.Spec.Allocations[podUUID].Allocationstatus).To(Equal(inferencev1alpha1.AllocationStatusDeleting))
 
@@ -194,7 +194,7 @@ func TestInstasliceDaemonsetCreation_Reconcile(t *testing.T) {
 			daemonSet = &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "instaslice-operator-controller-daemonset",
-					Namespace: instaSliceOperatorNamespace,
+					Namespace: InstaSliceOperatorNamespace,
 				},
 				Spec: appsv1.DaemonSetSpec{
 					Selector: &metav1.LabelSelector{
@@ -215,7 +215,7 @@ func TestInstasliceDaemonsetCreation_Reconcile(t *testing.T) {
 			req = ctrl.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      "instaslice-operator-controller-daemonset",
-					Namespace: instaSliceOperatorNamespace,
+					Namespace: InstaSliceOperatorNamespace,
 				},
 			}
 		})
@@ -344,11 +344,11 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 				},
 			}
 			instaslice.Name = "test-instaslice"
-			instaslice.Namespace = instaSliceOperatorNamespace
+			instaslice.Namespace = InstaSliceOperatorNamespace
 			pod = &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pod",
-					Namespace: instaSliceOperatorNamespace,
+					Namespace: InstaSliceOperatorNamespace,
 					UID:       types.UID(podUUID),
 					Finalizers: []string{
 						finalizerName,
@@ -404,7 +404,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			req = ctrl.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      "test-pod",
-					Namespace: instaSliceOperatorNamespace,
+					Namespace: InstaSliceOperatorNamespace,
 				},
 			}
 		})
@@ -466,7 +466,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			pod = &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      failedPodName,
-					Namespace: instaSliceOperatorNamespace,
+					Namespace: InstaSliceOperatorNamespace,
 					// PodUUID has to be same as the one present in the instaslice allocations
 					// to process the allocations
 					UID: types.UID(podUUID),
@@ -486,7 +486,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			Expect(err).NotTo(HaveOccurred())
 			// As the allocations are present in the Instaslice Object, expecting a return from
 			// the reconcile function without removing the Finalizer
-			Expect(result).To(Equal(ctrl.Result{RequeueAfter: requeue2sDelay}))
+			Expect(result).To(Equal(ctrl.Result{RequeueAfter: Requeue2sDelay}))
 
 			// Update the podUUID and observe the Finalizer is not present inside the Failed pod
 			// as the corresponding allocation details are not present inside the Instaslice Allocations
@@ -497,7 +497,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(ctrl.Result{}))
 			newPod := &v1.Pod{}
-			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: failedPodName, Namespace: instaSliceOperatorNamespace}, newPod)).To(Succeed())
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: failedPodName, Namespace: InstaSliceOperatorNamespace}, newPod)).To(Succeed())
 			Expect(newPod.Finalizers).ToNot(ContainElement(finalizerName))
 
 		})
@@ -509,7 +509,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			pod = &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      succeededPodName,
-					Namespace: instaSliceOperatorNamespace,
+					Namespace: InstaSliceOperatorNamespace,
 					// PodUUID has to be same as the one present in the instaslice allocations
 					// to process the allocations
 					UID: types.UID(podUUID),
@@ -540,7 +540,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(ctrl.Result{}))
 			newPod := &v1.Pod{}
-			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: succeededPodName, Namespace: instaSliceOperatorNamespace}, newPod)).To(Succeed())
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: succeededPodName, Namespace: InstaSliceOperatorNamespace}, newPod)).To(Succeed())
 			Expect(newPod.Finalizers).ToNot(ContainElement(finalizerName))
 
 		})
@@ -550,7 +550,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			pod = &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pod-1",
-					Namespace: instaSliceOperatorNamespace,
+					Namespace: InstaSliceOperatorNamespace,
 					// PodUUID has to be same as the one present in the instaslice allocations
 					// to process the allocations
 					UID: types.UID(podUUID),
@@ -581,7 +581,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pod-1",
-					Namespace: instaSliceOperatorNamespace,
+					Namespace: InstaSliceOperatorNamespace,
 					UID:       types.UID(podUUID),
 					Finalizers: []string{
 						finalizerName,
@@ -630,7 +630,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pod-1",
-					Namespace: instaSliceOperatorNamespace,
+					Namespace: InstaSliceOperatorNamespace,
 					UID:       types.UID(podUUID),
 					Finalizers: []string{
 						finalizerName,
@@ -686,7 +686,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pod-1",
-					Namespace: instaSliceOperatorNamespace,
+					Namespace: InstaSliceOperatorNamespace,
 					UID:       types.UID(podUUID),
 					Finalizers: []string{
 						finalizerName,
@@ -805,7 +805,7 @@ func TestInstasliceReconciler_podMapFunc(t *testing.T) {
 	}
 	instaslice := new(inferencev1alpha1.Instaslice)
 	allocDetails := make(map[string]inferencev1alpha1.AllocationDetails)
-	allocDetails["pod-uuid"] = inferencev1alpha1.AllocationDetails{Namespace: instaSliceOperatorNamespace, PodName: "test-pod", Allocationstatus: inferencev1alpha1.AllocationStatusDeleted}
+	allocDetails["pod-uuid"] = inferencev1alpha1.AllocationDetails{Namespace: InstaSliceOperatorNamespace, PodName: "test-pod", Allocationstatus: inferencev1alpha1.AllocationStatusDeleted}
 	instaslice.Spec = inferencev1alpha1.InstasliceSpec{
 		Allocations: allocDetails,
 	}
@@ -819,7 +819,7 @@ func TestInstasliceReconciler_podMapFunc(t *testing.T) {
 		args   args
 		want   []reconcile.Request
 	}{
-		{"test-case-1", newFields, newArgs, []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: instaSliceOperatorNamespace, Name: "test-pod"}}}},
+		{"test-case-1", newFields, newArgs, []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: InstaSliceOperatorNamespace, Name: "test-pod"}}}},
 		{"test-case-2", newFields, *new(args), nil},
 	}
 	for _, tt := range tests {
@@ -862,14 +862,14 @@ func TestFirstFitPolicy_SetAllocationDetails(t *testing.T) {
 		discoveredGiprofile: 0,
 		Ciprofileid:         0,
 		Ciengprofileid:      0,
-		namespace:           instaSliceOperatorNamespace,
+		namespace:           InstaSliceOperatorNamespace,
 		podName:             "test-pod",
 		gpuUuid:             "A-100",
 		resourceIdentifier:  "abcd-1234",
 		cpuMilli:            500,
 		memory:              1024,
 	}
-	allocDetails := inferencev1alpha1.AllocationDetails{PodUUID: "test-pod-uuid", Start: 0, Size: 1, Profile: "1g.5gb", GPUUUID: "A-100", Nodename: "kind-control-plane", Allocationstatus: inferencev1alpha1.AllocationStatus("created"), Resourceidentifier: "abcd-1234", Namespace: instaSliceOperatorNamespace, PodName: "test-pod", Cpu: 500, Memory: 1024}
+	allocDetails := inferencev1alpha1.AllocationDetails{PodUUID: "test-pod-uuid", Start: 0, Size: 1, Profile: "1g.5gb", GPUUUID: "A-100", Nodename: "kind-control-plane", Allocationstatus: inferencev1alpha1.AllocationStatus("created"), Resourceidentifier: "abcd-1234", Namespace: InstaSliceOperatorNamespace, PodName: "test-pod", Cpu: 500, Memory: 1024}
 	tests := []struct {
 		name string
 		args args
