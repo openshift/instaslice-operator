@@ -22,7 +22,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/dynamicacceleratorslicer/instaslice-operator:{{revision}}
+    value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator:{{revision}}
   - name: dockerfile
     value: Dockerfile.ocp
   pipelineSpec:
