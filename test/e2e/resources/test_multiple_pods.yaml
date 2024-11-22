@@ -9,7 +9,7 @@ spec:
   terminationGracePeriodSeconds: 0
   containers:
   - name: vectoradd
-    image: "quay.io/tardieu/vectoradd:0.1.0"
+    image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8"
     command: ["sh", "-c", "sleep 20"]
     resources:
       limits:
@@ -26,7 +26,7 @@ spec:
   terminationGracePeriodSeconds: 0
   containers:
   - name: vectoradd
-    image: "quay.io/tardieu/vectoradd:0.1.0"
+    image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8"
     command: ["sh", "-c", "sleep 20"]
     resources:
       limits:
@@ -43,7 +43,7 @@ spec:
   terminationGracePeriodSeconds: 0
   containers:
   - name: vectoradd
-    image: "quay.io/tardieu/vectoradd:0.1.0"
+    image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8"
     command: ["sh", "-c", "sleep 20"]
     resources:
       limits:
@@ -60,7 +60,7 @@ spec:
   terminationGracePeriodSeconds: 0
   containers:
   - name: vectoradd
-    image: "quay.io/tardieu/vectoradd:0.1.0"
+    image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8"
     command: ["sh", "-c", "sleep 20"]
     resources:
       limits:
@@ -77,7 +77,7 @@ spec:
   terminationGracePeriodSeconds: 0
   containers:
   - name: vectoradd
-    image: "quay.io/tardieu/vectoradd:0.1.0"
+    image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8"
     command: ["sh", "-c", "sleep 20"]
     resources:
       limits:
@@ -94,7 +94,7 @@ spec:
   terminationGracePeriodSeconds: 0
   containers:
   - name: vectoradd
-    image: "quay.io/tardieu/vectoradd:0.1.0"
+    image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8"
     command: ["sh", "-c", "sleep 20"]
     resources:
       limits:
@@ -111,7 +111,7 @@ spec:
   terminationGracePeriodSeconds: 0
   containers:
   - name: vectoradd
-    image: "quay.io/tardieu/vectoradd:0.1.0"
+    image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8"
     command: ["sh", "-c", "sleep 20"]
     resources:
       limits:

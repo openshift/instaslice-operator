@@ -24,7 +24,7 @@ spec:
   - name: instaslice.redhat.com/accelerator
   containers:
   - name: $ORIGINAL_NAME
-    image: "quay.io/tardieu/vectoradd:0.1.0"
+    image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8"
     resources:
       limits:
         nvidia.com/mig-1g.5gb: 1
