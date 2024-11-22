@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
@@ -59,7 +60,14 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 	}
 	if userCpuCoresCeil < nodeAvailableCpu && userMemoryBytes < nodeAvailableMemory {
 		//TODO: discover this value, this may work for A100 and H100 for now.
+		var gpuUUIDs []string
 		for gpuuuid := range updatedInstaSliceObject.Spec.MigGPUUUID {
+			gpuUUIDs = append(gpuUUIDs, gpuuuid)
+		}
+
+		// Sort the keys
+		sort.Strings(gpuUUIDs)
+		for _, gpuuuid := range gpuUUIDs {
 			if updatedInstaSliceObject.Spec.Allocations == nil {
 				updatedInstaSliceObject.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
 			}

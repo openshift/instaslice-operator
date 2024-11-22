@@ -472,14 +472,25 @@ var _ = Describe("controller", Ordered, func() {
 					return false
 				}
 
-				// Check if all allocations are in the 'ungated' state
+				var assignedGPUUUID string
+				allAssignedToOneGPU := true
+
+				// Check if all allocations are in the 'ungated' state and assigned to the same GPU
 				for _, allocation := range instaslice.Spec.Allocations {
 					if allocation.Allocationstatus != inferencev1alpha1.AllocationStatusUngated {
 						return false
 					}
+
+					// Check GPUUUID consistency
+					if assignedGPUUUID == "" {
+						assignedGPUUUID = allocation.GPUUUID
+					} else if allocation.GPUUUID != assignedGPUUUID {
+						allAssignedToOneGPU = false
+						break
+					}
 				}
 
-				return true
+				return allAssignedToOneGPU
 			}, "100s", "5s").Should(BeTrue(), "Not all allocations are in the 'ungated' state after the timeout")
 		})
 		It("should verify that the Kubernetes node has the specified resource and matches total GPU memory", func() {
