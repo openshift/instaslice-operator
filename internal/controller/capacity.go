@@ -60,13 +60,7 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 	}
 	if userCpuCoresCeil < nodeAvailableCpu && userMemoryBytes < nodeAvailableMemory {
 		//TODO: discover this value, this may work for A100 and H100 for now.
-		var gpuUUIDs []string
-		for gpuuuid := range updatedInstaSliceObject.Spec.MigGPUUUID {
-			gpuUUIDs = append(gpuUUIDs, gpuuuid)
-		}
-
-		// Sort the keys
-		sort.Strings(gpuUUIDs)
+		gpuUUIDs := sortGPUs(updatedInstaSliceObject)
 		for _, gpuuuid := range gpuUUIDs {
 			if updatedInstaSliceObject.Spec.Allocations == nil {
 				updatedInstaSliceObject.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
@@ -88,6 +82,15 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 	}
 
 	return nil, fmt.Errorf("failed to find allocatable node and gpu")
+}
+
+func sortGPUs(updatedInstaSliceObject *inferencev1alpha1.Instaslice) []string {
+	gpuUUIDs := make([]string, 0, len(updatedInstaSliceObject.Spec.MigGPUUUID))
+	for gpuuuid := range updatedInstaSliceObject.Spec.MigGPUUUID {
+		gpuUUIDs = append(gpuUUIDs, gpuuuid)
+	}
+	sort.Strings(gpuUUIDs)
+	return gpuUUIDs
 }
 
 // accounting logic that finds the correct GPU and index where a slice could be placed.
