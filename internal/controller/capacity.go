@@ -133,7 +133,7 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 				break
 			}
 			if neededContinousSlot == 2 {
-				if value+neededContinousSlot < len(gpuAllocatedIndex) {
+				if value+neededContinousSlot <= len(gpuAllocatedIndex) {
 					if gpuAllocatedIndex[value] == 0 && gpuAllocatedIndex[value+1] == 0 {
 						newStart = uint32(value)
 						break
@@ -142,7 +142,7 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 
 			}
 			if neededContinousSlot == 4 {
-				if value+neededContinousSlot < len(gpuAllocatedIndex) {
+				if value+neededContinousSlot <= len(gpuAllocatedIndex) {
 					if gpuAllocatedIndex[value] == 0 && gpuAllocatedIndex[value+1] == 0 && gpuAllocatedIndex[value+2] == 0 && gpuAllocatedIndex[value+3] == 0 {
 						newStart = uint32(value)
 						break
@@ -152,7 +152,7 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 
 			if neededContinousSlot == 8 {
 				//special case
-				if value+neededContinousSlot < len(gpuAllocatedIndex) {
+				if value+neededContinousSlot <= len(gpuAllocatedIndex) {
 					if gpuAllocatedIndex[value] == 0 && gpuAllocatedIndex[value+1] == 0 &&
 						gpuAllocatedIndex[value+2] == 0 && gpuAllocatedIndex[value+3] == 0 &&
 						gpuAllocatedIndex[value+4] == 0 && gpuAllocatedIndex[value+5] == 0 &&
