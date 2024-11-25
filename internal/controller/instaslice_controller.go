@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -407,6 +408,10 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		// pod does not have an allocation yet, make allocation
 		// find the node
 		if !podHasNodeAllocation {
+			sort.Slice(instasliceList.Items, func(i, j int) bool {
+				// Sort by Name in ascending order
+				return instasliceList.Items[i].Name < instasliceList.Items[j].Name
+			})
 			for _, instaslice := range instasliceList.Items {
 				// find the GPU on the node and the GPU index where the slice can be created
 				allocDetails, err := r.findNodeAndDeviceForASlice(ctx, &instaslice, profileName, policy, pod)

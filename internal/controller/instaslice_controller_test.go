@@ -884,3 +884,23 @@ func TestFirstFitPolicy_SetAllocationDetails(t *testing.T) {
 		})
 	}
 }
+
+func TestGPUSort(t *testing.T) {
+	var _ = Describe("SortGPUs", func() {
+		It("should sort GPU UUIDs in ascending order", func() {
+			instaslice := &inferencev1alpha1.Instaslice{
+				Spec: inferencev1alpha1.InstasliceSpec{
+					MigGPUUUID: map[string]string{
+						"gpu3": "uuid3",
+						"gpu1": "uuid1",
+						"gpu2": "uuid2",
+					},
+				},
+			}
+			sortedUUIDs := sortGPUs(instaslice)
+			expected := []string{"gpu1", "gpu2", "gpu3"}
+
+			Expect(sortedUUIDs).To(Equal(expected))
+		})
+	})
+}
