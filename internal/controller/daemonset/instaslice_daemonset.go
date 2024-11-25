@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
+	"github.com/openshift/instaslice-operator/internal/controller/utils"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -142,15 +143,8 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				return ctrl.Result{Requeue: true}, nil
 			}
 
-			updateInstasliceObject, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
-			if err != nil {
-				log.V(1).Error(err, "err getting latest instaslice object")
-				return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
-			}
-
 			allocations.Allocationstatus = inferencev1alpha1.AllocationStatusDeleted
-			updateInstasliceObject.Spec.Allocations[allocations.PodUUID] = allocations
-			err = r.Update(ctx, updateInstasliceObject)
+			err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, allocations.PodUUID, allocations)
 			if err != nil {
 				log.Error(err, "error updating InstaSlice object for ", "pod", allocations.PodName)
 				return ctrl.Result{Requeue: true}, nil
@@ -261,9 +255,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 			if updatedAllocation, ok := updateInstasliceObject.Spec.Allocations[allocations.PodUUID]; ok {
 				updatedAllocation.Allocationstatus = inferencev1alpha1.AllocationStatusCreated
-				updateInstasliceObject.Spec.Allocations[allocations.PodUUID] = updatedAllocation
-				err = r.Update(ctx, updateInstasliceObject)
-				if err != nil {
+				if err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, updatedAllocation.PodUUID, updatedAllocation); err != nil {
 					return ctrl.Result{Requeue: true}, nil
 				}
 				return ctrl.Result{}, nil
