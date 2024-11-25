@@ -22,7 +22,7 @@ metadata:
       ]
     capabilities: Basic Install
     categories: Drivers and plugins
-    containerImage: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:26263351059c6ffc9e1d61cf518169fc305319b3f91970bd55e09f56a3d80903
+    containerImage: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:034a6ce8508d41ea4b3dd0fd9f55b80f5a8bd3c52524f6ac29e0b16606e16711
     createdAt: "2024-11-01T14:26:33Z"
     description: InstaSlice works with GPU operator to create mig slices on demand
     operators.operatorframework.io/builder: operator-sdk-v1.34.2
@@ -214,7 +214,7 @@ spec:
                   value: "false"
                 - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
                   value: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:85568e2b6cd4c62ccf9f3e5eea3325c92f907111c2e21787ac3e0df4b1cbe37e
-                image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:26263351059c6ffc9e1d61cf518169fc305319b3f91970bd55e09f56a3d80903
+                image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:034a6ce8508d41ea4b3dd0fd9f55b80f5a8bd3c52524f6ac29e0b16606e16711
                 livenessProbe:
                   httpGet:
                     path: /healthz
