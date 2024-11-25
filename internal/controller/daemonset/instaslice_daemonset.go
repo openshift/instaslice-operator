@@ -233,6 +233,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				for _, migDevice := range createdMigInfos {
 					if migDevice.uuid == allocations.GPUUUID && migDevice.start == allocations.Start {
 						createCiAndGi = false
+						log.Info("skipping ci and gi creation for ", "pod", allocations.PodName, "parentgpu", allocations.GPUUUID, "start", allocations.Start)
 						break
 					}
 				}
