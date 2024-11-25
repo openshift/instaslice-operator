@@ -303,7 +303,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 								return resultDelete, errDeletingAllocation
 							}
 							resultRemove, errRemovingFinalizer := r.removeInstaSliceFinalizer(ctx, req)
-							if errDeletingAllocation != nil {
+							if errRemovingFinalizer != nil {
 								return resultRemove, errRemovingFinalizer
 							}
 						}
