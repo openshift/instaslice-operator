@@ -29,11 +29,7 @@ COPY go.sum go.sum
 RUN go mod download
 
 # Copy the go source
-COPY cmd/daemonset/main.go cmd/daemonset/main.go
-COPY api/ api/
-COPY internal/controller/daemonset/instaslice_daemonset.go internal/controller/daemonset/instaslice_daemonset.go
-COPY internal/controller/constants.go internal/controller/constants.go
-COPY internal/controller/utils.go internal/controller/utils.go
+COPY . .
 
 # Build
 # the GOARCH has not a default value to allow the binary be built according to the host where the command
