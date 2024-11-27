@@ -563,7 +563,14 @@ func (r *InstaSliceDaemonsetReconciler) classicalResourcesAndGPUMemOnNode(ctx co
 	newResourceQuantity := resource.MustParse(totalGPUMemory + "Gi")
 	// Convert the string to ResourceName
 	resourceName := v1.ResourceName(controller.QuotaResourceName)
-	node.Status.Capacity[resourceName] = newResourceQuantity
+	if node.Status.Capacity == nil {
+		resourceList := v1.ResourceList{
+			resourceName: newResourceQuantity,
+		}
+		node.Status.Capacity = resourceList
+	} else {
+		node.Status.Capacity[resourceName] = newResourceQuantity
+	}
 
 	if err := r.Status().Update(ctx, node); err != nil {
 		log.Error(err, "unable to patch the node with new resource")
