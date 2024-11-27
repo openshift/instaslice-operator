@@ -81,7 +81,7 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 	}
 
 	// Add scheduling
-	schedulingGateName := gateName
+	schedulingGateName := GateName
 	found := false
 	for _, gate := range pod.Spec.SchedulingGates {
 		if gate.Name == schedulingGateName {

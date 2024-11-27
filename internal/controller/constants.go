@@ -20,8 +20,8 @@ import "time"
 
 const (
 	OrgInstaslicePrefix              = "instaslice.redhat.com/"
-	gateName                         = OrgInstaslicePrefix + "accelerator"
-	finalizerName                    = gateName
+	GateName                         = OrgInstaslicePrefix + "accelerator"
+	FinalizerName                    = GateName
 	QuotaResourceName                = OrgInstaslicePrefix + "accelerator-memory-quota"
 	EmulatorModeFalse                = "false"
 	EmulatorModeTrue                 = "true"

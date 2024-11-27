@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -36,7 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
@@ -85,7 +85,7 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 					Namespace: InstaSliceOperatorNamespace,
 					UID:       types.UID(podUUID),
 					Finalizers: []string{
-						finalizerName,
+						FinalizerName,
 					},
 				},
 			}
@@ -135,7 +135,7 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 
 			updatedPod := &v1.Pod{}
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedPod)).To(Succeed())
-			Expect(updatedPod.Finalizers).NotTo(ContainElement(finalizerName))
+			Expect(updatedPod.Finalizers).NotTo(ContainElement(FinalizerName))
 		})
 
 		It("should set allocation status to Deleting if status is not Deleted", func() {
@@ -351,7 +351,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 					Namespace: InstaSliceOperatorNamespace,
 					UID:       types.UID(podUUID),
 					Finalizers: []string{
-						finalizerName,
+						FinalizerName,
 					},
 				},
 				Status: v1.PodStatus{Phase: v1.PodPending, Conditions: []v1.PodCondition{{Message: "blocked"}}},
@@ -449,7 +449,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 		It("should return if the containers are not present", func() {
 			// update the scheduling gates of the pod by unknown name
 			pod.Spec.SchedulingGates = append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{
-				Name: gateName,
+				Name: GateName,
 			})
 			pod.Finalizers = nil
 			Expect(fakeClient.Update(ctx, pod)).To(Succeed())
@@ -471,11 +471,11 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 					// to process the allocations
 					UID: types.UID(podUUID),
 					Finalizers: []string{
-						finalizerName,
+						FinalizerName,
 					},
 				},
 				Spec: v1.PodSpec{
-					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: gateName}),
+					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: GateName}),
 				},
 				Status: v1.PodStatus{Phase: v1.PodFailed, Conditions: []v1.PodCondition{{Message: "blocked"}}},
 			}
@@ -498,7 +498,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			Expect(result).To(Equal(ctrl.Result{}))
 			newPod := &v1.Pod{}
 			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: failedPodName, Namespace: InstaSliceOperatorNamespace}, newPod)).To(Succeed())
-			Expect(newPod.Finalizers).ToNot(ContainElement(finalizerName))
+			Expect(newPod.Finalizers).ToNot(ContainElement(FinalizerName))
 
 		})
 
@@ -514,11 +514,11 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 					// to process the allocations
 					UID: types.UID(podUUID),
 					Finalizers: []string{
-						finalizerName,
+						FinalizerName,
 					},
 				},
 				Spec: v1.PodSpec{
-					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: gateName}),
+					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: GateName}),
 				},
 				Status: v1.PodStatus{Phase: v1.PodSucceeded, Conditions: []v1.PodCondition{{Message: "blocked"}}},
 			}
@@ -541,7 +541,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			Expect(result).To(Equal(ctrl.Result{}))
 			newPod := &v1.Pod{}
 			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: succeededPodName, Namespace: InstaSliceOperatorNamespace}, newPod)).To(Succeed())
-			Expect(newPod.Finalizers).ToNot(ContainElement(finalizerName))
+			Expect(newPod.Finalizers).ToNot(ContainElement(FinalizerName))
 
 		})
 
@@ -555,11 +555,11 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 					// to process the allocations
 					UID: types.UID(podUUID),
 					Finalizers: []string{
-						finalizerName,
+						FinalizerName,
 					},
 				},
 				Spec: v1.PodSpec{
-					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: gateName}),
+					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: GateName}),
 					Containers:      []v1.Container{{Name: "test-container-1"}, {Name: "test-container-2"}},
 				},
 				Status: v1.PodStatus{Phase: v1.PodPending, Conditions: []v1.PodCondition{{Message: "blocked"}}},
@@ -584,12 +584,12 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 					Namespace: InstaSliceOperatorNamespace,
 					UID:       types.UID(podUUID),
 					Finalizers: []string{
-						finalizerName,
+						FinalizerName,
 					},
 				},
 				Spec: v1.PodSpec{
 					RestartPolicy:   v1.RestartPolicyOnFailure,
-					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: gateName}),
+					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: GateName}),
 					Containers: []v1.Container{
 						{
 							Name:  "vectoradd-cpu",
@@ -633,12 +633,12 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 					Namespace: InstaSliceOperatorNamespace,
 					UID:       types.UID(podUUID),
 					Finalizers: []string{
-						finalizerName,
+						FinalizerName,
 					},
 				},
 				Spec: v1.PodSpec{
 					RestartPolicy:   v1.RestartPolicyOnFailure,
-					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: gateName}),
+					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: GateName}),
 					Containers: []v1.Container{
 						{
 							Name:  "vectoradd-cpu",
@@ -689,12 +689,12 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 					Namespace: InstaSliceOperatorNamespace,
 					UID:       types.UID(podUUID),
 					Finalizers: []string{
-						finalizerName,
+						FinalizerName,
 					},
 				},
 				Spec: v1.PodSpec{
 					RestartPolicy:   v1.RestartPolicyOnFailure,
-					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: gateName}),
+					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: GateName}),
 					Containers: []v1.Container{
 						{
 							Name:  "vectoradd-cpu",
