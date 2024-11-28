@@ -24,9 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -35,44 +33,6 @@ import (
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
 )
-
-func TestDeleteConfigMap(t *testing.T) {
-	// Set up the scheme for the client
-	s := scheme.Scheme
-	_ = v1.AddToScheme(s)
-
-	// Create a fake client with a ConfigMap already created in the cluster
-	existingConfigMap := &v1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-configmap",
-			Namespace: "default",
-		},
-	}
-
-	// Use the fake client
-	client := fake.NewClientBuilder().WithScheme(s).WithObjects(existingConfigMap).Build()
-
-	// Create the reconciler with the fake client
-	reconciler := &InstaSliceDaemonsetReconciler{
-		Client: client,
-	}
-
-	// Create a background context
-	ctx := context.TODO()
-
-	// Test Case 1: Delete ConfigMap successfully
-	err := reconciler.deleteConfigMap(ctx, "test-configmap", "default")
-	assert.NoError(t, err, "expected no error when deleting configmap")
-
-	// Test that the ConfigMap no longer exists
-	cm := &v1.ConfigMap{}
-	err = client.Get(ctx, types.NamespacedName{Name: "test-configmap", Namespace: "default"}, cm)
-	assert.True(t, errors.IsNotFound(err), "expected configmap to be deleted")
-
-	// Test Case 2: ConfigMap not found
-	err = reconciler.deleteConfigMap(ctx, "non-existent-configmap", "default")
-	assert.NoError(t, err, "expected no error when configmap is not found")
-}
 
 func TestInstaSliceDaemonsetReconciler_Reconcile_Deleting_Alloc_Status(t *testing.T) {
 	// Set up the scheme for the client
@@ -180,10 +140,9 @@ func newInstaslice(name, podUUID string, status inferencev1alpha1.AllocationStat
 	spec := inferencev1alpha1.InstasliceSpec{
 		Allocations: map[string]inferencev1alpha1.AllocationDetails{
 			podUUID: {
-				PodUUID:            podUUID,
-				Allocationstatus:   status,
-				Nodename:           name,
-				Resourceidentifier: name,
+				PodUUID:          podUUID,
+				Allocationstatus: status,
+				Nodename:         name,
 			},
 		},
 	}
@@ -403,41 +362,4 @@ func TestMigProfile_Attributes(t *testing.T) {
 			assert.Equalf(t, tt.want, m.Attributes(), "Attributes()")
 		})
 	}
-}
-
-func TestInstaSliceDaemonsetReconciler_checkConfigMapExists(t *testing.T) {
-	// Set up the scheme for the client
-	s := scheme.Scheme
-	_ = v1.AddToScheme(s)
-	_ = inferencev1alpha1.AddToScheme(s)
-	_ = appsv1.AddToScheme(s)
-
-	nodeName := "test-node"
-
-	// Use the fake client
-	client := fake.NewClientBuilder().WithScheme(s).Build()
-
-	// Set NODE_NAME and EMULATOR_MODE env variables
-	assert.NoError(t, os.Setenv("NODE_NAME", nodeName))
-	assert.NoError(t, os.Setenv("EMULATOR_MODE", controller.EmulatorModeTrue))
-
-	// Create the reconciler with the fake client
-	reconciler := &InstaSliceDaemonsetReconciler{
-		Client:   client,
-		NodeName: nodeName,
-	}
-	// Create a background context
-	ctx := context.Background()
-	configMap := &v1.ConfigMap{}
-	configMap.Name = nodeName
-	configMap.Namespace = controller.InstaSliceOperatorNamespace
-	// create a config map
-	assert.NoError(t, reconciler.Create(ctx, configMap))
-	exists, err := reconciler.checkConfigMapExists(ctx, nodeName, controller.InstaSliceOperatorNamespace)
-	assert.NoError(t, err)
-	assert.True(t, exists)
-	// check for non-existent config map
-	exists, err = reconciler.checkConfigMapExists(ctx, "test-configmap", controller.InstaSliceOperatorNamespace)
-	assert.NoError(t, err)
-	assert.True(t, !exists)
 }

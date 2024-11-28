@@ -848,7 +848,6 @@ func TestFirstFitPolicy_SetAllocationDetails(t *testing.T) {
 		namespace           string
 		podName             string
 		gpuUuid             string
-		resourceIdentifier  string
 		cpuMilli            int64
 		memory              int64
 	}
@@ -865,11 +864,10 @@ func TestFirstFitPolicy_SetAllocationDetails(t *testing.T) {
 		namespace:           InstaSliceOperatorNamespace,
 		podName:             "test-pod",
 		gpuUuid:             "A-100",
-		resourceIdentifier:  "abcd-1234",
 		cpuMilli:            500,
 		memory:              1024,
 	}
-	allocDetails := inferencev1alpha1.AllocationDetails{PodUUID: "test-pod-uuid", Start: 0, Size: 1, Profile: "1g.5gb", GPUUUID: "A-100", Nodename: "kind-control-plane", Allocationstatus: inferencev1alpha1.AllocationStatus("created"), Resourceidentifier: "abcd-1234", Namespace: InstaSliceOperatorNamespace, PodName: "test-pod", Cpu: 500, Memory: 1024}
+	allocDetails := inferencev1alpha1.AllocationDetails{PodUUID: "test-pod-uuid", Start: 0, Size: 1, Profile: "1g.5gb", GPUUUID: "A-100", Nodename: "kind-control-plane", Allocationstatus: inferencev1alpha1.AllocationStatus("created"), Namespace: InstaSliceOperatorNamespace, PodName: "test-pod", Cpu: 500, Memory: 1024}
 	tests := []struct {
 		name string
 		args args
@@ -880,7 +878,7 @@ func TestFirstFitPolicy_SetAllocationDetails(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &FirstFitPolicy{}
-			assert.Equalf(t, tt.want, r.SetAllocationDetails(tt.args.profileName, tt.args.newStart, tt.args.size, tt.args.podUUID, tt.args.nodename, tt.args.processed, tt.args.discoveredGiprofile, tt.args.Ciprofileid, tt.args.Ciengprofileid, tt.args.namespace, tt.args.podName, tt.args.gpuUuid, tt.args.resourceIdentifier, tt.args.cpuMilli, tt.args.memory), "SetAllocationDetails(%v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v)", tt.args.profileName, tt.args.newStart, tt.args.size, tt.args.podUUID, tt.args.nodename, tt.args.processed, tt.args.discoveredGiprofile, tt.args.Ciprofileid, tt.args.Ciengprofileid, tt.args.namespace, tt.args.podName, tt.args.gpuUuid, tt.args.resourceIdentifier, tt.args.cpuMilli, tt.args.memory)
+			assert.Equalf(t, tt.want, r.SetAllocationDetails(tt.args.profileName, tt.args.newStart, tt.args.size, tt.args.podUUID, tt.args.nodename, tt.args.processed, tt.args.discoveredGiprofile, tt.args.Ciprofileid, tt.args.Ciengprofileid, tt.args.namespace, tt.args.podName, tt.args.gpuUuid, tt.args.cpuMilli, tt.args.memory), "SetAllocationDetails(%v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v)", tt.args.profileName, tt.args.newStart, tt.args.size, tt.args.podUUID, tt.args.nodename, tt.args.processed, tt.args.discoveredGiprofile, tt.args.Ciprofileid, tt.args.Ciengprofileid, tt.args.namespace, tt.args.podName, tt.args.gpuUuid, tt.args.cpuMilli, tt.args.memory)
 		})
 	}
 }

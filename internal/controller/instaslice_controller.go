@@ -54,7 +54,7 @@ type InstasliceReconciler struct {
 // AllocationPolicy interface with a single method
 type AllocationPolicy interface {
 	SetAllocationDetails(profileName string, newStart, size uint32, podUUID string, nodename string, processed string,
-		discoveredGiprofile int, Ciprofileid int, Ciengprofileid int, namespace string, podName string, gpuUuid string, resourceIndetifier string,
+		discoveredGiprofile int, Ciprofileid int, Ciengprofileid int, namespace string, podName string, gpuUuid string,
 		cpumilli int64, memory int64) *inferencev1alpha1.AllocationDetails
 }
 
@@ -637,20 +637,19 @@ func (r *InstasliceReconciler) removeInstaSliceFinalizer(ctx context.Context, re
 // Policy based allocation - FirstFit
 func (r *FirstFitPolicy) SetAllocationDetails(profileName string, newStart, size uint32, podUUID, nodename string,
 	processed string, discoveredGiprofile int, Ciprofileid int, Ciengprofileid int,
-	namespace string, podName string, gpuUuid string, resourceIdentifier string, cpuMilli int64, memory int64) *inferencev1alpha1.AllocationDetails {
+	namespace string, podName string, gpuUuid string, cpuMilli int64, memory int64) *inferencev1alpha1.AllocationDetails {
 	return &inferencev1alpha1.AllocationDetails{
-		Profile:            profileName,
-		Start:              newStart,
-		Size:               size,
-		PodUUID:            podUUID,
-		Nodename:           nodename,
-		Allocationstatus:   inferencev1alpha1.AllocationStatus(processed),
-		Namespace:          namespace,
-		PodName:            podName,
-		GPUUUID:            gpuUuid,
-		Resourceidentifier: resourceIdentifier,
-		Cpu:                cpuMilli,
-		Memory:             memory,
+		Profile:          profileName,
+		Start:            newStart,
+		Size:             size,
+		PodUUID:          podUUID,
+		Nodename:         nodename,
+		Allocationstatus: inferencev1alpha1.AllocationStatus(processed),
+		Namespace:        namespace,
+		PodName:          podName,
+		GPUUUID:          gpuUuid,
+		Cpu:              cpuMilli,
+		Memory:           memory,
 	}
 }
 

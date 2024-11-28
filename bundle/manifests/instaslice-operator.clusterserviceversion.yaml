@@ -22,14 +22,14 @@ metadata:
       ]
     capabilities: Basic Install
     categories: Drivers and plugins
-    containerImage: quay.io/ibm/instaslice-controller:kubecon
-    createdAt: "2024-11-06T17:06:29Z"
+    containerImage: quay.io/amalvank/instaslicev2-controller:latest
+    createdAt: "2024-11-28T19:46:57Z"
     description: InstaSlice works with GPU operator to create mig slices on demand
-    operators.operatorframework.io/builder: operator-sdk-v1.34.1
+    operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/openshift/instaslice-operator
     support: https://github.com/openshift/instaslice-operator/issues
-  name: instaslice-operator.v0.0.1
+  name: instaslice-operator.v0.0.2
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -96,19 +96,6 @@ spec:
         - apiGroups:
           - ""
           resources:
-          - configmaps
-          - pods
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - ""
-          resources:
           - nodes
           verbs:
           - get
@@ -124,6 +111,18 @@ spec:
           - get
           - patch
           - update
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
         - apiGroups:
           - apps
           resources:
@@ -208,8 +207,8 @@ spec:
                 - name: EMULATOR_MODE
                   value: "false"
                 - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
-                  value: quay.io/ibm/instaslice-daemonset:kubecon
-                image: quay.io/ibm/instaslice-controller:kubecon
+                  value: quay.io/amalvank/instaslicev2-daemonset:latest
+                image: quay.io/amalvank/instaslicev2-controller:latest
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -351,7 +350,7 @@ spec:
     name: Codeflare
     url: https://github.com/openshift/instaslice-operator
   relatedImages:
-  - image: quay.io/ibm/instaslice-daemonset:kubecon
+  - image: quay.io/amalvank/instaslicev2-daemonset:latest
     name: instaslice-daemonset
   version: 0.0.2
   webhookdefinitions:

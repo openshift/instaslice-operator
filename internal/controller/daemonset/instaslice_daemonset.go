@@ -32,7 +32,6 @@ import (
 	"github.com/openshift/instaslice-operator/internal/controller"
 	"github.com/openshift/instaslice-operator/internal/controller/utils"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -58,7 +57,6 @@ type InstaSliceDaemonsetReconciler struct {
 //+kubebuilder:rbac:groups=inference.redhat.com,resources=instaslices/finalizers,verbs=update
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=nodes/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 var discoveredGpusOnHost []string
 
@@ -137,12 +135,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				}
 			}
 
-			err = r.deleteConfigMap(ctx, allocations.Resourceidentifier, allocations.Namespace)
-			if err != nil && !errors.IsNotFound(err) {
-				log.Error(err, "error deleting config map for ", "pod", allocations.PodName)
-				return ctrl.Result{Requeue: true}, nil
-			}
-
 			allocations.Allocationstatus = inferencev1alpha1.AllocationStatusDeleted
 			err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, allocations.PodUUID, allocations)
 			if err != nil {
@@ -156,13 +148,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			//Assume pod only has one container with one GPU request
 			log.Info("creating allocation for ", "pod", allocations.PodName)
 
-			existingAllocations := instaslice.Spec.Allocations[allocations.PodUUID]
-
 			if emulatorMode == controller.EmulatorModeTrue {
-				// configmap with fake MIG uuid
-				if err := r.createConfigMap(ctx, allocations.Resourceidentifier, existingAllocations.Namespace, allocations.Resourceidentifier); err != nil {
-					return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
-				}
 				// Emulating cost to create CI and GI on a GPU
 				time.Sleep(controller.Requeue1sDelay)
 			}
@@ -222,8 +208,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					log.Error(err, "walking MIG devices failed")
 					return ctrl.Result{}, err
 				}
-				// we should skip ci and gi creation for cases where etcd update fails or configmap creation
-				// fails.
+				// we should skip ci and gi creation for cases where etcd update fails
 				for _, migDevice := range createdMigInfos {
 					if migDevice.uuid == allocations.GPUUUID && migDevice.start == allocations.Start {
 						createCiAndGi = false
@@ -241,9 +226,19 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				}
 				for migUuid, migDevice := range createdMigInfos {
 					if migDevice.start == allocations.Start && migDevice.uuid == allocations.GPUUUID && giProfileInfo.Id == migDevice.giInfo.ProfileId {
-						if err := r.createConfigMap(ctx, migUuid, existingAllocations.Namespace, allocations.Resourceidentifier); err != nil {
-							return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
+
+						pod, err := r.kubeClient.CoreV1().Pods(allocations.Namespace).Get(context.TODO(), allocations.PodName, metav1.GetOptions{})
+						if err != nil {
+							return ctrl.Result{}, err
 						}
+
+						pod.Annotations["instaslice.nvidia.device"] = migUuid
+
+						_, err = r.kubeClient.CoreV1().Pods(allocations.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{})
+						if err != nil {
+							return ctrl.Result{}, err
+						}
+
 						log.Info("done creating mig slice for ", "pod", allocations.PodName, "parentgpu", allocations.GPUUUID, "miguuid", migUuid)
 						break
 					}
@@ -327,14 +322,7 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 
 		}
 	}
-	exists, err := r.checkConfigMapExists(ctx, allocation.Resourceidentifier, allocation.Resourceidentifier)
-	if err != nil {
-		return err
-	}
-	if exists {
-		log.Error(nil, "mig walking did not discover any slice for ", "pod", "migInfos", allocation.PodName, migInfos, logMigInfosSingleLine(migInfos))
-		return fmt.Errorf("MIG slice not found for GPUUUID %v and Start %v", allocation.GPUUUID, allocation.Start)
-	}
+
 	return nil
 }
 
@@ -709,56 +697,6 @@ func (m MigProfile) Attributes() []string {
 	return attr
 }
 
-// Create configmap which is used by Pods to consume MIG device
-func (r *InstaSliceDaemonsetReconciler) createConfigMap(ctx context.Context, migGPUUUID string, namespace string, resourceIdentifier string) error {
-	log := logr.FromContext(ctx)
-	var configMap v1.ConfigMap
-	err := r.Get(ctx, types.NamespacedName{Name: resourceIdentifier, Namespace: namespace}, &configMap)
-	if err != nil {
-		log.Info("ConfigMap not found, creating for ", "name", resourceIdentifier, "migGPUUUID", migGPUUUID)
-		configMapToCreate := &v1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      resourceIdentifier,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				"NVIDIA_VISIBLE_DEVICES": migGPUUUID,
-				"CUDA_VISIBLE_DEVICES":   migGPUUUID,
-			},
-		}
-		if err := r.Create(ctx, configMapToCreate); err != nil {
-			log.Error(err, "failed to create ConfigMap")
-			return err
-		}
-
-	}
-	return nil
-}
-
-// Manage lifecycle of configmap, delete it once the pod is deleted from the system
-func (r *InstaSliceDaemonsetReconciler) deleteConfigMap(ctx context.Context, configMapName string, namespace string) error {
-	log := logr.FromContext(ctx)
-	// Define the ConfigMap object with the name and namespace
-	configMap := &v1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      configMapName,
-			Namespace: namespace,
-		},
-	}
-
-	err := r.Delete(ctx, configMap)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			log.Error(err, "configmap not found for ", "pod", configMapName)
-			return nil
-		}
-		return err
-	}
-
-	log.Info("ConfigMap deleted successfully ", "name", configMapName)
-	return nil
-}
-
 func createPatchData(resourceName string, resourceValue resource.Quantity) ([]byte, error) {
 	patch := []ResPatchOperation{
 		{Op: "add",
@@ -960,20 +898,4 @@ func logMigInfosSingleLine(migInfos map[string]*MigDeviceInfo) string {
 	}
 
 	return result
-}
-
-func (r *InstaSliceDaemonsetReconciler) checkConfigMapExists(ctx context.Context, name, namespace string) (bool, error) {
-	log := logr.FromContext(ctx)
-	configMap := &v1.ConfigMap{}
-	err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, configMap)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			log.Info("ConfigMap not found", "name", name, "namespace", namespace)
-			return false, nil
-		}
-		log.Error(err, "Error checking ConfigMap", "name", name, "namespace", namespace)
-		return false, err
-	}
-	log.Info("ConfigMap exists", "name", name, "namespace", namespace)
-	return true, nil
 }

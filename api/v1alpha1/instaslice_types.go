@@ -51,12 +51,11 @@ type AllocationDetails struct {
 	GPUUUID  string `json:"gpuUUID"`
 	Nodename string `json:"nodename"`
 	// +kubebuilder:validation:Enum:=deleted;deleting;ungated;creating;created
-	Allocationstatus   AllocationStatus `json:"allocationStatus"`
-	Resourceidentifier string           `json:"resourceIdentifier"`
-	Namespace          string           `json:"namespace"`
-	PodName            string           `json:"podName"`
-	Cpu                int64            `json:"cpu"`
-	Memory             int64            `json:"memory"`
+	Allocationstatus AllocationStatus `json:"allocationStatus"`
+	Namespace        string           `json:"namespace"`
+	PodName          string           `json:"podName"`
+	Cpu              int64            `json:"cpu"`
+	Memory           int64            `json:"memory"`
 }
 
 // InstasliceSpec defines the desired state of Instaslice
