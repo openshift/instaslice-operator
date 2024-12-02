@@ -147,6 +147,23 @@ spec:
         - name: kind
           value: task
         resolver: bundles
+    - name: init-daemonset
+      params:
+      - name: image-url
+        value: $(params.output-image-daemonset)
+      - name: rebuild
+        value: $(params.rebuild)
+      - name: skip-checks
+        value: $(params.skip-checks)
+      taskRef:
+        params:
+        - name: name
+          value: init
+        - name: bundle
+          value: quay.io/konflux-ci/tekton-catalog/task-init:0.2@sha256:0523b51c28375a3f222da91690e22eff11888ebc98a0c73c468af44762265c69
+        - name: kind
+          value: task
+        resolver: bundles
     - name: clone-repository
       params:
       - name: url
@@ -159,6 +176,7 @@ spec:
         value: $(params.image-expires-after)
       runAfter:
       - init
+      - init-daemonset
       taskRef:
         params:
         - name: name
@@ -170,6 +188,10 @@ spec:
         resolver: bundles
       when:
       - input: $(tasks.init.results.build)
+        operator: in
+        values:
+        - "true"
+      - input: $(tasks.init-daemonset.results.build)
         operator: in
         values:
         - "true"
@@ -250,6 +272,10 @@ spec:
         operator: in
         values:
         - "true"
+      - input: $(tasks.init-daemonset.results.build)
+        operator: in
+        values:
+        - "true"
     - matrix:
         params:
         - name: PLATFORM
@@ -298,6 +324,10 @@ spec:
         operator: in
         values:
         - "true"
+      - input: $(tasks.init-daemonset.results.build)
+        operator: in
+        values:
+        - "true"
     - name: build-image-index
       params:
       - name: IMAGE
@@ -329,6 +359,10 @@ spec:
         operator: in
         values:
         - "true"
+      - input: $(tasks.init-daemonset.results.build)
+        operator: in
+        values:
+        - "true"
     - name: build-source-image
       params:
       - name: BINARY_IMAGE
@@ -350,6 +384,10 @@ spec:
         resolver: bundles
       when:
       - input: $(tasks.init.results.build)
+        operator: in
+        values:
+        - "true"
+      - input: $(tasks.init-daemonset.results.build)
         operator: in
         values:
         - "true"
