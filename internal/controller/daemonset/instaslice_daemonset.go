@@ -600,7 +600,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*infe
 		}
 
 		uuid, _ := device.GetUUID()
-		mode, _, ret := nvml.Device(device).GetMigMode()
+		mode, _, ret := device.GetMigMode()
 		if ret == nvml.ERROR_NOT_SUPPORTED {
 			return instaslice, ret, gpuModelMap, false, fmt.Errorf("unable to detect mig mode")
 		}
