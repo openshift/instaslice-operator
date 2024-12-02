@@ -24,6 +24,8 @@ spec:
     value: '{{revision}}'
   - name: output-image
     value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator:on-pr-{{revision}}
+  - name: output-image-daemonset
+    value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset:on-pr-{{revision}}
   - name: image-expires-after
     value: 5d
   - name: dockerfile-daemonset
@@ -256,7 +258,7 @@ spec:
       name: build-daemonset-image
       params:
       - name: IMAGE
-        value: $(params.output-image)
+        value: $(params.output-image-daemonset)
       - name: DOCKERFILE
         value: $(params.dockerfile-daemonset)
       - name: CONTEXT
