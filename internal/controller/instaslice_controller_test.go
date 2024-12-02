@@ -593,7 +593,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 					Containers: []v1.Container{
 						{
 							Name:  "vectoradd-cpu",
-							Image: "quay.io/tardieu/vectoradd:0.1.0",
+							Image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8",
 							Resources: v1.ResourceRequirements{
 								Requests: v1.ResourceList{
 									v1.ResourceCPU:    resource.MustParse("500m"),
@@ -642,7 +642,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 					Containers: []v1.Container{
 						{
 							Name:  "vectoradd-cpu",
-							Image: "quay.io/tardieu/vectoradd:0.1.0",
+							Image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8",
 							Resources: v1.ResourceRequirements{
 								Requests: v1.ResourceList{
 									v1.ResourceCPU:    resource.MustParse("500m"),
@@ -698,7 +698,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 					Containers: []v1.Container{
 						{
 							Name:  "vectoradd-cpu",
-							Image: "quay.io/tardieu/vectoradd:0.1.0",
+							Image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8",
 							Resources: v1.ResourceRequirements{
 								Requests: v1.ResourceList{
 									v1.ResourceCPU:    resource.MustParse("500m"),
