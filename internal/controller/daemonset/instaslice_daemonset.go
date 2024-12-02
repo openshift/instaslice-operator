@@ -587,6 +587,7 @@ func (r *InstaSliceDaemonsetReconciler) classicalResourcesAndGPUMemOnNode(ctx co
 
 // during init time we need to discover GPU that are MIG enabled and slices if any on them to start making allocations of the next pods.
 func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*inferencev1alpha1.Instaslice, nvml.Return, map[string]string, bool, error) {
+	log := logr.FromContext(context.TODO())
 	instaslice := &inferencev1alpha1.Instaslice{}
 	ret := nvml.Init()
 	if ret != nvml.SUCCESS {
@@ -606,6 +607,17 @@ func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*infe
 		}
 
 		uuid, _ := device.GetUUID()
+		mode, _, ret := device.GetMigMode()
+		if ret == nvml.ERROR_NOT_SUPPORTED {
+			return instaslice, ret, gpuModelMap, false, fmt.Errorf("unable to detect mig mode")
+		}
+		if ret != nvml.SUCCESS {
+			return instaslice, ret, gpuModelMap, false, fmt.Errorf("error getting MIG mode: %v", ret)
+		}
+		if mode != nvml.DEVICE_MIG_ENABLE {
+			log.Info("mig mode not enabled on gpu with", "uuid", uuid)
+			continue
+		}
 		gpuName, _ := device.GetName()
 		gpuModelMap[uuid] = gpuName
 		discoveredGpusOnHost = append(discoveredGpusOnHost, uuid)
