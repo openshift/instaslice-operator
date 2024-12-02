@@ -22,6 +22,8 @@ spec:
     value: '{{source_url}}'
   - name: revision
     value: '{{revision}}'
+  - name: output-image-index
+    value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-index:on-pr-{{revision}}
   - name: output-image
     value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator:on-pr-{{revision}}
   - name: output-image-daemonset
@@ -164,6 +166,23 @@ spec:
         - name: kind
           value: task
         resolver: bundles
+    - name: init-index
+      params:
+      - name: image-url
+        value: $(params.output-image-index)
+      - name: rebuild
+        value: $(params.rebuild)
+      - name: skip-checks
+        value: $(params.skip-checks)
+      taskRef:
+        params:
+        - name: name
+          value: init
+        - name: bundle
+          value: quay.io/konflux-ci/tekton-catalog/task-init:0.2@sha256:0523b51c28375a3f222da91690e22eff11888ebc98a0c73c468af44762265c69
+        - name: kind
+          value: task
+        resolver: bundles
     - name: clone-repository
       params:
       - name: url
@@ -176,6 +195,7 @@ spec:
         value: $(params.image-expires-after)
       runAfter:
       - init
+      - init-index
       - init-daemonset
       taskRef:
         params:
@@ -331,7 +351,7 @@ spec:
     - name: build-image-index
       params:
       - name: IMAGE
-        value: $(params.output-image)
+        value: $(params.output-image-index)
       - name: COMMIT_SHA
         value: $(tasks.clone-repository.results.commit)
       - name: IMAGE_EXPIRES_AFTER
@@ -388,6 +408,10 @@ spec:
         values:
         - "true"
       - input: $(tasks.init-daemonset.results.build)
+        operator: in
+        values:
+        - "true"
+      - input: $(tasks.init-index.results.build)
         operator: in
         values:
         - "true"
