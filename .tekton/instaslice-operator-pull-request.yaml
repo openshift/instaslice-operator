@@ -308,7 +308,8 @@ spec:
         value: $(params.build-image-index)
       - name: IMAGES
         value:
-        - $(tasks.build-images.results.IMAGE_REF[*])
+        - $(tasks.build-operator-image.results.IMAGE_REF[*])
+        - $(tasks.build-daemonset-image.results.IMAGE_REF[*])
       runAfter:
       - build-operator-image
       - build-daemonset-image
