@@ -30,7 +30,6 @@ import (
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
-	"github.com/openshift/instaslice-operator/internal/controller/utils"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -134,14 +133,15 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, nil
 				}
 			}
-
-			allocations.Allocationstatus = inferencev1alpha1.AllocationStatusDeleted
-			err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, allocations.PodUUID, allocations)
-			if err != nil {
-				log.Error(err, "error updating InstaSlice object for ", "pod", allocations.PodName)
-				return ctrl.Result{Requeue: true}, nil
-			}
-			return ctrl.Result{}, nil
+			/*
+				allocations.Allocationstatus = inferencev1alpha1.AllocationStatusDeleted
+				err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, allocations.PodUUID, allocations)
+				if err != nil {
+					log.Error(err, "error updating InstaSlice object for ", "pod", allocations.PodName)
+					return ctrl.Result{Requeue: true}, nil
+				}
+				return ctrl.Result{}, nil
+			*/
 		}
 		// create new slice by obeying controller allocation
 		if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusCreating && allocations.Nodename == nodeName {
@@ -244,19 +244,20 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					}
 				}
 			}
-			updateInstasliceObject, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
-			if err != nil {
-				return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
-			}
-
-			if updatedAllocation, ok := updateInstasliceObject.Spec.Allocations[allocations.PodUUID]; ok {
-				updatedAllocation.Allocationstatus = inferencev1alpha1.AllocationStatusCreated
-				if err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, updatedAllocation.PodUUID, updatedAllocation); err != nil {
-					return ctrl.Result{Requeue: true}, nil
+			/*
+				updateInstasliceObject, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
+				if err != nil {
+					return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
 				}
-				return ctrl.Result{}, nil
-			}
 
+				if updatedAllocation, ok := updateInstasliceObject.Spec.Allocations[allocations.PodUUID]; ok {
+					updatedAllocation.Allocationstatus = inferencev1alpha1.AllocationStatusCreated
+					if err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, updatedAllocation.PodUUID, updatedAllocation); err != nil {
+						return ctrl.Result{Requeue: true}, nil
+					}
+					return ctrl.Result{}, nil
+				}
+			*/
 		}
 	}
 	return ctrl.Result{}, nil

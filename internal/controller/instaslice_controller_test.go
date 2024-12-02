@@ -666,9 +666,9 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			Expect(fakeClient.Create(ctx, pod)).To(Succeed())
 			// Update the Instaslice object's Allocation status of the pod to AllocationStatusCreated
 			allocDetails := inferencev1alpha1.AllocationDetails{
-				PodUUID:          podUUID,
-				PodName:          "test-pod-1",
-				Allocationstatus: inferencev1alpha1.AllocationStatusCreated,
+				PodUUID: podUUID,
+				PodName: "test-pod-1",
+				//	Allocationstatus: inferencev1alpha1.AllocationStatusCreated,
 			}
 			instaslice.Spec.Allocations[podUUID] = allocDetails
 			Expect(fakeClient.Update(ctx, instaslice)).To(Succeed())
@@ -722,9 +722,9 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			Expect(fakeClient.Create(ctx, pod)).To(Succeed())
 			// Update the instaslice with a unknown podUUID and expect Pod not to have allocations
 			allocDetails := inferencev1alpha1.AllocationDetails{
-				PodUUID:          "unknown-podUUID",
-				PodName:          "test-pod-1",
-				Allocationstatus: inferencev1alpha1.AllocationStatusCreated,
+				PodUUID: "unknown-podUUID",
+				PodName: "test-pod-1",
+				//	Allocationstatus: inferencev1alpha1.AllocationStatusCreated,
 			}
 			instaslice.Spec.Allocations[podUUID] = allocDetails
 			Expect(fakeClient.Update(ctx, instaslice)).To(Succeed())

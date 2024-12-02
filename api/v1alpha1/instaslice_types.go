@@ -39,7 +39,7 @@ const (
 	AllocationStatusDeleting AllocationStatus = "deleting"
 	AllocationStatusUngated  AllocationStatus = "ungated"
 	AllocationStatusCreating AllocationStatus = "creating"
-	AllocationStatusCreated  AllocationStatus = "created"
+	// AllocationStatusCreated  AllocationStatus = "created"
 )
 
 // Define the struct for allocation details
