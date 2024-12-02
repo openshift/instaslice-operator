@@ -23,8 +23,12 @@ spec:
     value: '{{revision}}'
   - name: output-image
     value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator:{{revision}}
+  - name: output-image-daemonset
+    value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset:{{revision}}
   - name: dockerfile
     value: Dockerfile.ocp
+  - name: dockerfile-daemonset
+    value: Dockerfile.daemonset-ocp
   pipelineSpec:
     description: |
       This pipeline is ideal for building multi-arch container images from a Containerfile while maintaining trust after pipeline customization.
@@ -56,6 +60,9 @@ spec:
     - description: Fully Qualified Output Image
       name: output-image
       type: string
+    - description: Fully Qualified Output Image for the Daemonset
+      name: output-image-daemonset
+      type: string
     - default: .
       description: Path to the source code of an application's component from where
         to build image.
@@ -65,6 +72,11 @@ spec:
       description: Path to the Dockerfile inside the context specified by parameter
         path-context
       name: dockerfile
+      type: string
+    - default: Dockerfile
+      description: Path to the Dockerfile inside the context specified by parameter
+        path-context
+      name: dockerfile-daemonset
       type: string
     - default: "false"
       description: Force rebuild image
@@ -123,10 +135,27 @@ spec:
       name: CHAINS-GIT_COMMIT
       value: $(tasks.clone-repository.results.commit)
     tasks:
-    - name: init
+    - name: init-operator
       params:
       - name: image-url
         value: $(params.output-image)
+      - name: rebuild
+        value: $(params.rebuild)
+      - name: skip-checks
+        value: $(params.skip-checks)
+      taskRef:
+        params:
+        - name: name
+          value: init
+        - name: bundle
+          value: quay.io/konflux-ci/tekton-catalog/task-init:0.2@sha256:0523b51c28375a3f222da91690e22eff11888ebc98a0c73c468af44762265c69
+        - name: kind
+          value: task
+        resolver: bundles
+    - name: init-daemonset
+      params:
+      - name: image-url
+        value: $(params.output-image-daemonset)
       - name: rebuild
         value: $(params.rebuild)
       - name: skip-checks
@@ -151,7 +180,8 @@ spec:
       - name: ociArtifactExpiresAfter
         value: $(params.image-expires-after)
       runAfter:
-      - init
+      - init-operator
+      - init-daemonset
       taskRef:
         params:
         - name: name
@@ -162,7 +192,11 @@ spec:
           value: task
         resolver: bundles
       when:
-      - input: $(tasks.init.results.build)
+      - input: $(tasks.init-operator.results.build)
+        operator: in
+        values:
+        - "true"
+      - input: $(tasks.init-daemonset.results.build)
         operator: in
         values:
         - "true"
@@ -200,7 +234,7 @@ spec:
         - name: PLATFORM
           value:
           - $(params.build-platforms)
-      name: build-images
+      name: build-operator-image
       params:
       - name: IMAGE
         value: $(params.output-image)
@@ -243,6 +277,54 @@ spec:
         operator: in
         values:
         - "true"
+    - matrix:
+        params:
+        - name: PLATFORM
+          value:
+          - $(params.build-platforms)
+      name: build-daemonset-image
+      params:
+      - name: IMAGE
+        value: $(params.output-image-daemonset)
+      - name: DOCKERFILE
+        value: $(params.dockerfile-daemonset)
+      - name: CONTEXT
+        value: $(params.path-context)
+      - name: HERMETIC
+        value: $(params.hermetic)
+      - name: PREFETCH_INPUT
+        value: $(params.prefetch-input)
+      - name: IMAGE_EXPIRES_AFTER
+        value: $(params.image-expires-after)
+      - name: COMMIT_SHA
+        value: $(tasks.clone-repository.results.commit)
+      - name: BUILD_ARGS
+        value:
+        - $(params.build-args[*])
+      - name: BUILD_ARGS_FILE
+        value: $(params.build-args-file)
+      - name: SOURCE_ARTIFACT
+        value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+      - name: CACHI2_ARTIFACT
+        value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
+      - name: IMAGE_APPEND_PLATFORM
+        value: "true"
+      runAfter:
+      - prefetch-dependencies
+      taskRef:
+        params:
+        - name: name
+          value: buildah-remote-oci-ta
+        - name: bundle
+          value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.2@sha256:2a3e27910c933d39ec1580dde6c48c61763ba28311a36f38bc2d58ec8b87eece
+        - name: kind
+          value: task
+        resolver: bundles
+      when:
+      - input: $(tasks.init-daemonset.results.build)
+        operator: in
+        values:
+        - "true"
     - name: build-image-index
       params:
       - name: IMAGE
@@ -255,9 +337,11 @@ spec:
         value: $(params.build-image-index)
       - name: IMAGES
         value:
-        - $(tasks.build-images.results.IMAGE_REF[*])
+        - $(tasks.build-operator-image.results.IMAGE_REF[*])
+        - $(tasks.build-daemonset-image.results.IMAGE_REF[*])
       runAfter:
-      - build-images
+      - build-operator-image
+      - build-daemonset-image
       taskRef:
         params:
         - name: name
@@ -292,7 +376,11 @@ spec:
           value: task
         resolver: bundles
       when:
-      - input: $(tasks.init.results.build)
+      - input: $(tasks.init-operator.results.build)
+        operator: in
+        values:
+        - "true"
+      - input: $(tasks.init-daemonset.results.build)
         operator: in
         values:
         - "true"
@@ -427,7 +515,7 @@ spec:
         - name: kind
           value: task
         resolver: bundles
-    - name: push-dockerfile
+    - name: push-operator-dockerfile
       params:
       - name: IMAGE
         value: $(tasks.build-image-index.results.IMAGE_URL)
@@ -435,6 +523,29 @@ spec:
         value: $(tasks.build-image-index.results.IMAGE_DIGEST)
       - name: DOCKERFILE
         value: $(params.dockerfile)
+      - name: CONTEXT
+        value: $(params.path-context)
+      - name: SOURCE_ARTIFACT
+        value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+      runAfter:
+      - build-image-index
+      taskRef:
+        params:
+        - name: name
+          value: push-dockerfile-oci-ta
+        - name: bundle
+          value: quay.io/konflux-ci/tekton-catalog/task-push-dockerfile-oci-ta:0.1@sha256:80d48a1b9d2707490309941ec9f79338533938f959ca9a207b481b0e8a5e7a93
+        - name: kind
+          value: task
+        resolver: bundles
+    - name: push-daemonset-dockerfile
+      params:
+      - name: IMAGE
+        value: $(tasks.build-image-index.results.IMAGE_URL)
+      - name: IMAGE_DIGEST
+        value: $(tasks.build-image-index.results.IMAGE_DIGEST)
+      - name: DOCKERFILE
+        value: $(params.dockerfile-daemonset)
       - name: CONTEXT
         value: $(params.path-context)
       - name: SOURCE_ARTIFACT
