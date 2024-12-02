@@ -102,6 +102,14 @@ spec:
       description: Path to a file with build arguments for buildah, see https://www.mankier.com/1/buildah-build#--build-arg-file
       name: build-args-file
       type: string
+    - name: operator-image-build-repo
+      description: Repository where the (unreleased) operator image is pushed by its build pipeline.
+      type: string
+      default: "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator"
+    - name: daemonset-image-build-repo
+      description: Repository where the (unreleased) daemonset image is pushed by its build pipeline.
+      type: string
+      default: "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset"
     results:
     - description: ""
       name: IMAGE_URL
@@ -188,6 +196,20 @@ spec:
         workspace: git-auth
       - name: netrc
         workspace: netrc
+    - name: wait-for-operator-image
+      params:
+      - name: IMAGE
+        value: "$(params.operator-image-build-repo):{revision}"
+      taskRef:
+        name: wait-for-operator-image
+      timeout: 1h10m
+    - name: wait-for-daemonset-image
+      params:
+      - name: IMAGE
+        value: "$(params.daemonset-image-build-repo):{revision}"
+      taskRef:
+        name: wait-for-daemonset-image
+      timeout: 1h10m
     - name: build-container
       params:
       - name: IMAGE
@@ -215,6 +237,8 @@ spec:
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
       runAfter:
       - prefetch-dependencies
+      - wait-for-operator-image
+      - wait-for-daemonset-image
       taskRef:
         params:
         - name: name
