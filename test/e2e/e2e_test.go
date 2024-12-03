@@ -423,6 +423,13 @@ var _ = Describe("controller", Ordered, func() {
 
 		It("should verify instaslice.redhat.com/mig-1g.5gb is max before submitting pods and verify the existence of pod allocation", func() {
 			ctx := context.TODO()
+			cmd := exec.CommandContext(ctx, kubectlBin, "get", "instaslice", nodeName, "-n", namespace, "-o", "json")
+			output, err := cmd.CombinedOutput()
+			Expect(err).ToNot(HaveOccurred())
+			instaslice := &inferencev1alpha1.Instaslice{}
+			err = json.Unmarshal(output, instaslice)
+			Expect(err).ToNot(HaveOccurred())
+			expected := strconv.Itoa(len(instaslice.Spec.MigGPUUUID) * 7)
 			checkMIG := func(expectedMIG string) bool {
 				cmd := exec.CommandContext(ctx, kubectlBin, "get", "node", nodeName, "-o", "json")
 				output, err := cmd.CombinedOutput()
@@ -447,7 +454,7 @@ var _ = Describe("controller", Ordered, func() {
 				return found && migCapacity == expectedMIG
 			}
 
-			Expect(checkMIG("14")).To(BeTrue(), "instaslice.redhat.com/mig-1g.5gb is not zero before submitting pods")
+			Expect(checkMIG(expected)).To(BeTrue(), "instaslice.redhat.com/mig-1g.5gb is max before submitting pods")
 
 			outputApply, err := applyResource(kubectlBin, "resources/test_multiple_pods.yaml", templateVars)
 			if err != nil {
