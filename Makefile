@@ -169,7 +169,6 @@ test-e2e-ocp-emulated: docker-build docker-push deploy-instaslice-emulated-on-oc
 PHONY: cleanup-test-e2e-ocp-emulated
 cleanup-test-e2e-ocp-emulated: KUBECTL=oc
 cleanup-test-e2e-ocp-emulated: ocp-undeploy-emulated uninstall
-	${KUBECTL} delete ns instaslice-system
 
 .PHONY: create-kind-cluster
 create-kind-cluster:
