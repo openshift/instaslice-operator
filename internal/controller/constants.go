@@ -31,7 +31,7 @@ const (
 	NodeLabel                        = "kubernetes.io/hostname"
 	multipleContainersUnsupportedErr = "multiple containers per pod not supported"
 	noContainerInsidePodErr          = "no containers present inside the pod"
-	instasliceDaemonsetName          = "instaslice-operator-controller-daemonset"
+	InstasliceDaemonsetName          = "instaslice-operator-controller-daemonset"
 	daemonSetImageName               = "quay.io/amalvank/instaslicev2-daemonset:latest"
 	daemonSetName                    = "daemonset"
 	serviceAccountName               = "instaslice-operator-controller-manager"

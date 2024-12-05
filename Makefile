@@ -162,13 +162,14 @@ cleanup-test-e2e-kind-emulated:
 test-e2e-ocp-emulated: export IMG_TAG=latest
 test-e2e-ocp-emulated: export EMULATOR_MODE=true
 test-e2e-ocp-emulated: docker-build docker-push deploy-instaslice-emulated-on-ocp
+test-e2e-ocp-emulated:
 	$(eval FOCUS_ARG := $(if $(FOCUS),--focus="$(FOCUS)"))
 	export KUBECTL=oc IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
 	ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m $(FOCUS_ARG) ./test/e2e
 
 PHONY: cleanup-test-e2e-ocp-emulated
 cleanup-test-e2e-ocp-emulated: KUBECTL=oc
-cleanup-test-e2e-ocp-emulated: ocp-undeploy-emulated uninstall
+cleanup-test-e2e-ocp-emulated: ocp-undeploy-emulated
 
 .PHONY: create-kind-cluster
 create-kind-cluster:
