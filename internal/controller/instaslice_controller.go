@@ -83,7 +83,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// 1. Ensure DaemonSet is deployed
 	daemonSet := &appsv1.DaemonSet{}
-	err := r.Get(ctx, types.NamespacedName{Name: instasliceDaemonsetName, Namespace: InstaSliceOperatorNamespace}, daemonSet)
+	err := r.Get(ctx, types.NamespacedName{Name: InstasliceDaemonsetName, Namespace: InstaSliceOperatorNamespace}, daemonSet)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// DaemonSet doesn't exist, so create it
@@ -418,7 +418,7 @@ func createInstaSliceDaemonSet(namespace string) *appsv1.DaemonSet {
 	// Base DaemonSet structure
 	daemonSet := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      instasliceDaemonsetName,
+			Name:      InstasliceDaemonsetName,
 			Namespace: namespace,
 			Labels:    daemonSetlabel,
 		},

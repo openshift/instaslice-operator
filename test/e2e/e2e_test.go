@@ -18,24 +18,29 @@ package e2e
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"log"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"regexp"
-	"strconv"
-	"strings"
-	"text/template"
 	"time"
-
-	v1 "k8s.io/api/core/v1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
-	"github.com/openshift/instaslice-operator/test/utils"
+	"github.com/openshift/instaslice-operator/internal/controller"
+	"github.com/openshift/instaslice-operator/internal/controller/daemonset"
+	"github.com/openshift/instaslice-operator/test/e2e/resources"
+
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	"k8s.io/client-go/kubernetes/scheme"
+
+	"k8s.io/client-go/rest"
+	//+kubebuilder:scaffold:imports
 )
 
 var (
@@ -44,10 +49,18 @@ var (
 	namespace              = "instaslice-system"
 	emulated               = false
 	nodeName               = "kind-e2e-control-plane"
-	controllerManagerLabel = "control-plane=controller-manager"
+	controllerManagerLabel = map[string]string{
+		"control-plane": "controller-manager",
+	}
 
 	controllerImage string
 	daemonsetImage  string
+	ctx             context.Context
+
+	instasliceObj inferencev1alpha1.Instaslice
+
+	cfg       *rest.Config
+	k8sClient client.Client
 )
 
 type TemplateVars struct {
@@ -75,13 +88,7 @@ func init() {
 	if env := os.Getenv("KUBECTL_BIN"); env != "" {
 		kubectlBin = env
 	}
-	node, err := getNodeName(kubectlBin, controllerManagerLabel)
-	if node != "" && err == nil {
-		nodeName = node
-		templateVars.NodeName = node
-	} else {
-		templateVars.NodeName = nodeName
-	}
+
 }
 
 var _ = BeforeSuite(func() {
@@ -92,6 +99,32 @@ var _ = BeforeSuite(func() {
 	GinkgoWriter.Printf("node-name: %v\n", nodeName)
 	GinkgoWriter.Printf("controller-image: %v\n", controllerImage)
 	GinkgoWriter.Printf("daemonset-image: %v\n", daemonsetImage)
+
+	var err error
+
+	cfg, err = config.GetConfig()
+	Expect(err).NotTo(HaveOccurred(), "Failed to get Kubernetes config")
+	Expect(cfg).NotTo(BeNil())
+
+	err = inferencev1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	//+kubebuilder:scaffold:scheme
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(k8sClient).NotTo(BeNil())
+
+	ctx = context.TODO()
+
+	node, err := getNodeName(controllerManagerLabel)
+	Expect(err).NotTo(HaveOccurred())
+	if node != "" && err == nil {
+		nodeName = node
+		templateVars.NodeName = node
+	} else {
+		templateVars.NodeName = nodeName
+	}
+
 })
 
 // TODO: add more test cases -
@@ -101,394 +134,348 @@ var _ = BeforeSuite(func() {
 // 3. submit 3 pods with 3g.20gb slice and verify that two allocations exists in instaslice object.
 // 4. submit a test pod with 1g.20gb slice and later delete it. verify the allocation status to be
 // in state deleting
-
 var _ = Describe("controller", Ordered, func() {
+	BeforeEach(func() {
+		err := k8sClient.Create(ctx, resources.GenerateFakeCapacity(templateVars.NodeName))
+		Expect(err).NotTo(HaveOccurred(), "Failed to create instaslice object")
+
+		err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: templateVars.NodeName}, &instasliceObj)
+		Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice resource")
+
+		timeout := 2 * time.Minute
+		pollInterval := 5 * time.Second
+
+		daemonSet := &appsv1.DaemonSet{}
+
+		Eventually(func() error {
+			err := k8sClient.Get(ctx, client.ObjectKey{Namespace: controller.InstaSliceOperatorNamespace,
+				Name: controller.InstasliceDaemonsetName}, daemonSet)
+			if err != nil {
+				return fmt.Errorf("failed to get DaemonSet: %v", err)
+			}
+
+			if daemonSet.Status.DesiredNumberScheduled != daemonSet.Status.NumberReady {
+				return fmt.Errorf("DaemonSet not ready, desired: %d, ready: %d",
+					daemonSet.Status.DesiredNumberScheduled, daemonSet.Status.NumberReady)
+			}
+
+			return nil
+		}, timeout, pollInterval).Should(Succeed(), "DaemonSet rollout status check failed")
+	})
+
 	Context("Operator", func() {
-		It("should apply the YAML and check if that instaslice resource exists", func() {
-			output, err := applyResource(kubectlBin, "resources/instaslice-fake-capacity.yaml.tmpl", templateVars)
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", output))
+		It("should create a pod with no requests and check if finalizer exists", func() {
+			pod := resources.GetVectorAddFinalizerPod()
+			err := k8sClient.Create(ctx, pod)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create the pod")
 
-			checkCmd := exec.Command(kubectlBin, "describe", "instaslice", "-n", namespace)
-			output, err = checkCmd.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Resource not found: %s", output))
-			// Wait for the daemonset to be ready
-			dsCmd := exec.Command(kubectlBin, "rollout", "status", "daemonset", "instaslice-operator-controller-daemonset", "-n", "instaslice-system", "--timeout", "120s")
-			output, err = dsCmd.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Instaslice daemonset not yet ready: %s", output))
-		})
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, pod)
+				if err != nil {
+					log.Printf("Error deleting the pod %+v: %+v", pod, err)
+				}
+			})
 
-		It("should apply the pod YAML with no requests and check if finalizer exists", func() {
-			outputPod, err := applyResource(kubectlBin, "resources/test-finalizer.yaml", templateVars)
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
-
-			cmdGetPod := exec.Command(kubectlBin, "get", "pod", "vectoradd-finalizer", "-o", "json")
-			outputGetPod, err := cmdGetPod.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to get pod: %s", outputGetPod))
-
-			var podObj map[string]interface{}
-			err = json.Unmarshal(outputGetPod, &podObj)
-			Expect(err).NotTo(HaveOccurred(), "Failed to parse pod JSON")
-
-			finalizers, found := podObj["metadata"].(map[string]interface{})["finalizers"].([]interface{})
-			Expect(found).To(BeTrue(), "Pod does not have finalizers")
-			finalizer := utils.AppendToInstaSlicePrefix("accelerator")
-			Expect(finalizers).To(ContainElement(finalizer), "Finalizer '%s' not found on pod", finalizer)
-		})
-
-		It("should apply the pod YAML with no requests and check the allocation in instaslice object", func() {
-			outputPod, err := applyResource(kubectlBin, "resources/test-pod-no-requests.yaml", templateVars)
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
 			Eventually(func() error {
-				cmd := exec.Command(kubectlBin, "get", "instaslice", "-o", "json", "-n", namespace)
-				output, err := cmd.CombinedOutput()
+				err := k8sClient.Get(ctx, client.ObjectKey{Name: pod.Name, Namespace: pod.Namespace}, pod)
 				if err != nil {
-					return fmt.Errorf("Failed to get Instaslice object: %s", string(output))
+					return err
 				}
 
-				var result struct {
-					Items []map[string]interface{} `json:"items"`
-				}
-				err = json.Unmarshal(output, &result)
-				if err != nil {
-					return fmt.Errorf("Failed to parse JSON output: %v", err)
-				}
-
-				if len(result.Items) == 0 {
-					return fmt.Errorf("No Instaslice objects found")
-				}
-
-				instaslice := result.Items[0]
-				spec, found := instaslice["spec"].(map[string]interface{})
-				if !found {
-					return fmt.Errorf("Spec not found in Instaslice object")
-				}
-
-				allocations, found := spec["allocations"].(map[string]interface{})
-				if !found {
-					return fmt.Errorf("Spec.Allocations not found in Instaslice object")
-				}
-
-				for _, data := range allocations {
-					if allocation, ok := data.(map[string]interface{}); ok {
-						if _, ok := allocation["allocationStatus"].(string); !ok {
-							return fmt.Errorf("allocationStatus not found in Instaslice object")
-						}
-
-						notCreated := findPodName(allocations, "vectoradd-no-req")
-						if notCreated {
-							return fmt.Errorf("Spec.Allocations found in Instaslice object")
-						}
+				for _, finalizer := range pod.ObjectMeta.Finalizers {
+					if finalizer == controller.FinalizerName {
+						return nil // Finalizer found
 					}
 				}
 
-				// Everything is okay
-				return nil
+				return fmt.Errorf("finalizer %s not found on Pod %s", controller.FinalizerName, pod.Name)
+			}, time.Minute, 5*time.Second).Should(Succeed(), "Failed to verify finalizer on Pod")
+		})
+		It("should create a pod with no requests and check the allocation in instaslice object", func() {
+			pod := resources.GetVectorAddNoReqPod()
+			err := k8sClient.Create(ctx, pod)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create the pod")
+
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, pod)
+				if err != nil {
+					log.Printf("Error deleting the pod %+v: %+v", pod, err)
+				}
+			})
+
+			Eventually(func() error {
+				err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: templateVars.NodeName}, &instasliceObj)
+				if err != nil {
+					return err
+				}
+
+				for _, allocation := range instasliceObj.Spec.Allocations {
+					if allocation.PodName == pod.Name {
+						return nil
+					}
+				}
+				return fmt.Errorf("No valid allocation found for the pod %+v ", pod)
 			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid allocations")
 		})
+		It("should create a pod with small requests and check the allocation in instaslice object", func() {
+			pod := resources.GetVectorAddSmallReqPod()
+			err := k8sClient.Create(ctx, pod)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create the pod")
 
-		It("should apply the pod YAML with small requests and check the allocation in instaslice object", func() {
-			outputPod, err := applyResource(kubectlBin, "resources/test-pod-with-small-requests.yaml", templateVars)
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
-
-			var result struct {
-				Items []map[string]interface{} `json:"items"`
-			}
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, pod)
+				if err != nil {
+					log.Printf("Error deleting the pod %+v: %+v", pod, err)
+				}
+			})
 
 			Eventually(func() error {
-				cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
-				output, err := cmd.CombinedOutput()
+				err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: templateVars.NodeName}, &instasliceObj)
 				if err != nil {
-					return fmt.Errorf("failed to get Instaslice object: %s", string(output))
+					return err
 				}
 
-				err = json.Unmarshal(output, &result)
-				if err != nil {
-					return fmt.Errorf("failed to parse JSON output: %v", err)
-				}
-
-				if len(result.Items) == 0 {
-					return fmt.Errorf("no Instaslice objects found")
-				}
-
-				instaslice := result.Items[0]
-				spec, found := instaslice["spec"].(map[string]interface{})
-				if !found {
-					return fmt.Errorf("Spec not found in Instaslice object")
-				}
-
-				allocations, found := spec["allocations"].(map[string]interface{})
-				if !found {
-					return fmt.Errorf("Spec.Allocations not found in Instaslice object")
-				}
-
-				for _, data := range allocations {
-					if allocation, ok := data.(map[string]interface{}); ok {
-						if _, ok := allocation["allocationStatus"].(string); ok {
-							notCreated := findPodName(allocations, "vectoradd-small-req")
-							if notCreated {
-								return fmt.Errorf("Spec.Allocations found in Instaslice object")
-							}
-						} else {
-							return fmt.Errorf("allocationStatus not found in Instaslice object")
-						}
+				for _, allocation := range instasliceObj.Spec.Allocations {
+					if allocation.PodName == pod.Name {
+						return nil
 					}
 				}
+				return fmt.Errorf("No valid allocation found for the pod %+v ", pod)
+			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid allocations")
+		})
+		It("should create a pod with large memory requests and check the allocation in instaslice object", func() {
+			pod := resources.GetVectorAddLargeMemPod()
+			err := k8sClient.Create(ctx, pod)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create the pod")
 
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, pod)
+				if err != nil {
+					log.Printf("Error deleting the pod %+v: %+v", pod, err)
+				}
+			})
+			Consistently(func() error {
+				err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: templateVars.NodeName}, &instasliceObj)
+				if err != nil {
+					return err
+				}
+
+				for _, allocation := range instasliceObj.Spec.Allocations {
+					if allocation.PodName == pod.Name {
+						return fmt.Errorf("PodName %s found in allocations", pod.Name)
+					}
+				}
 				return nil
-			}, "60s", "5s").Should(Succeed(), "Instaslice object should eventually have the allocation")
+			}, 1*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid allocations")
 		})
+		It("should create a pod with large cpu requests and check the allocation in instaslice object", func() {
+			pod := resources.GetVectorAddLargeCPUPod()
+			err := k8sClient.Create(ctx, pod)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create the pod")
 
-		It("should apply the pod YAML with pod large memory requests and check the allocation in instaslice object", func() {
-			outputPod, err := applyResource(kubectlBin, "resources/test-pod-with-large-memory-requests.yaml", templateVars)
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
-
-			cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
-			output, err := cmd.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
-
-			// Parse the JSON output
-			var result struct {
-				Items []map[string]interface{} `json:"items"`
-			}
-			err = json.Unmarshal(output, &result)
-			Expect(err).NotTo(HaveOccurred(), "Failed to parse JSON output")
-
-			// Assume we want to check the first Instaslice object if it exists
-			if len(result.Items) > 0 {
-				instaslice := result.Items[0]
-				spec, found := instaslice["spec"].(map[string]interface{})
-				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
-				allocations, _ := spec["allocations"].(map[string]interface{})
-				notCreated := findPodName(allocations, "cuda-vectoradd-large-memory")
-				Expect(notCreated).To(BeTrue(), "Spec.Allocations found in Instaslice object")
-
-			} else {
-				Fail("No Instaslice objects found")
-			}
-		})
-
-		It("should apply the pod YAML with pod large cpu requests and check the allocation in instaslice object", func() {
-			outputPod, err := applyResource(kubectlBin, "resources/test-pod-with-large-cpu-requests.yaml", templateVars)
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
-
-			cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
-			output, err := cmd.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
-
-			// Parse the JSON output
-			var result struct {
-				Items []map[string]interface{} `json:"items"`
-			}
-			err = json.Unmarshal(output, &result)
-			Expect(err).NotTo(HaveOccurred(), "Failed to parse JSON output")
-
-			// Assume we want to check the first Instaslice object if it exists
-			if len(result.Items) > 0 {
-				instaslice := result.Items[0]
-				spec, found := instaslice["spec"].(map[string]interface{})
-				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
-				allocations, _ := spec["allocations"].(map[string]interface{})
-				notCreated := findPodName(allocations, "cuda-vectoradd-large-cpu")
-				Expect(notCreated).To(BeTrue(), "Spec.Allocations found in Instaslice object")
-
-			} else {
-				Fail("No Instaslice objects found")
-			}
-		})
-
-		It("should apply the deployment YAML and check if pod exists", func() {
-			ctx := context.TODO()
-			// deploymentName := "sleep-deployment"
-			labelSelector := "app=sleep-app"
-			outputPod, err := applyResource(kubectlBin, "resources/test-sleep-deployment.yaml", templateVars)
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
-
-			cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
-			output, err := cmd.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
-
-			// Parse the JSON output
-			var result struct {
-				Items []map[string]interface{} `json:"items"`
-			}
-			err = json.Unmarshal(output, &result)
-			Expect(err).NotTo(HaveOccurred(), "Failed to parse JSON output")
-
-			// Assume we want to check the first Instaslice object if it exists
-			if len(result.Items) > 0 {
-				instaslice := result.Items[0]
-				_, found := instaslice["spec"].(map[string]interface{})
-				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
-
-				Eventually(func() bool {
-					cmd := exec.CommandContext(ctx, kubectlBin, "get", "pods", "-n", namespace, "-l", labelSelector, "--no-headers")
-					output, err := cmd.CombinedOutput()
-					if err != nil {
-						fmt.Printf("Failed to execute kubectl: %v\n", err)
-						return false
-					}
-
-					outputStr := string(output)
-					podLines := strings.Split(strings.TrimSpace(outputStr), "\n")
-					return len(podLines) > 0 && podLines[0] != ""
-				}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "No pods spawned by the deployment")
-
-			} else {
-				Fail("No Instaslice objects found")
-			}
-		})
-
-		It("should apply the statefulset YAML and check if pod exists", func() {
-			ctx := context.TODO()
-			// statefulSetName := "sleep-statefulset"
-			labelSelector := "app=sleep-statefulset"
-			outputPod, err := applyResource(kubectlBin, "resources/test-sleep-statefulset.yaml", templateVars)
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
-
-			cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
-			output, err := cmd.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
-
-			// Parse the JSON output
-			var result struct {
-				Items []map[string]interface{} `json:"items"`
-			}
-			err = json.Unmarshal(output, &result)
-			Expect(err).NotTo(HaveOccurred(), "Failed to parse JSON output")
-
-			// Assume we want to check the first Instaslice object if it exists
-			if len(result.Items) > 0 {
-				instaslice := result.Items[0]
-				_, found := instaslice["spec"].(map[string]interface{})
-				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
-
-				Eventually(func() bool {
-					cmd := exec.CommandContext(ctx, kubectlBin, "get", "pods", "-n", namespace, "-l", labelSelector, "--no-headers")
-					output, err := cmd.CombinedOutput()
-					if err != nil {
-						fmt.Printf("Failed to execute kubectl: %v\n", err)
-						return false
-					}
-
-					outputStr := string(output)
-					podLines := strings.Split(strings.TrimSpace(outputStr), "\n")
-					return len(podLines) > 0 && podLines[0] != ""
-				}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "No pods spawned by the statefulset")
-
-			} else {
-				Fail("No Instaslice objects found")
-			}
-		})
-
-		It("should apply the job YAML and check if pod exists", func() {
-			ctx := context.TODO()
-			labelSelector := "app=sleep-job"
-			outputPod, err := applyResource(kubectlBin, "resources/test-sleep-job.yaml", templateVars)
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputPod))
-
-			cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
-			output, err := cmd.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
-
-			// Parse the JSON output
-			var result struct {
-				Items []map[string]interface{} `json:"items"`
-			}
-			err = json.Unmarshal(output, &result)
-			Expect(err).NotTo(HaveOccurred(), "Failed to parse JSON output")
-
-			// Assume we want to check the first Instaslice object if it exists
-			if len(result.Items) > 0 {
-				instaslice := result.Items[0]
-				_, found := instaslice["spec"].(map[string]interface{})
-				Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
-
-				Eventually(func() bool {
-					cmd := exec.CommandContext(ctx, kubectlBin, "get", "pods", "-n", namespace, "-l", labelSelector, "--no-headers")
-					output, err := cmd.CombinedOutput()
-					if err != nil {
-						fmt.Printf("Failed to execute kubectl: %v\n", err)
-						return false
-					}
-
-					outputStr := string(output)
-					podLines := strings.Split(strings.TrimSpace(outputStr), "\n")
-					return len(podLines) > 0 && podLines[0] != ""
-				}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "No pods spawned by the job")
-
-			} else {
-				Fail("No Instaslice objects found")
-			}
-		})
-
-		It("should verify instaslice.redhat.com/mig-1g.5gb is max before submitting pods and verify the existence of pod allocation", func() {
-			ctx := context.TODO()
-			cmd := exec.CommandContext(ctx, kubectlBin, "get", "instaslice", nodeName, "-n", namespace, "-o", "json")
-			output, err := cmd.CombinedOutput()
-			Expect(err).ToNot(HaveOccurred())
-			instaslice := &inferencev1alpha1.Instaslice{}
-			err = json.Unmarshal(output, instaslice)
-			Expect(err).ToNot(HaveOccurred())
-			expected := strconv.Itoa(len(instaslice.Spec.MigGPUUUID) * 7)
-			checkMIG := func(expectedMIG string) bool {
-				cmd := exec.CommandContext(ctx, kubectlBin, "get", "node", nodeName, "-o", "json")
-				output, err := cmd.CombinedOutput()
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, pod)
 				if err != nil {
-					fmt.Printf("Failed to execute kubectl: %v\n", err)
-					fmt.Printf("kubectl output: %s\n", string(output))
-					return false
+					log.Printf("Error deleting the pod %+v: %+v", pod, err)
 				}
+			})
 
-				var nodeResult struct {
-					Status struct {
-						Capacity map[string]string `json:"capacity"`
-					} `json:"status"`
-				}
-				err = json.Unmarshal(output, &nodeResult)
+			Consistently(func() error {
+				err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: templateVars.NodeName}, &instasliceObj)
 				if err != nil {
-					fmt.Printf("Failed to parse node capacity JSON: %v\n", err)
-					return false
+					return err
 				}
 
-				migCapacity, found := nodeResult.Status.Capacity["instaslice.redhat.com/mig-1g.5gb"]
-				return found && migCapacity == expectedMIG
+				for _, allocation := range instasliceObj.Spec.Allocations {
+					if allocation.PodName == pod.Name {
+						return fmt.Errorf("PodName %s found in allocations", pod.Name)
+					}
+				}
+				return nil
+			}, 1*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid allocations")
+		})
+		It("should create a deployment and check the allocation in instaslice object", func() {
+			deployment := resources.GetSleepDeployment()
+			err := k8sClient.Create(ctx, deployment)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create the deployment")
+
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, deployment)
+				if err != nil {
+					log.Printf("Error deleting the deployment %+v: %+v", deployment, err)
+				}
+			})
+
+			Eventually(func() error {
+				podList := &corev1.PodList{}
+				labelSelector := client.MatchingLabels{"app": "sleep-app"}
+				err := k8sClient.List(ctx, podList, client.InNamespace(deployment.Namespace), labelSelector)
+				if err != nil {
+					return err
+				}
+
+				if len(podList.Items) == 0 {
+					return fmt.Errorf("no pods found for deployment %s", deployment.Name)
+				}
+
+				podName := podList.Items[0].Name
+
+				err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: templateVars.NodeName}, &instasliceObj)
+				if err != nil {
+					return err
+				}
+
+				for _, allocation := range instasliceObj.Spec.Allocations {
+					if allocation.PodName == podName {
+						return nil
+					}
+				}
+				return fmt.Errorf("No valid allocation found for the pod %s", podName)
+			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid allocations")
+		})
+		It("should create a statefulset and check the allocation in instaslice object", func() {
+			statefulSet := resources.GetSleepStatefulSet()
+			err := k8sClient.Create(ctx, statefulSet)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create the statefulSet")
+
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, statefulSet)
+				if err != nil {
+					log.Printf("Error deleting the statefulSet %+v: %+v", statefulSet, err)
+				}
+			})
+
+			Eventually(func() error {
+				podList := &corev1.PodList{}
+				labelSelector := client.MatchingLabels{"app": "sleep-stateful"}
+				err := k8sClient.List(ctx, podList, client.InNamespace(statefulSet.Namespace), labelSelector)
+				if err != nil {
+					return err
+				}
+
+				if len(podList.Items) == 0 {
+					return fmt.Errorf("no pods found for statefulSet %s", statefulSet.Name)
+				}
+
+				podName := podList.Items[0].Name
+
+				err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: templateVars.NodeName}, &instasliceObj)
+				if err != nil {
+					return err
+				}
+
+				for _, allocation := range instasliceObj.Spec.Allocations {
+					if allocation.PodName == podName {
+						return nil
+					}
+				}
+				return fmt.Errorf("No valid allocation found for the pod %s", podName)
+			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid allocations")
+		})
+		It("should create a job and check the allocation in instaslice object", func() {
+			job := resources.GetSleepJob()
+			err := k8sClient.Create(ctx, job)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create the job")
+
+			DeferCleanup(func() {
+				propagationPolicy := metav1.DeletePropagationForeground
+				err = k8sClient.Delete(ctx, job, &client.DeleteOptions{
+					PropagationPolicy: &propagationPolicy,
+				})
+				if err != nil {
+					log.Printf("Error deleting the job %+v: %+v", job, err)
+				}
+			})
+
+			Eventually(func() error {
+				podList := &corev1.PodList{}
+				labelSelector := client.MatchingLabels{"app": "sleep-job"}
+				err := k8sClient.List(ctx, podList, client.InNamespace(job.Namespace), labelSelector)
+				if err != nil {
+					return err
+				}
+
+				if len(podList.Items) == 0 {
+					return fmt.Errorf("no pods found for job %s", job.Name)
+				}
+
+				podName := podList.Items[0].Name
+
+				err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: templateVars.NodeName}, &instasliceObj)
+				if err != nil {
+					return err
+				}
+				for _, allocation := range instasliceObj.Spec.Allocations {
+					if allocation.PodName == podName {
+						return nil
+					}
+				}
+				return fmt.Errorf("No valid allocation found for the pod %s", podName)
+			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid allocations")
+		})
+		It("should verify all MIG slice capacities are as expected before submitting pods", func() {
+			err := k8sClient.Get(ctx, client.ObjectKey{Name: templateVars.NodeName, Namespace: namespace}, &instasliceObj)
+			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve Instaslice object")
+
+			expectedCapacities := map[string]int{
+				"instaslice.redhat.com/mig-1g.5gb":    len(instasliceObj.Spec.MigGPUUUID) * 7,
+				"instaslice.redhat.com/mig-1g.10gb":   len(instasliceObj.Spec.MigGPUUUID) * 4,
+				"instaslice.redhat.com/mig-1g.5gb+me": len(instasliceObj.Spec.MigGPUUUID) * 7,
+				"instaslice.redhat.com/mig-2g.10gb":   len(instasliceObj.Spec.MigGPUUUID) * 3,
+				"instaslice.redhat.com/mig-3g.20gb":   len(instasliceObj.Spec.MigGPUUUID) * 2,
+				"instaslice.redhat.com/mig-4g.20gb":   len(instasliceObj.Spec.MigGPUUUID) * 1,
+				"instaslice.redhat.com/mig-7g.40gb":   len(instasliceObj.Spec.MigGPUUUID) * 1,
 			}
 
-			Expect(checkMIG(expected)).To(BeTrue(), "instaslice.redhat.com/mig-1g.5gb is max before submitting pods")
+			node := &corev1.Node{}
+			err = k8sClient.Get(ctx, client.ObjectKey{Name: templateVars.NodeName}, node)
+			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve the node object")
 
-			outputApply, err := applyResource(kubectlBin, "resources/test_multiple_pods.yaml", templateVars)
-			if err != nil {
-				fmt.Printf("kubectl apply error: %s\n", string(outputApply))
+			validateMIGCapacity := func(sliceType string, expectedCapacity int) error {
+				migCapacity, found := node.Status.Capacity[corev1.ResourceName(sliceType)]
+				if !found {
+					return fmt.Errorf("MIG capacity '%s' not found on node %s", sliceType, templateVars.NodeName)
+				}
+
+				actualCapacity, parsed := migCapacity.AsInt64()
+				if !parsed {
+					return fmt.Errorf("failed to parse MIG capacity value %s for slice %s", migCapacity.String(), sliceType)
+				}
+
+				if actualCapacity != int64(expectedCapacity) {
+					return fmt.Errorf("expected MIG capacity %d for slice %s, but got %d", expectedCapacity, sliceType, actualCapacity)
+				}
+				return nil
 			}
-			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply YAML: %s", outputApply))
+
+			for sliceType, expectedCapacity := range expectedCapacities {
+				Expect(validateMIGCapacity(sliceType, expectedCapacity)).To(Succeed(), fmt.Sprintf("MIG capacity validation failed for %s", sliceType))
+			}
+		})
+		It("should verify the existence of pod allocations", func() {
+			pods := resources.GetMultiPods()
+			for _, pod := range pods {
+				err := k8sClient.Create(ctx, pod)
+				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create pod %s", pod.Name))
+			}
 
 			Eventually(func() bool {
-				// Retrieve the Instaslice object
-				cmd := exec.Command(kubectlBin, "get", "instaslice", nodeName, "-n", namespace, "-o", "json")
-				output, err := cmd.CombinedOutput()
+				err := k8sClient.Get(ctx, client.ObjectKey{Name: templateVars.NodeName, Namespace: namespace}, &instasliceObj)
 				if err != nil {
-					fmt.Printf("Failed to retrieve the Instaslice object: %s\n", string(output))
-					return false
-				}
-
-				instaslice := &inferencev1alpha1.Instaslice{}
-
-				err = json.Unmarshal(output, &instaslice)
-				if err != nil {
-					fmt.Printf("Failed to unmarshal the Instaslice object: %v\n", err)
+					fmt.Printf("Failed to get Instaslice object: %v\n", err)
 					return false
 				}
 
 				var assignedGPUUUID string
 				allAssignedToOneGPU := true
 
-				// Check if all allocations are in the 'ungated' state and assigned to the same GPU
-				for _, allocation := range instaslice.Spec.Allocations {
+				for _, allocation := range instasliceObj.Spec.Allocations {
 					if allocation.Allocationstatus != inferencev1alpha1.AllocationStatusUngated {
 						return false
 					}
 
-					// Check GPUUUID consistency
+					// Since we are requesting 7 slices of type mig-1g.5gb, all 7 pods must be
+					// assigned to the same GPU
 					if assignedGPUUUID == "" {
 						assignedGPUUUID = allocation.GPUUUID
 					} else if allocation.GPUUUID != assignedGPUUUID {
@@ -498,245 +485,63 @@ var _ = Describe("controller", Ordered, func() {
 				}
 
 				return allAssignedToOneGPU
-			}, "100s", "5s").Should(BeTrue(), "Not all allocations are in the 'ungated' state after the timeout")
+			}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Not all allocations are in the 'ungated' state after the timeout")
+
+			for _, pod := range pods {
+				err := k8sClient.Delete(ctx, pod)
+				if err != nil {
+					log.Printf("Error deleting the pod %+v: %+v", pod, err)
+				}
+			}
+
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKey{Name: templateVars.NodeName, Namespace: namespace}, &instasliceObj)
+				if err != nil {
+					fmt.Printf("Failed to get Instaslice object: %v\n", err)
+					return false
+				}
+
+				return len(instasliceObj.Spec.Allocations) == 0
+			}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Expected Instaslice object Allocations to be empty")
 		})
 		It("should verify that the Kubernetes node has the specified resource and matches total GPU memory", func() {
-			instasliceQuotaResourceName := "instaslice.redhat.com/accelerator-memory-quota"
-			// Step 1: Get the total GPU memory from the Instaslice object
-			By("Getting the Instaslice object")
-			cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
-			output, err := cmd.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice object: "+string(output))
+			Expect(len(instasliceObj.Spec.MigGPUUUID)).To(Equal(2))
+			totalMemoryGB := daemonset.CalculateTotalMemoryGB(instasliceObj.Spec.MigGPUUUID)
 
-			// Parse the JSON output of Instaslice object
-			var instasliceResult struct {
-				Items []map[string]interface{} `json:"items"`
-			}
-			err = json.Unmarshal(output, &instasliceResult)
-			Expect(err).NotTo(HaveOccurred(), "Failed to parse Instaslice JSON output")
+			By(fmt.Sprintf("Verifying that node has custom resource %s", controller.QuotaResourceName))
+			node := &corev1.Node{}
+			err := k8sClient.Get(ctx, client.ObjectKey{Name: templateVars.NodeName}, node)
+			Expect(err).NotTo(HaveOccurred(), "Failed to get the node")
 
-			// Check if there are any Instaslice objects
-			Expect(len(instasliceResult.Items)).To(BeNumerically(">", 0), "No Instaslice objects found")
+			acceleratorMemory, exists := node.Status.Capacity[corev1.ResourceName(controller.QuotaResourceName)]
+			Expect(exists).To(BeTrue(), fmt.Sprintf("%s not found in Node object", controller.QuotaResourceName))
 
-			instaslice := instasliceResult.Items[0]
-			spec, found := instaslice["spec"].(map[string]interface{})
-			Expect(found).To(BeTrue(), "Spec not found in Instaslice object")
-
-			migGPUs, found := spec["MigGPUUUID"].(map[string]interface{})
-			Expect(found).To(BeTrue(), "MigGPUUUID not found in Instaslice object")
-
-			// Calculate the total GPU memory
-			totalMemoryGB := 0
-			re := regexp.MustCompile(`(\d+)(GB)`)
-			for _, gpuInfo := range migGPUs {
-				gpuInfoStr, ok := gpuInfo.(string)
-				if !ok {
-					continue
-				}
-				matches := re.FindStringSubmatch(gpuInfoStr)
-				if len(matches) == 3 {
-					memoryGB, err := strconv.Atoi(matches[1])
-					if err != nil {
-						Fail("unable to parse GPU memory value: " + err.Error())
-					}
-					totalMemoryGB += memoryGB
-				}
-			}
-
-			// Step 2: Get the patched resource from the node
-			By(fmt.Sprintf("Verifying that node has custom resource %s", instasliceQuotaResourceName))
-			cmd = exec.Command(kubectlBin, "get", "node", "-o", "json")
-			output, err = cmd.CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), "Failed to get node details: "+string(output))
-
-			// Parse the JSON output of nodes
-			var nodeResult struct {
-				Items []map[string]interface{} `json:"items"`
-			}
-			err = json.Unmarshal(output, &nodeResult)
-			Expect(err).NotTo(HaveOccurred(), "Failed to parse node JSON output")
-
-			// Check if there are any nodes
-			Expect(len(nodeResult.Items)).To(BeNumerically(">", 0), "No nodes found")
-
-			node := nodeResult.Items[0]
-			status, found := node["status"].(map[string]interface{})
-			Expect(found).To(BeTrue(), "Status not found in Node object")
-
-			capacity, found := status["capacity"].(map[string]interface{})
-			Expect(found).To(BeTrue(), "Capacity resources not found in Node object")
-
-			acceleratorMemory, found := capacity[instasliceQuotaResourceName].(string)
-			Expect(found).To(BeTrue(), fmt.Sprintf("%s not found in Node object", instasliceQuotaResourceName))
-
-			// Extract the memory size from the acceleratorMemory
-			reMemory := regexp.MustCompile(`(\d+)Gi`)
-			matches := reMemory.FindStringSubmatch(acceleratorMemory)
-			var nodeMemoryGB int
-			if len(matches) == 2 {
-				nodeMemoryGB, err = strconv.Atoi(matches[1])
-				Expect(err).NotTo(HaveOccurred(), "Failed to extract memory")
-			} else {
-				Expect(matches).To(HaveLen(2), "Failed to match memory size")
-			}
-
-			// Step 3: Verify the node's accelerator memory matches the total GPU memory in Instaslice
-			By("Verifying that node's accelerator memory quota matches Instaslice total GPU memory")
-			Expect(nodeMemoryGB).To(BeNumerically("==", totalMemoryGB), fmt.Sprintf("%s on node does not match total GPU memory in Instaslice object", instasliceQuotaResourceName))
-		})
-		// NOTE: Keep this as the last test in e2e test suite, when all workloads are deleted
-		// there should be no allocations in InstaSlice object.
-		It("should verify that there are no allocations on the Instaslice object", func() {
-			Eventually(func() error {
-				cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
-				output, err := cmd.CombinedOutput()
-				if err != nil {
-					return fmt.Errorf("failed to get Instaslice object: %s", string(output))
-				}
-
-				var instasliceResult struct {
-					Items []map[string]interface{} `json:"items"`
-				}
-
-				err = json.Unmarshal(output, &instasliceResult)
-				if err != nil {
-					return fmt.Errorf("failed to parse Instaslice JSON output: %s", err)
-				}
-
-				if len(instasliceResult.Items) == 0 {
-					return fmt.Errorf("no Instaslice objects found")
-				}
-
-				instaslice := instasliceResult.Items[0]
-
-				_, found := instaslice["allocations"].([]interface{})
-				if found {
-					return fmt.Errorf("allocations field found in Instaslice object")
-				}
-
-				return nil
-			}, "60s", "5s").Should(Succeed(), "Expected no allocations in the Instaslice object")
-		})
-		// NOTE: Keep this as the last test in e2e test suite, when all workloads are deleted
-		// there should be no allocations in InstaSlice object.
-		It("should verify that there are no allocations on the Instaslice object", func() {
-			Eventually(func() error {
-				cmd := exec.Command(kubectlBin, "get", "instaslice", "-n", namespace, "-o", "json")
-				output, err := cmd.CombinedOutput()
-				if err != nil {
-					return fmt.Errorf("failed to get Instaslice object: %s", string(output))
-				}
-
-				var instasliceResult struct {
-					Items []map[string]interface{} `json:"items"`
-				}
-
-				err = json.Unmarshal(output, &instasliceResult)
-				if err != nil {
-					return fmt.Errorf("failed to parse Instaslice JSON output: %s", err)
-				}
-
-				if len(instasliceResult.Items) == 0 {
-					return fmt.Errorf("no Instaslice objects found")
-				}
-
-				instaslice := instasliceResult.Items[0]
-
-				_, found := instaslice["allocations"].([]interface{})
-				if found {
-					return fmt.Errorf("allocations fieldc found in Instaslice object")
-				}
-
-				return nil
-			}, "60s", "5s").Should(Succeed(), "Expected no allocations in the Instaslice object")
+			Expect(acceleratorMemory.Value()/(1024*1024*1024)).To(Equal(int64(totalMemoryGB)),
+				fmt.Sprintf("%s on node does not match total GPU memory in Instaslice object", controller.QuotaResourceName))
 		})
 	})
 
 	AfterEach(func() {
-		time.Sleep(10 * time.Second)
-		workloadNamespace := "default"
-		cmdDeleteJob := exec.Command(kubectlBin, "delete", "job", "--all", "-n", workloadNamespace)
-		outputDeleteJob, err := cmdDeleteJob.CombinedOutput()
-		if err != nil {
-			fmt.Printf("Failed to delete job: %s\n", string(outputDeleteJob))
-		}
-
-		cmdDeleteDeployments := exec.Command(kubectlBin, "delete", "deployments", "--all", "-n", workloadNamespace)
-		outputDeleteDeployments, err := cmdDeleteDeployments.CombinedOutput()
-		if err != nil {
-			fmt.Printf("Failed to delete pods: %s\n", string(outputDeleteDeployments))
-		}
-
-		cmdDeleteStatefulsets := exec.Command(kubectlBin, "delete", "statefulsets", "--all", "-n", workloadNamespace)
-		outputDeleteStatefulsets, err := cmdDeleteStatefulsets.CombinedOutput()
-		if err != nil {
-			fmt.Printf("Failed to delete pods: %s\n", string(outputDeleteStatefulsets))
-		}
-
-		cmdDeletePods := exec.Command(kubectlBin, "delete", "pod", "--all", "-n", workloadNamespace)
-		outputDeletePods, err := cmdDeletePods.CombinedOutput()
-		if err != nil {
-			fmt.Printf("Failed to delete pods: %s\n", string(outputDeletePods))
-		}
+		_ = k8sClient.Delete(ctx, &instasliceObj)
 	})
 })
 
-func findPodName(allocationMap map[string]interface{}, targetPodName string) bool {
-	// Iterate over the outer map
-	for _, allocationData := range allocationMap {
-		// Assert that the allocationData is of type map[string]interface{}
-		allocation, ok := allocationData.(map[string]interface{})
-		if !ok {
-			continue // Skip if it's not the expected type
-		}
-		if podName, exists := allocation["podName"]; exists {
-			if podNameStr, ok := podName.(string); ok && podNameStr == targetPodName {
-				return false
-			}
-		}
-	}
-	return true
-}
+func getNodeName(label map[string]string) (string, error) {
 
-func applyResource(kubectlBin string, tmplFile string, tmplVars TemplateVars) (output []byte, err error) {
-	if filepath.Ext(tmplFile) == ".tmpl" {
-		tmpl, err := template.ParseFiles(tmplFile)
-		if err != nil {
-			return nil, err
-		}
-		fd, err := os.CreateTemp("", filepath.Base(strings.TrimSuffix(tmplFile, ".tmpl")))
-		if err != nil {
-			return nil, err
-		}
-		err = tmpl.Execute(fd, tmplVars)
-		_ = fd.Close()
-		if err != nil {
-			return nil, err
-		}
-		tmplFile = fd.Name()
-		defer func() {
-			_ = os.Remove(tmplFile)
-		}()
-	}
-	cmd := exec.Command(kubectlBin, "apply", "-f", tmplFile)
-	return cmd.CombinedOutput()
-}
-
-func getNodeName(clientBin, label string) (string, error) {
 	var nodeName string
-	output, err := exec.Command(clientBin, "get", "pods", "-l", label, "-A", "-o", "json").CombinedOutput()
+
+	podList := &corev1.PodList{}
+	err := k8sClient.List(ctx, podList, client.MatchingLabels(label))
 	if err != nil {
-		return "", fmt.Errorf("unable to get the node name : %v, output: %s\n", err, output)
+		return "", fmt.Errorf("unable to list pods: %v", err)
 	}
-	var pods v1.PodList
-	err = json.Unmarshal(output, &pods)
-	if err != nil {
-		return "", fmt.Errorf("Error parsing JSON output: %v", err)
+
+	for _, pod := range podList.Items {
+		if pod.Spec.NodeName != "" {
+			nodeName = pod.Spec.NodeName
+			return nodeName, nil
+		}
 	}
-	for _, pod := range pods.Items {
-		nodeName = pod.Spec.NodeName
-		// returning from here as we have the node name now
-		return nodeName, nil
-	}
-	return nodeName, nil
+
+	return "", fmt.Errorf("no node name found for pods with label: %v", label)
 }
