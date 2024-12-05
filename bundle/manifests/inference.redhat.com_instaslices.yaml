@@ -74,8 +74,6 @@ spec:
                       type: string
                     profile:
                       type: string
-                    resourceIdentifier:
-                      type: string
                     size:
                       format: int32
                       type: integer
@@ -92,7 +90,6 @@ spec:
                   - podName
                   - podUUID
                   - profile
-                  - resourceIdentifier
                   - size
                   - start
                   type: object
