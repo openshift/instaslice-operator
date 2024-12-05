@@ -54,7 +54,7 @@ type InstasliceReconciler struct {
 // AllocationPolicy interface with a single method
 type AllocationPolicy interface {
 	SetAllocationDetails(profileName string, newStart, size uint32, podUUID string, nodename string, processed string,
-		discoveredGiprofile int, Ciprofileid int, Ciengprofileid int, namespace string, podName string, gpuUuid string, resourceIndetifier string,
+		discoveredGiprofile int, Ciprofileid int, Ciengprofileid int, namespace string, podName string, gpuUuid string,
 		cpumilli int64, memory int64) *inferencev1alpha1.AllocationDetails
 }
 
@@ -165,6 +165,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}
 
+	annotation, present := pod.Annotations["instaslice.nvidia.device"]
 	// failed pods are not deleted by InstaSlice, finalizer is removed so that user can
 	// delete the pod.
 	if pod.Status.Phase == v1.PodFailed && controllerutil.ContainsFinalizer(pod, FinalizerName) {
@@ -174,16 +175,17 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreating {
 						return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
 					}
-					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreated || allocation.Allocationstatus == inferencev1alpha1.AllocationStatusUngated {
+					//if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreated || allocation.Allocationstatus == inferencev1alpha1.AllocationStatusUngated {
+					if (annotation != "" && present) || allocation.Allocationstatus == inferencev1alpha1.AllocationStatusUngated {
 						resultDeleting, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, string(pod.UID), allocation)
 						if err != nil {
 							return resultDeleting, nil
 						}
-						// return and rely on daemonset to se allocation status to created
 						// this will cause podmap function to wakeup pod and perform clean up
 						return ctrl.Result{}, nil
 					}
-					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
+					// if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
+					if !present || annotation == "" {
 						resultRemove, err := r.removeInstasliceAllocation(ctx, instaslice.Name, allocation)
 						if err != nil {
 							return resultRemove, nil
@@ -212,7 +214,8 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		for _, instaslice := range instasliceList.Items {
 			for _, allocation := range instaslice.Spec.Allocations {
 				if allocation.PodUUID == string(pod.UID) {
-					if allocation.Allocationstatus != inferencev1alpha1.AllocationStatusDeleted {
+					// if allocation.Allocationstatus != inferencev1alpha1.AllocationStatusDeleted {
+					if present && annotation != "" {
 						result, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, string(pod.UID), allocation)
 						if err != nil {
 							return result, err
@@ -222,7 +225,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						return ctrl.Result{}, nil
 					}
 
-					if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
+					if !present || annotation == "" {
 						result, err := r.removeInstasliceAllocation(ctx, instaslice.Name, allocation)
 						if err != nil {
 							return result, nil
@@ -253,7 +256,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		// allocation can be in creating or created while the user deletes the pod.
 		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocation := range instaslice.Spec.Allocations {
-				if podUuid == string(pod.UID) && (allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreated) {
+				if podUuid == string(pod.UID) && (present && annotation != "") {
 					allocation.Allocationstatus = inferencev1alpha1.AllocationStatusDeleting
 					if errUpdatingInstaslice := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, podUuid, allocation); errUpdatingInstaslice != nil {
 						log.Info("unable to set instaslice to state deleted for ungated", "pod", allocation.PodName)
@@ -261,7 +264,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					}
 					return ctrl.Result{}, nil
 				}
-				if podUuid == string(pod.UID) && allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
+				if podUuid == string(pod.UID) && (!present || annotation == "") {
 					result, err := r.removeInstasliceAllocation(ctx, instaslice.Name, allocation)
 					if err != nil {
 						return result, nil
@@ -287,7 +290,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			for _, instaslice := range instasliceList.Items {
 				for podUuid, allocation := range instaslice.Spec.Allocations {
 					if podUuid == string(pod.UID) {
-						if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
+						if !present || annotation == "" {
 							resultDelete, errDeletingAllocation := r.deleteInstasliceAllocation(ctx, instaslice.Name, allocation)
 							if errDeletingAllocation != nil {
 								return resultDelete, errDeletingAllocation
@@ -346,7 +349,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocations := range instaslice.Spec.Allocations {
-				if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusCreated && allocations.PodUUID == string(pod.UID) {
+				if (present && annotation != "") && allocations.PodUUID == string(pod.UID) {
 					allocations.Allocationstatus = inferencev1alpha1.AllocationStatusUngated
 					if err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, podUuid, allocations); err != nil {
 						return ctrl.Result{Requeue: true}, nil
@@ -553,14 +556,14 @@ func (r *InstasliceReconciler) podMapFunc(ctx context.Context, obj client.Object
 	instaslice, ok := obj.(*inferencev1alpha1.Instaslice)
 	if ok {
 		for _, allocation := range instaslice.Spec.Allocations {
-			if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreated || allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
-				requests = append(requests, reconcile.Request{
-					NamespacedName: types.NamespacedName{
-						Namespace: allocation.Namespace,
-						Name:      allocation.PodName,
-					},
-				})
-			}
+			//if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusCreated || allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: allocation.Namespace,
+					Name:      allocation.PodName,
+				},
+			})
+			//}
 		}
 	}
 	return requests
@@ -637,20 +640,19 @@ func (r *InstasliceReconciler) removeInstaSliceFinalizer(ctx context.Context, re
 // Policy based allocation - FirstFit
 func (r *FirstFitPolicy) SetAllocationDetails(profileName string, newStart, size uint32, podUUID, nodename string,
 	processed string, discoveredGiprofile int, Ciprofileid int, Ciengprofileid int,
-	namespace string, podName string, gpuUuid string, resourceIdentifier string, cpuMilli int64, memory int64) *inferencev1alpha1.AllocationDetails {
+	namespace string, podName string, gpuUuid string, cpuMilli int64, memory int64) *inferencev1alpha1.AllocationDetails {
 	return &inferencev1alpha1.AllocationDetails{
-		Profile:            profileName,
-		Start:              newStart,
-		Size:               size,
-		PodUUID:            podUUID,
-		Nodename:           nodename,
-		Allocationstatus:   inferencev1alpha1.AllocationStatus(processed),
-		Namespace:          namespace,
-		PodName:            podName,
-		GPUUUID:            gpuUuid,
-		Resourceidentifier: resourceIdentifier,
-		Cpu:                cpuMilli,
-		Memory:             memory,
+		Profile:          profileName,
+		Start:            newStart,
+		Size:             size,
+		PodUUID:          podUUID,
+		Nodename:         nodename,
+		Allocationstatus: inferencev1alpha1.AllocationStatus(processed),
+		Namespace:        namespace,
+		PodName:          podName,
+		GPUUUID:          gpuUuid,
+		Cpu:              cpuMilli,
+		Memory:           memory,
 	}
 }
 
@@ -671,12 +673,12 @@ func (l *RightToLeftPolicy) SetAllocationDetails(profileName string, newStart, s
 }
 
 func (r *InstasliceReconciler) removeInstasliceAllocation(ctx context.Context, instasliceName string, allocation inferencev1alpha1.AllocationDetails) (ctrl.Result, error) {
-	if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
-		deleteResult, errDeletingAllocation := r.deleteInstasliceAllocation(ctx, instasliceName, allocation)
-		if errDeletingAllocation != nil {
-			return deleteResult, errDeletingAllocation
-		}
+	//if allocation.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
+	deleteResult, errDeletingAllocation := r.deleteInstasliceAllocation(ctx, instasliceName, allocation)
+	if errDeletingAllocation != nil {
+		return deleteResult, errDeletingAllocation
 	}
+	//}
 	return ctrl.Result{}, nil
 }
 
