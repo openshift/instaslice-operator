@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
+	"github.com/openshift/instaslice-operator/internal/controller/config"
 	"github.com/openshift/instaslice-operator/internal/controller/daemonset"
 	//+kubebuilder:scaffold:imports
 )
@@ -125,6 +126,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	var nodeName string
+	if name, ok := os.LookupEnv("NODE_NAME"); ok {
+		nodeName = name
+	} else {
+		setupLog.Error(err, "could not enumerate Node name")
+		os.Exit(1)
+	}
+
 	// if err = (&controller.InstasliceReconciler{
 	// 	Client: mgr.GetClient(),
 	// 	Scheme: mgr.GetScheme(),
@@ -134,11 +143,13 @@ func main() {
 	// }
 
 	if err = (&daemonset.InstaSliceDaemonsetReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Config:   config.ConfigFromEnvironment(),
+		NodeName: nodeName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "InstaSliceDaemonsetReconciler")
-		//os.Exit(1)
+		// os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
 

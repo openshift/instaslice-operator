@@ -20,14 +20,15 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"os"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
+	"github.com/openshift/instaslice-operator/internal/controller/config"
 	"github.com/openshift/instaslice-operator/internal/controller/utils"
+
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -49,6 +50,7 @@ type InstasliceReconciler struct {
 	client.Client
 	Scheme     *runtime.Scheme
 	kubeClient *kubernetes.Clientset
+	Config     *config.Config
 }
 
 // AllocationPolicy interface with a single method
@@ -67,9 +69,7 @@ type LeftToRightPolicy struct{}
 // first fit policy is implemented at the moment
 type FirstFitPolicy struct{}
 
-var (
-	daemonSetlabel = map[string]string{"app": "controller-daemonset"}
-)
+var daemonSetlabel = map[string]string{"app": "controller-daemonset"}
 
 //+kubebuilder:rbac:groups=inference.redhat.com,resources=instaslices,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=inference.redhat.com,resources=instaslices/status,verbs=get;update;patch
@@ -87,7 +87,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// DaemonSet doesn't exist, so create it
-			daemonSet = createInstaSliceDaemonSet(InstaSliceOperatorNamespace)
+			daemonSet = r.createInstaSliceDaemonSet(InstaSliceOperatorNamespace)
 			err = r.Create(ctx, daemonSet)
 			if err != nil {
 				log.Error(err, "Failed to create DaemonSet")
@@ -232,7 +232,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					}
 					return ctrl.Result{}, nil
 				}
-
 			}
 		}
 
@@ -248,7 +247,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// handle deleted pod that never gets ungated
-	//set allocation status to deleting to cleanup resources if any
+	// set allocation status to deleting to cleanup resources if any
 	if !pod.DeletionTimestamp.IsZero() && isPodGated {
 		// allocation can be in creating or created while the user deletes the pod.
 		for _, instaslice := range instasliceList.Items {
@@ -311,7 +310,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					}
 				}
 			}
-
 		}
 		// exit after handling deletion event for a pod.
 		return ctrl.Result{}, nil
@@ -326,7 +324,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if len(pod.Spec.Containers) == 0 {
 			return ctrl.Result{}, fmt.Errorf(noContainerInsidePodErr+", pod: %v", pod.Name)
 		}
-		//Assume pod only has one container with one GPU requests
+		// Assume pod only has one container with one GPU requests
 		if len(pod.Spec.Containers) != 1 {
 			return ctrl.Result{}, fmt.Errorf(multipleContainersUnsupportedErr+", pod: %v", pod.Name)
 		}
@@ -334,7 +332,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		profileName := r.extractProfileName(limits)
 		var podHasNodeAllocation bool
 		// search if pod has allocation in any of the instaslice object in the cluster
-		//TODO: allocations may get slower as the cluster size increases
+		// TODO: allocations may get slower as the cluster size increases
 		for _, instaslice := range instasliceList.Items {
 			for _, allocations := range instaslice.Spec.Allocations {
 				// no matter the state if allocations exists for a pod skip such a pod
@@ -386,13 +384,13 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					if err != nil {
 						return ctrl.Result{Requeue: true}, nil
 					}
-					//allocation was successful
+					// allocation was successful
 					return ctrl.Result{}, nil
 				}
 			}
 		}
 
-		//if the cluster does not have suitable node, requeue request
+		// if the cluster does not have suitable node, requeue request
 		if !podHasNodeAllocation {
 			log.Info("no suitable node found in cluster for ", "pod", pod.Name)
 			// Generate a random duration between 1 and 10 seconds
@@ -406,15 +404,10 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 }
 
 // create the DaemonSet object
-func createInstaSliceDaemonSet(namespace string) *appsv1.DaemonSet {
-	emulatorMode := os.Getenv("EMULATOR_MODE")
-	if emulatorMode == "" {
-		emulatorMode = EmulatorModeFalse
-	}
-	instasliceDaemonsetImage := os.Getenv("RELATED_IMAGE_INSTASLICE_DAEMONSET")
-	if instasliceDaemonsetImage == "" {
-		instasliceDaemonsetImage = daemonSetImageName
-	}
+func (r *InstasliceReconciler) createInstaSliceDaemonSet(namespace string) *appsv1.DaemonSet {
+	emulatorMode := r.Config.EmulatorModeEnable
+	instasliceDaemonsetImage := r.Config.DaemonsetImage
+
 	// Base DaemonSet structure
 	daemonSet := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -477,7 +470,7 @@ func createInstaSliceDaemonSet(namespace string) *appsv1.DaemonSet {
 								},
 								{
 									Name:  "EMULATOR_MODE",
-									Value: emulatorMode,
+									Value: fmt.Sprintf("%v", emulatorMode),
 								},
 							},
 						},
@@ -568,7 +561,6 @@ func (r *InstasliceReconciler) podMapFunc(ctx context.Context, obj client.Object
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *InstasliceReconciler) SetupWithManager(mgr ctrl.Manager) error {
-
 	restConfig := mgr.GetConfig()
 
 	var err error
@@ -637,7 +629,8 @@ func (r *InstasliceReconciler) removeInstaSliceFinalizer(ctx context.Context, re
 // Policy based allocation - FirstFit
 func (r *FirstFitPolicy) SetAllocationDetails(profileName string, newStart, size uint32, podUUID, nodename string,
 	processed string, discoveredGiprofile int, Ciprofileid int, Ciengprofileid int,
-	namespace string, podName string, gpuUuid string, resourceIdentifier string, cpuMilli int64, memory int64) *inferencev1alpha1.AllocationDetails {
+	namespace string, podName string, gpuUuid string, resourceIdentifier string, cpuMilli int64, memory int64,
+) *inferencev1alpha1.AllocationDetails {
 	return &inferencev1alpha1.AllocationDetails{
 		Profile:            profileName,
 		Start:              newStart,
@@ -657,7 +650,8 @@ func (r *FirstFitPolicy) SetAllocationDetails(profileName string, newStart, size
 // Policy based allocation - LeftToRIght
 func (l *LeftToRightPolicy) SetAllocationDetails(profileName string, newStart, size uint32, podUUID, nodename string,
 	processed string, discoveredGiprofile int, Ciprofileid int, Ciengprofileid int,
-	namespace string, podName string, gpuUuid string) *inferencev1alpha1.AllocationDetails {
+	namespace string, podName string, gpuUuid string,
+) *inferencev1alpha1.AllocationDetails {
 	// Implement the left-to-right policy here
 	return &inferencev1alpha1.AllocationDetails{}
 }
@@ -665,7 +659,8 @@ func (l *LeftToRightPolicy) SetAllocationDetails(profileName string, newStart, s
 // Policy based allocation - RigghToLeft
 func (l *RightToLeftPolicy) SetAllocationDetails(profileName string, newStart, size uint32, podUUID, nodename string,
 	processed string, discoveredGiprofile int, Ciprofileid int, Ciengprofileid int,
-	namespace string, podName string, gpuUuid string) *inferencev1alpha1.AllocationDetails {
+	namespace string, podName string, gpuUuid string,
+) *inferencev1alpha1.AllocationDetails {
 	// Implement the left-to-right policy here
 	return &inferencev1alpha1.AllocationDetails{}
 }
