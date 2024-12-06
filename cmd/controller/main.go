@@ -127,6 +127,7 @@ func main() {
 	}
 
 	config := config.ConfigFromEnvironment()
+	setupLog.Info("using config", "config", config.ToString())
 
 	if config.WebhookEnable {
 		mgr.GetWebhookServer().Register("/mutate-v1-pod", &webhook.Admission{Handler: &controller.PodAnnotator{
