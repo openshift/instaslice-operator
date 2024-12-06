@@ -37,10 +37,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
+	"github.com/openshift/instaslice-operator/internal/controller/config"
 )
 
 func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
-	var _ = Describe("InstasliceReconciler processInstasliceAllocation", func() {
+	_ = Describe("InstasliceReconciler processInstasliceAllocation", func() {
 		var (
 			ctx        context.Context
 			r          *InstasliceReconciler
@@ -59,9 +60,11 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 			Expect(v1.AddToScheme(scheme)).To(Succeed())
 
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+			config := config.ConfigFromEnvironment()
 
 			r = &InstasliceReconciler{
 				Client: fakeClient,
+				Config: config,
 			}
 
 			podUUID = "test-pod-uuid"
@@ -160,10 +163,10 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 			Expect(result.Requeue).To(BeTrue())
 		})
 	})
-
 }
+
 func TestInstasliceDaemonsetCreation_Reconcile(t *testing.T) {
-	var _ = Describe("InstasliceReconciler", func() {
+	_ = Describe("InstasliceReconciler", func() {
 		var (
 			r               *InstasliceReconciler
 			fakeClient      client.Client
@@ -183,9 +186,11 @@ func TestInstasliceDaemonsetCreation_Reconcile(t *testing.T) {
 
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
 
+			config := config.ConfigFromEnvironment()
 			r = &InstasliceReconciler{
 				Client: fakeClient,
 				Scheme: scheme,
+				Config: config,
 			}
 
 			ctx = context.Background()
@@ -304,7 +309,7 @@ func TestInstasliceDaemonsetCreation_Reconcile(t *testing.T) {
 }
 
 func TestInstasliceReconciler_Reconcile(t *testing.T) {
-	var _ = Describe("InstasliceReconciler Reconcile Loop", func() {
+	_ = Describe("InstasliceReconciler Reconcile Loop", func() {
 		var (
 			ctx        context.Context
 			r          *InstasliceReconciler
@@ -323,11 +328,13 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			Expect(v1.AddToScheme(scheme)).To(Succeed())
 			Expect(appsv1.AddToScheme(scheme)).To(Succeed()) // Ensure DaemonSet is registered
 
-			//fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&v1.Pod{}).Build()
+			// fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&v1.Pod{}).Build()
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+			config := config.ConfigFromEnvironment()
 
 			r = &InstasliceReconciler{
 				Client: fakeClient,
+				Config: config,
 			}
 
 			podUUID = "test-pod-uuid"
@@ -460,7 +467,6 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 		})
 
 		It("should reconcile a Failed Pod and remove the finalizer if the instaslice allocations are not present", func() {
-
 			failedPodName := "failed-pod"
 			// Define a Failed pod
 			pod = &v1.Pod{
@@ -499,11 +505,9 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			newPod := &v1.Pod{}
 			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: failedPodName, Namespace: InstaSliceOperatorNamespace}, newPod)).To(Succeed())
 			Expect(newPod.Finalizers).ToNot(ContainElement(FinalizerName))
-
 		})
 
 		It("should reconcile a Succeeded Pod and remove the finalizer if the instaslice allocations are not present", func() {
-
 			succeededPodName := "succeeded-pod"
 			// Define a succeeded pod
 			pod = &v1.Pod{
@@ -542,7 +546,6 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 			newPod := &v1.Pod{}
 			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: succeededPodName, Namespace: InstaSliceOperatorNamespace}, newPod)).To(Succeed())
 			Expect(newPod.Finalizers).ToNot(ContainElement(FinalizerName))
-
 		})
 
 		It("should return from reconcile when more than 1 container is present in a pod", func() {
@@ -747,7 +750,7 @@ func TestInstasliceReconciler_extractGpuProfile(t *testing.T) {
 		profileName string
 	}
 	scheme := runtime.NewScheme()
-	var newFields = fields{
+	newFields := fields{
 		Client: fake.NewClientBuilder().WithScheme(scheme).Build(),
 		Scheme: scheme,
 	}
@@ -757,7 +760,7 @@ func TestInstasliceReconciler_extractGpuProfile(t *testing.T) {
 			{Profile: "1g.5gb", Placements: []inferencev1alpha1.Placement{{Size: 1, Start: 0}}, Giprofileid: 0, CIProfileID: 1, CIEngProfileID: 2},
 		},
 	}
-	var newArgs = args{
+	newArgs := args{
 		profileName: "1g.5gb",
 		instaslice:  instaslice,
 	}
@@ -772,12 +775,14 @@ func TestInstasliceReconciler_extractGpuProfile(t *testing.T) {
 	}{
 		{"Test-case", newFields, newArgs, 1, 0, 1, 2},
 	}
+	config := config.ConfigFromEnvironment()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			in := &InstasliceReconciler{
 				Client:     tt.fields.Client,
 				Scheme:     tt.fields.Scheme,
 				kubeClient: tt.fields.kubeClient,
+				Config:     config,
 			}
 			got, got1, got2, got3 := in.extractGpuProfile(tt.args.instaslice, tt.args.profileName)
 			assert.Equalf(t, tt.want, got, "extractGpuProfile(%v, %v)", tt.args.instaslice, tt.args.profileName)
@@ -799,7 +804,7 @@ func TestInstasliceReconciler_podMapFunc(t *testing.T) {
 		obj client.Object
 	}
 	scheme := runtime.NewScheme()
-	var newFields = fields{
+	newFields := fields{
 		Client: fake.NewClientBuilder().WithScheme(scheme).Build(),
 		Scheme: scheme,
 	}
@@ -809,7 +814,7 @@ func TestInstasliceReconciler_podMapFunc(t *testing.T) {
 	instaslice.Spec = inferencev1alpha1.InstasliceSpec{
 		Allocations: allocDetails,
 	}
-	var newArgs = args{
+	newArgs := args{
 		ctx: context.TODO(),
 		obj: instaslice,
 	}
@@ -852,7 +857,7 @@ func TestFirstFitPolicy_SetAllocationDetails(t *testing.T) {
 		cpuMilli            int64
 		memory              int64
 	}
-	var newArgs = args{
+	newArgs := args{
 		profileName:         "1g.5gb",
 		newStart:            0,
 		size:                1,
@@ -886,7 +891,7 @@ func TestFirstFitPolicy_SetAllocationDetails(t *testing.T) {
 }
 
 func TestGPUSort(t *testing.T) {
-	var _ = Describe("SortGPUs", func() {
+	_ = Describe("SortGPUs", func() {
 		It("should sort GPU UUIDs in ascending order", func() {
 			instaslice := &inferencev1alpha1.Instaslice{
 				Spec: inferencev1alpha1.InstasliceSpec{
