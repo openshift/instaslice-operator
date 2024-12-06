@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 )
@@ -14,13 +15,13 @@ const (
 
 type Config struct {
 	// EmulatorMode enable emulation mode
-	EmulatorModeEnable bool
+	EmulatorModeEnable bool `json:"emulator_mode_enable"`
 
 	// Webhook enable webhook endpoint
-	WebhookEnable bool
+	WebhookEnable bool `json:"webhook_enable"`
 
 	// DaemonsetImage the daemonset image to use
-	DaemonsetImage string
+	DaemonsetImage string `json:"daemonset_image"`
 }
 
 func NewConfig() *Config {
@@ -29,6 +30,11 @@ func NewConfig() *Config {
 		WebhookEnable:      DefaultEmulatorMode,
 		DaemonsetImage:     DefaultDaemonsetImage,
 	}
+}
+
+func (c *Config) ToString() string {
+	bytes, _ := json.Marshal(*c)
+	return string(bytes)
 }
 
 func ConfigFromEnvironment() *Config {
