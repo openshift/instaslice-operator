@@ -204,7 +204,7 @@ func Test_calculateTotalMemoryGB(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, calculateTotalMemoryGB(tt.args.gpuInfoList), "calculateTotalMemoryGB(%v)", tt.args.gpuInfoList)
+			assert.Equalf(t, tt.want, CalculateTotalMemoryGB(tt.args.gpuInfoList), "calculateTotalMemoryGB(%v)", tt.args.gpuInfoList)
 		})
 	}
 }
