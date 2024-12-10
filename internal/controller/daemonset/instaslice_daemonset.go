@@ -394,7 +394,7 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 
 		// Patch the node capacity with GPU memory in emulator mode
 		if emulatorMode == controller.EmulatorModeTrue {
-			totalEmulatedGPUMemory := calculateTotalMemoryGB(instaslice.Spec.MigGPUUUID)
+			totalEmulatedGPUMemory := CalculateTotalMemoryGB(instaslice.Spec.MigGPUUUID)
 			if err := r.patchNodeStatusForNode(ctx, nodeName, totalEmulatedGPUMemory); err != nil {
 				return err
 			}
@@ -417,7 +417,7 @@ func (r *InstaSliceDaemonsetReconciler) setupWithManager(mgr ctrl.Manager) error
 		Complete(r)
 }
 
-func calculateTotalMemoryGB(gpuInfoList map[string]string) int {
+func CalculateTotalMemoryGB(gpuInfoList map[string]string) int {
 	totalMemoryGB := 0
 	re := regexp.MustCompile(`(\d+)(GB)`)
 	for _, gpuInfo := range gpuInfoList {
@@ -448,7 +448,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 		return nil, err
 	}
 
-	totalMemoryGB := calculateTotalMemoryGB(gpuModelMap)
+	totalMemoryGB := CalculateTotalMemoryGB(gpuModelMap)
 	nodeName := os.Getenv("NODE_NAME")
 	cpu, memory, err := r.classicalResourcesAndGPUMemOnNode(context.TODO(), nodeName, strconv.Itoa(totalMemoryGB))
 	if err != nil {
