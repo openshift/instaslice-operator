@@ -98,6 +98,8 @@ func main() {
 		TLSOpts: tlsOpts,
 	})
 
+	config := config.ConfigFromEnvironment()
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
@@ -134,23 +136,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	// if err = (&controller.InstasliceReconciler{
-	// 	Client: mgr.GetClient(),
-	// 	Scheme: mgr.GetScheme(),
-	// }).SetupWithManager(mgr); err != nil {
-	// 	setupLog.Error(err, "unable to create controller", "controller", "Instaslice")
-	// 	os.Exit(1)
-	// }
-
-	if err = (&daemonset.InstaSliceDaemonsetReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Config:   config.ConfigFromEnvironment(),
-		NodeName: nodeName,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "InstaSliceDaemonsetReconciler")
-		// os.Exit(1)
+	reconciler, err := daemonset.NewInstasliceDaemonsetReconciler(mgr.GetClient(), mgr.GetScheme(), nodeName, config)
+	if err != nil {
+		setupLog.Error(err, "could not create daemonset reconciler")
+		os.Exit(1)
 	}
+
+	if err := reconciler.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "InstaSliceDaemonsetReconciler")
+		os.Exit(1)
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -161,17 +157,6 @@ func main() {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
-
-	// setupLog.Info("starting CLI App")
-	// os.Args = []string{
-	// 	filepath.Base("set-nas-status"),
-	// 	"--status=NotReady",
-	// 	"--node-name=kind-control-plane",
-	// }
-	// if err := newApp().Run(os.Args); err != nil {
-	// 	fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-	// 	os.Exit(1)
-	// }
 
 	setupLog.Info("starting daemonset")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
