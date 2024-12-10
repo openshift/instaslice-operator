@@ -39,7 +39,6 @@ import (
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
-	"github.com/openshift/instaslice-operator/internal/controller/config"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -126,19 +125,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	config := config.ConfigFromEnvironment()
-	setupLog.Info("using config", "config", config.ToString())
-
-	if config.WebhookEnable {
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		mgr.GetWebhookServer().Register("/mutate-v1-pod", &webhook.Admission{Handler: &controller.PodAnnotator{
-			Client: mgr.GetClient(), Decoder: admission.NewDecoder(mgr.GetScheme()),
-		}})
+			Client: mgr.GetClient(), Decoder: admission.NewDecoder(mgr.GetScheme())}})
 	}
 
 	if err = (&controller.InstasliceReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-		Config: config,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Instaslice")
 		os.Exit(1)
