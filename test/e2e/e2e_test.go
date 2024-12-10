@@ -92,14 +92,6 @@ func init() {
 }
 
 var _ = BeforeSuite(func() {
-	GinkgoWriter.Printf("cri-bin: %v\n", criBin)
-	GinkgoWriter.Printf("kubectl-bin: %v\n", kubectlBin)
-	GinkgoWriter.Printf("namespace: %v\n", namespace)
-	GinkgoWriter.Printf("emulated: %v\n", emulated)
-	GinkgoWriter.Printf("node-name: %v\n", nodeName)
-	GinkgoWriter.Printf("controller-image: %v\n", controllerImage)
-	GinkgoWriter.Printf("daemonset-image: %v\n", daemonsetImage)
-
 	var err error
 
 	cfg, err = config.GetConfig()
@@ -125,6 +117,13 @@ var _ = BeforeSuite(func() {
 		templateVars.NodeName = nodeName
 	}
 
+	GinkgoWriter.Printf("cri-bin: %v\n", criBin)
+	GinkgoWriter.Printf("kubectl-bin: %v\n", kubectlBin)
+	GinkgoWriter.Printf("namespace: %v\n", namespace)
+	GinkgoWriter.Printf("emulated: %v\n", emulated)
+	GinkgoWriter.Printf("node-name: %v\n", nodeName)
+	GinkgoWriter.Printf("controller-image: %v\n", controllerImage)
+	GinkgoWriter.Printf("daemonset-image: %v\n", daemonsetImage)
 })
 
 // TODO: add more test cases -
