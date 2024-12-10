@@ -19,12 +19,14 @@ package daemonset
 import (
 	"context"
 	"encoding/json"
+	goerror "errors"
 	"fmt"
 	"math"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
@@ -64,6 +66,8 @@ type InstaSliceDaemonsetReconciler struct {
 
 var discoveredGpusOnHost []string
 
+var initNvmlOnce sync.Once
+
 // this struct is created to represent profiles
 // in human readable format and perform string comparison
 // NVML provides int values which are hard to interpret.
@@ -89,6 +93,31 @@ type MigDeviceInfo struct {
 	ciInfo *nvml.ComputeInstanceInfo
 	start  uint32
 	size   uint32
+}
+
+func NewInstasliceDaemonsetReconciler(client client.Client, scheme *runtime.Scheme, nodeName string, config *config.Config) (*InstaSliceDaemonsetReconciler, error) {
+	reconciler := &InstaSliceDaemonsetReconciler{
+		Client:   client,
+		Scheme:   scheme,
+		Config:   config,
+		NodeName: nodeName,
+	}
+
+	var err error
+	initNvmlOnce.Do(func() {
+		if config.EmulatorModeEnable {
+			return
+		}
+		ret := nvml.Init()
+		if ret != nvml.SUCCESS {
+			err = goerror.New("Unable to initialize NVML")
+		}
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return reconciler, nil
 }
 
 func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -168,23 +197,8 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				time.Sleep(controller.Requeue1sDelay)
 			}
 			if !r.Config.EmulatorModeEnable {
-				ret := nvml.Init()
-				if ret != nvml.SUCCESS {
-					log.Error(ret, "Unable to initialize NVML")
-				}
-
-				var shutdownErr error
 				var createdMigInfos map[string]*MigDeviceInfo
 				var err error
-
-				defer func() {
-					if shutdownErr = nvml.Shutdown(); shutdownErr != nvml.SUCCESS {
-						log.Error(shutdownErr, "error to perform nvml.Shutdown")
-					}
-				}()
-				if ret != nvml.SUCCESS {
-					log.Error(ret, "Unable to get device count")
-				}
 
 				// TODO: any GPU can fail creating CI and GI
 				// if simulator mode is on do not perform NVML calls
@@ -199,7 +213,9 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				// the keep latency low for realizing slices.
 				device, retCodeForDevice := nvml.DeviceGetHandleByUUID(allocations.GPUUUID)
 				if retCodeForDevice != nvml.SUCCESS {
-					log.Error(ret, "error getting GPU device handle")
+					err = goerror.New("error getting GPU device handle")
+					log.Error(retCodeForDevice, err.Error())
+					return ctrl.Result{}, err
 				}
 				var giProfileId, ciProfileId int
 				for _, item := range instaslice.Spec.Migplacement {
@@ -272,17 +288,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 // TODO: split this method into two methods.
 func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allocation inferencev1alpha1.AllocationDetails) error {
 	log := logr.FromContext(ctx)
-	ret := nvml.Init()
-	if ret != nvml.SUCCESS {
-		return fmt.Errorf("unable to init NVML %v", ret)
-	}
-	var shutdownErr error
-
-	defer func() {
-		if shutdownErr = nvml.Shutdown(); shutdownErr != nvml.SUCCESS {
-			log.Error(shutdownErr, "error to perform nvml.Shutdown")
-		}
-	}()
 
 	parent, ret := nvml.DeviceGetHandleByUUID(allocation.GPUUUID)
 	if ret != nvml.SUCCESS {
@@ -584,10 +589,6 @@ func (r *InstaSliceDaemonsetReconciler) classicalResourcesAndGPUMemOnNode(ctx co
 func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*inferencev1alpha1.Instaslice, nvml.Return, map[string]string, bool, error) {
 	log := logr.FromContext(context.TODO())
 	instaslice := &inferencev1alpha1.Instaslice{}
-	ret := nvml.Init()
-	if ret != nvml.SUCCESS {
-		return nil, ret, nil, false, ret
-	}
 
 	count, ret := nvml.DeviceGetCount()
 	if ret != nvml.SUCCESS {
