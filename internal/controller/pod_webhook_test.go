@@ -139,3 +139,79 @@ func TestHandle(t *testing.T) {
 		})
 	}
 }
+
+func TestTransformResources(t *testing.T) {
+	createResourceList := func(resources map[string]string) v1.ResourceList {
+		resourceList := v1.ResourceList{}
+		for name, value := range resources {
+			resourceList[v1.ResourceName(name)] = resource.MustParse(value)
+		}
+		return resourceList
+	}
+
+	tests := []struct {
+		name             string
+		limits           map[string]string
+		requests         map[string]string
+		expectedLimits   map[string]string
+		expectedRequests map[string]string
+	}{
+		{
+			name: "Transform valid resources",
+			limits: map[string]string{
+				"nvidia.com/mig-1g": "1",
+				"nvidia.com/mig-2g": "2",
+			},
+			requests: map[string]string{
+				"nvidia.com/mig-1g": "1",
+			},
+			expectedLimits: map[string]string{
+				"instaslice.redhat.com/mig-1g": "1",
+				"instaslice.redhat.com/mig-2g": "2",
+			},
+			expectedRequests: map[string]string{
+				"instaslice.redhat.com/mig-1g": "1",
+			},
+		},
+		{
+			name: "Do not transform unrelated resources (negative test)",
+			limits: map[string]string{
+				"other.com/mig-1g": "3",
+			},
+			requests: map[string]string{
+				"unrelated.com/mig-1g": "4",
+			},
+			expectedLimits: map[string]string{
+				"other.com/mig-1g": "3",
+			},
+			expectedRequests: map[string]string{
+				"unrelated.com/mig-1g": "4",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resources := &v1.ResourceRequirements{
+				Limits:   createResourceList(tt.limits),
+				Requests: createResourceList(tt.requests),
+			}
+			transformResources(resources)
+			compareResourceLists := func(actual, expected v1.ResourceList) {
+				if len(actual) != len(expected) {
+					t.Fatalf("expected %d resources, got %d", len(expected), len(actual))
+				}
+				for name, expectedQuantity := range expected {
+					actualQuantity, exists := actual[name]
+					if !exists {
+						t.Errorf("expected resource %s not found", name)
+					} else if actualQuantity.Cmp(expectedQuantity) != 0 {
+						t.Errorf("expected resource %s to have quantity %s, got %s", name, expectedQuantity.String(), actualQuantity.String())
+					}
+				}
+			}
+			compareResourceLists(resources.Limits, createResourceList(tt.expectedLimits))
+			compareResourceLists(resources.Requests, createResourceList(tt.expectedRequests))
+		})
+	}
+}

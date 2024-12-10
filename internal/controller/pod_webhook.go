@@ -52,33 +52,8 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 
 	performQuotaArithmetic(pod, req)
 
-	// Add extended resource to resource limits
-	if pod.Spec.Containers[0].Resources.Limits == nil {
-		pod.Spec.Containers[0].Resources.Limits = make(v1.ResourceList)
-	}
-
-	limits := pod.Spec.Containers[0].Resources.Limits
-	for resourceName, quantity := range limits {
-		if strings.HasPrefix(string(resourceName), "nvidia.com/mig-") {
-			newResourceName := strings.Replace(string(resourceName), "nvidia.com", "instaslice.redhat.com", 1)
-			delete(pod.Spec.Containers[0].Resources.Limits, resourceName)
-			limits[v1.ResourceName(newResourceName)] = quantity
-		}
-	}
-
-	if pod.Spec.Containers[0].Resources.Requests == nil {
-		pod.Spec.Containers[0].Resources.Requests = make(v1.ResourceList)
-	}
-
 	// Transform resource requests from nvidia.com/mig-* to instaslice.redhat.com/mig-*
-	requests := pod.Spec.Containers[0].Resources.Requests
-	for resourceName, quantity := range requests {
-		if strings.HasPrefix(string(resourceName), "nvidia.com/mig-") {
-			newResourceName := strings.Replace(string(resourceName), "nvidia.com", "instaslice.redhat.com", 1)
-			delete(requests, resourceName)
-			requests[v1.ResourceName(newResourceName)] = quantity
-		}
-	}
+	transformResources(&pod.Spec.Containers[0].Resources)
 
 	// Add scheduling
 	schedulingGateName := GateName
@@ -165,4 +140,21 @@ func performQuotaArithmetic(pod *v1.Pod, req admission.Request) admission.Respon
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 	return admission.PatchResponseFromRaw(req.Object.Raw, marshaledPod)
+}
+
+func transformResources(resources *v1.ResourceRequirements) {
+	func(resourceLists ...*v1.ResourceList) {
+		for _, resourceList := range resourceLists {
+			if *resourceList == nil {
+				*resourceList = make(v1.ResourceList)
+			}
+			for resourceName, quantity := range *resourceList {
+				if strings.HasPrefix(string(resourceName), NvidiaMIGPrefix) {
+					newResourceName := strings.Replace(string(resourceName), NvidiaMIGPrefix, fmt.Sprintf("%smig-", OrgInstaslicePrefix), 1)
+					delete(*resourceList, resourceName)
+					(*resourceList)[v1.ResourceName(newResourceName)] = quantity
+				}
+			}
+		}
+	}(&resources.Limits, &resources.Requests)
 }
