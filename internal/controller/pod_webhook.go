@@ -46,14 +46,17 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 		return admission.Errored(400, fmt.Errorf("could not decode pod: %v", err))
 	}
 
-	if !hasMIGResource(pod) {
+	count, migContainerIndex := hasMIGResource(pod)
+	if count == 0 {
 		return admission.Allowed("No nvidia.com/mig-* resource found, skipping mutation.")
+	} else if count > 1 {
+		return admission.Denied(fmt.Sprintf("Too many containers found with mig resources (count=%v, podName=%v)", count, pod.Name))
 	}
 
-	performQuotaArithmetic(pod, req)
+	performQuotaArithmetic(pod, req, migContainerIndex)
 
 	// Transform resource requests from nvidia.com/mig-* to instaslice.redhat.com/mig-*
-	transformResources(&pod.Spec.Containers[0].Resources)
+	transformResources(&pod.Spec.Containers[migContainerIndex].Resources)
 
 	// Add scheduling
 	schedulingGateName := GateName
@@ -74,7 +77,7 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 	// Add envFrom with a unique ConfigMap name derived from the pod name
 	configMapName := uuidStr
 	// Support for only one pod workloads
-	pod.Spec.Containers[0].EnvFrom = append(pod.Spec.Containers[0].EnvFrom, v1.EnvFromSource{
+	pod.Spec.Containers[migContainerIndex].EnvFrom = append(pod.Spec.Containers[migContainerIndex].EnvFrom, v1.EnvFromSource{
 		ConfigMapRef: &v1.ConfigMapEnvSource{
 			LocalObjectReference: v1.LocalObjectReference{Name: configMapName},
 		},
@@ -90,27 +93,34 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 }
 
 // hasMIGResource checks if a pod has resource requests or limits with a key that matches `nvidia.com/mig-*`
-func hasMIGResource(pod *v1.Pod) bool {
-	for _, container := range pod.Spec.Containers {
+func hasMIGResource(pod *v1.Pod) (int, int) {
+	count := 0
+	migContainerIndex := 0
+	for i, container := range pod.Spec.Containers {
+		foundContainerResource := false
+
 		// Check resource limits
 		for resourceName := range container.Resources.Limits {
 			if strings.HasPrefix(string(resourceName), NvidiaMIGPrefix) {
-				return true
+				foundContainerResource = true
 			}
 		}
 		// Check resource requests
 		for resourceName := range container.Resources.Requests {
 			if strings.HasPrefix(string(resourceName), NvidiaMIGPrefix) {
-				return true
+				foundContainerResource = true
 			}
 		}
+
+		if foundContainerResource {
+			count++
+			migContainerIndex = i
+		}
 	}
-	return false
+	return count, migContainerIndex
 }
 
-func performQuotaArithmetic(pod *v1.Pod, req admission.Request) admission.Response {
-	// assumption is that workloads will have 1 container where
-	// MIG is requested.
+func performQuotaArithmetic(pod *v1.Pod, req admission.Request, migContainerIndex int) admission.Response {
 	// TODO instead of only iterating over regular containers,
 	// we should also consider other types of containers (such as init containers) in future
 	for _, container := range pod.Spec.Containers {
@@ -120,7 +130,7 @@ func performQuotaArithmetic(pod *v1.Pod, req admission.Request) admission.Respon
 			resourceParts := strings.Split(strings.TrimPrefix(string(resourceName), NvidiaMIGPrefix), ".")
 
 			if len(resourceParts) == 2 {
-				//gpuPart := resourceParts[0]
+				// gpuPart := resourceParts[0]
 				memoryPart := resourceParts[1]
 				memoryValue, err := strconv.Atoi(strings.TrimSuffix(memoryPart, "gb"))
 				if err != nil {
@@ -130,7 +140,7 @@ func performQuotaArithmetic(pod *v1.Pod, req admission.Request) admission.Respon
 				// assume 1 container workload
 				// Convert the string to ResourceName
 				resourceName := v1.ResourceName(QuotaResourceName)
-				pod.Spec.Containers[0].Resources.Limits[resourceName] = resource.MustParse(fmt.Sprintf("%dGi", acceleratorMemory))
+				pod.Spec.Containers[migContainerIndex].Resources.Limits[resourceName] = resource.MustParse(fmt.Sprintf("%dGi", acceleratorMemory))
 			}
 		}
 	}

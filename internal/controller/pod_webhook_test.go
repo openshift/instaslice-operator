@@ -45,14 +45,24 @@ func TestHandle(t *testing.T) {
 		Decoder: admission.NewDecoder(scheme),
 	}
 
+	type ExpectedMutation int
+
+	const (
+		None = iota
+		Allowed
+		Disallowed
+	)
+
 	tests := []struct {
 		name          string
 		pod           *v1.Pod
-		expectMut     bool
+		expectMut     ExpectedMutation
 		expectedLimit string
+		migIndex      int
 	}{
 		{
-			name: "Pod without nvidia.com/mig-* resource",
+			name:     "Pod without nvidia.com/mig-* resource",
+			migIndex: 0,
 			pod: &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "pod-without-mig-resource",
@@ -69,11 +79,12 @@ func TestHandle(t *testing.T) {
 					},
 				},
 			},
-			expectMut:     false,
+			expectMut:     None,
 			expectedLimit: "",
 		},
 		{
-			name: "Pod with nvidia.com/mig-1g.5gb resource",
+			name:     "Pod with nvidia.com/mig-1g.5gb resource",
+			migIndex: 0,
 			pod: &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "pod-with-mig-resource",
@@ -90,8 +101,92 @@ func TestHandle(t *testing.T) {
 					},
 				},
 			},
-			expectMut:     true,
+			expectMut:     Allowed,
 			expectedLimit: "5Gi",
+		},
+		{
+			name:     "Pod with nvidia.com/mig-1g.5gb resource with multiple containers index 0",
+			migIndex: 0,
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "pod-with-mig-resource",
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name: "mig container",
+							Resources: v1.ResourceRequirements{
+								Limits: v1.ResourceList{
+									"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
+								},
+							},
+						},
+						{
+							Name: "extra-container",
+						},
+					},
+				},
+			},
+			expectMut:     Allowed,
+			expectedLimit: "5Gi",
+		},
+		{
+			name:     "Pod with nvidia.com/mig-1g.5gb resource with multiple containers index 1",
+			migIndex: 1,
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "pod-with-mig-resource",
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name: "extra-container",
+						},
+						{
+							Name: "mig container",
+							Resources: v1.ResourceRequirements{
+								Limits: v1.ResourceList{
+									"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectMut:     Allowed,
+			expectedLimit: "5Gi",
+		},
+		{
+			name: "Pod with nvidia.com/mig-1g.5gb resource with multiple mig indexes (disallowed)",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "pod-with-mig-resource",
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name: "extra-container",
+						},
+						{
+							Name: "mig container",
+							Resources: v1.ResourceRequirements{
+								Limits: v1.ResourceList{
+									"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
+								},
+							},
+						},
+						{
+							Name: "mig container 2 (this is invalid)",
+							Resources: v1.ResourceRequirements{
+								Limits: v1.ResourceList{
+									"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectMut: Disallowed,
 		},
 	}
 
@@ -109,7 +204,11 @@ func TestHandle(t *testing.T) {
 
 			resp := annotator.Handle(context.TODO(), req)
 
-			if tt.expectMut {
+			switch tt.expectMut {
+			case None:
+				g.Expect(resp.Allowed).To(BeTrue(), "Expected request to be allowed without mutation")
+				g.Expect(resp.Patches).To(BeEmpty(), "Expected no patches but found some")
+			case Allowed:
 				g.Expect(resp.Allowed).To(BeTrue(), "Expected mutation but none occurred")
 				g.Expect(resp.Patches).NotTo(BeEmpty(), "Expected patches but none were found")
 
@@ -128,13 +227,15 @@ func TestHandle(t *testing.T) {
 				modifiedPod := &v1.Pod{}
 				g.Expect(json.Unmarshal(patchedPodBytes, modifiedPod)).To(Succeed(), "Failed to unmarshal patched pod")
 
-				actualMemory, found := modifiedPod.Spec.Containers[0].Resources.Limits[v1.ResourceName(instasliceQuotaResourceName)]
+				actualMemory, found := modifiedPod.Spec.Containers[tt.migIndex].Resources.Limits[v1.ResourceName(instasliceQuotaResourceName)]
 				g.Expect(found).To(BeTrue(), fmt.Sprintf("%s limit not found in the modified pod", instasliceQuotaResourceName))
 				expectedMemory := resource.MustParse(tt.expectedLimit)
 				g.Expect(actualMemory.Cmp(expectedMemory)).To(Equal(0), fmt.Sprintf("Expected %s to be %s", instasliceQuotaResourceName, tt.expectedLimit))
-			} else {
-				g.Expect(resp.Allowed).To(BeTrue(), "Expected request to be allowed without mutation")
+			case Disallowed:
+				g.Expect(resp.Allowed).To(BeFalse(), "Expected request to be disallowed without mutation")
 				g.Expect(resp.Patches).To(BeEmpty(), "Expected no patches but found some")
+			default:
+				t.Fatal("invalid expected case")
 			}
 		})
 	}
