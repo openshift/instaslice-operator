@@ -13,15 +13,15 @@ InstaSlice has two controllers (restating):
 InstaSlice allocation states per pod:
 - creating : the controller finds a allocation for pod and makes a “soft” allocation
 - created : the daemonset creates:
-    - Actual allocation on the GPU, 
-    - Creates configmap
-    - InstaSlice resource and 
+    - Actual allocation on the GPU,
+    - Adds pod annotation with MIG UUID
+    - InstaSlice resource and
     - Updates node capacity
 - ungated : the controller ungates the pod when the slice exists and scheduler takes over
-- deleting : the controller sets status as deleting when user deletes pods or the pod completes 
+- deleting : the controller sets status as deleting when user deletes pods or the pod completes
 - deleted : the daemonset state set status to deleted and deletes
-    - Ci and Gi, configmap, 
-    - InstaSlice resource and 
+    - Ci and Gi
+    - InstaSlice resource and
     - Updates node capacity
 
 Allocations and prepared sections are added to the same InstaSlice object for every gated pod in the system. Allocation object  state can be mutated by the controller and daemonset. The prepared section is added and deleted by the daemonset.
@@ -36,7 +36,7 @@ The SUT has been tested under batch assumption with short tasks. I am not sure i
 - Hardware setup:
 
 The node has two A100s with 40 GB of GPU memory, 72 online CPUs hyperthreaded and 1 TB of ram.
-We have 3g.20gb dangling slices on the GPUs, these are not used by the controller. Once we have the upstream GPU operator fix deployment instructions, we can start using a clean slate GPU for making allocations. 
+We have 3g.20gb dangling slices on the GPUs, these are not used by the controller. Once we have the upstream GPU operator fix deployment instructions, we can start using a clean slate GPU for making allocations.
 
 - KinD:
 

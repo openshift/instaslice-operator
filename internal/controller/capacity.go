@@ -73,10 +73,9 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 				continue
 			}
 			size, discoveredGiprofile, Ciprofileid, Ciengprofileid := r.extractGpuProfile(updatedInstaSliceObject, profileName)
-			resourceIdentifier := pod.Spec.Containers[0].EnvFrom[0].ConfigMapRef.Name
 			allocDetails := policy.SetAllocationDetails(profileName, newStart, uint32(size),
 				string(pod.UID), updatedInstaSliceObject.Name, string(inferencev1alpha1.AllocationStatusCreating), discoveredGiprofile,
-				Ciprofileid, Ciengprofileid, pod.Namespace, pod.Name, gpuuuid, resourceIdentifier, userCpuCoresCeil, userMemoryBytes)
+				Ciprofileid, Ciengprofileid, pod.Namespace, pod.Name, gpuuuid, userCpuCoresCeil, userMemoryBytes)
 			return allocDetails, nil
 		}
 	}
