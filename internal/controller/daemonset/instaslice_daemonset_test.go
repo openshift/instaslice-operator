@@ -34,7 +34,6 @@ import (
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
-	"github.com/openshift/instaslice-operator/internal/controller/config"
 )
 
 func TestDeleteConfigMap(t *testing.T) {
@@ -92,13 +91,10 @@ func TestInstaSliceDaemonsetReconciler_Reconcile_Deleting_Alloc_Status(t *testin
 	assert.NoError(t, os.Setenv("NODE_NAME", nodeName))
 	assert.NoError(t, os.Setenv("EMULATOR_MODE", controller.EmulatorModeTrue))
 
-	config := config.ConfigFromEnvironment()
-
 	// Create the reconciler with the fake client
 	reconciler := &InstaSliceDaemonsetReconciler{
 		Client:   client,
 		NodeName: nodeName,
-		Config:   config,
 	}
 
 	// Create a background context
@@ -150,13 +146,10 @@ func TestInstaSliceDaemonsetReconciler_Reconcile_Creating_Alloc_Status(t *testin
 	assert.NoError(t, os.Setenv("NODE_NAME", nodeName))
 	assert.NoError(t, os.Setenv("EMULATOR_MODE", controller.EmulatorModeTrue))
 
-	config := config.ConfigFromEnvironment()
-
 	// Create the reconciler with the fake client
 	reconciler := &InstaSliceDaemonsetReconciler{
 		Client:   client,
 		NodeName: nodeName,
-		Config:   config,
 	}
 
 	// Create a background context
