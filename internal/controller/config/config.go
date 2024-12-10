@@ -27,7 +27,7 @@ type Config struct {
 func NewConfig() *Config {
 	return &Config{
 		EmulatorModeEnable: DefaultEmulatorMode,
-		WebhookEnable:      DefaultEmulatorMode,
+		WebhookEnable:      DefaultWebhookMode,
 		DaemonsetImage:     DefaultDaemonsetImage,
 	}
 }
@@ -45,7 +45,7 @@ func ConfigFromEnvironment() *Config {
 	}
 
 	if webhookEnable, ok := os.LookupEnv("WEBHOOK_ENABLE"); ok {
-		config.WebhookEnable = strings.EqualFold(webhookEnable, "true")
+		config.WebhookEnable = webhookEnable != "false"
 	}
 
 	if daemonsetImage, ok := os.LookupEnv("RELATED_IMAGE_INSTASLICE_DAEMONSET"); ok {
