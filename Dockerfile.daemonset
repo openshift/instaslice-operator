@@ -9,10 +9,10 @@ RUN set -eux; \
     \
     arch="$(uname -m)"; \
     case "${arch##*-}" in \
-        x86_64 | amd64) ARCH='amd64' ;; \
-        ppc64el | ppc64le) ARCH='ppc64le' ;; \
-        aarch64) ARCH='arm64' ;; \
-        *) echo "unsupported architecture" ; exit 1 ;; \
+    x86_64 | amd64) ARCH='amd64' ;; \
+    ppc64el | ppc64le) ARCH='ppc64le' ;; \
+    aarch64) ARCH='arm64' ;; \
+    *) echo "unsupported architecture" ; exit 1 ;; \
     esac; \
     wget -nv -O - https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-${ARCH}.tar.gz \
     | tar -C /usr/local -xz
@@ -36,7 +36,7 @@ COPY . .
 # was called. For example, if we call make docker-build in a local env which has the Apple Silicon M1 SO
 # the docker BUILDPLATFORM arg will be linux/arm64 when for Apple x86 it will be linux/amd64. Therefore,
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
-RUN go build -o bin/daemonset cmd/daemonset/main.go
+RUN make build-daemonset
 
 ARG CUDA_VERSION=12.4.1
 ARG BASE_DIST=ubi8
@@ -56,8 +56,8 @@ COPY --from=build /workspace/bin/daemonset .
 # Install / upgrade packages here that are required to resolve CVEs
 ARG CVE_UPDATES
 RUN if [ -n "${CVE_UPDATES}" ]; then \
-        yum update -y ${CVE_UPDATES} && \
-        rm -rf /var/cache/yum/*; \
+    yum update -y ${CVE_UPDATES} && \
+    rm -rf /var/cache/yum/*; \
     fi
 
 

@@ -4,6 +4,9 @@
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= $(shell cat VERSION)
+GIT_VERSION ?= $(shell git describe --always --abbrev=7)
+GIT_COMMIT ?= $(shell git rev-list -1 HEAD)
+DATE = $(shell date -u +"%Y.%m.%d.%H.%M.%S")
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
@@ -197,7 +200,7 @@ deploy-instaslice-emulated-on-ocp:
                 hack/deploy-instaslice-emulated-on-ocp.sh
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
-GOLANGCI_LINT_VERSION ?= v1.61.0
+GOLANGCI_LINT_VERSION ?= v1.62.2
 golangci-lint:
 	@[ -f $(GOLANGCI_LINT) ] || { \
 	set -e ;\
@@ -215,9 +218,19 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 ##@ Build
 
 .PHONY: build
-build: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/controller/main.go
-	go build -o bin/daemonset cmd/daemonset/main.go
+build: manifests generate fmt vet build-daemonset build-controller ## Build manager binary.
+
+.PHONY: build-daemonset
+build-daemonset: fmt vet ## Build manager binary.
+	go build \
+	   -ldflags "-X=github.com/openshift/instaslice-operator/internal/controller/version.GitCommit=$(GIT_COMMIT) -X=github.com/openshift/instaslice-operator/internal/controller/version.Version=$(VERSION)" \
+		-o bin/daemonset cmd/daemonset/main.go
+
+.PHONY: build-controller
+build-controller: fmt vet ## Build manager binary.
+	go build \
+	   -ldflags "-X=github.com/openshift/instaslice-operator/internal/controller/version.GitCommit=$(GIT_COMMIT) -X=github.com/openshift/instaslice-operator/internal/controller/version.Version=$(VERSION)" \
+		-o bin/manager cmd/controller/main.go
 
 .PHONY: run-controller
 run-controller: manifests generate fmt vet ## Run a controller from your host.
@@ -232,13 +245,13 @@ run-daemonset: manifests generate fmt vet ## Run a controller from your host.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build -t ${IMG} -f Dockerfile.controller .
-	$(CONTAINER_TOOL) build -t ${IMG_DMST} -f Dockerfile.daemonset .
+	$(CONTAINER_TOOL) build -t ${IMG} --build-arg GIT_VERSION=${GIT_VERSION} --build-arg GIT_COMMIT=${GIT_COMMIT} -f Dockerfile.controller .
+	$(CONTAINER_TOOL) build -t ${IMG_DMST} --build-arg GIT_VERSION=${GIT_VERSION} --build-arg GIT_COMMIT=${GIT_COMMIT} -f Dockerfile.daemonset .
 
 .PHONY: container-build-ocp
 container-build-ocp: ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build -t ${IMG} -f Dockerfile.ocp .
-	$(CONTAINER_TOOL) build -t ${IMG_DMST} -f Dockerfile.daemonset-ocp .
+	$(CONTAINER_TOOL) build -t ${IMG} --build-arg GIT_VERSION=${GIT_VERSION} --build-arg GIT_COMMIT=${GIT_COMMIT} -f Dockerfile.ocp .
+	$(CONTAINER_TOOL) build -t ${IMG_DMST} --build-arg GIT_VERSION=${GIT_VERSION} --build-arg GIT_COMMIT=${GIT_COMMIT} -f Dockerfile.daemonset-ocp .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
