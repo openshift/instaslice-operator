@@ -56,6 +56,7 @@ func init() {
 }
 
 func main() {
+	controller.RegisterMetrics()
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string

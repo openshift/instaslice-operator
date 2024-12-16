@@ -400,6 +400,16 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	}
 
+	// Example: Updating GPU slice metrics
+	UpdateGpuSliceMetrics("node1", "gpu0", 3, 5)
+
+	// Example: Updating pending GPU slice requests
+	pendingCount := getPendingGpuRequests(r.Client)
+	UpdatePendingSliceRequests(pendingCount)
+
+	// Example: Updating ConfigMap metrics
+	updateConfigMaps(r.Client)
+
 	return ctrl.Result{}, nil
 }
 

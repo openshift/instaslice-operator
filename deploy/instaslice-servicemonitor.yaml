@@ -1,0 +1,12 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: instaslice-monitor
+  namespace: default  # Replace with your namespace if needed
+spec:
+  selector:
+    matchLabels:
+      app: instaslice  # Replace with your operator’s label
+  endpoints:
+    - port: metrics
+      interval: 30s  # Scrape interval, adjust as needed
