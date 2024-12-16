@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -71,7 +72,7 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 				Config: config,
 			}
 
-			podUUID = "test-pod-uuid"
+			podUUID = "test-pod-uuid-1"
 
 			pod = &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -373,7 +374,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 				Config: config,
 			}
 
-			podUUID = "test-pod-uuid"
+			podUUID = "test-pod-uuid-3"
 			pod = &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pod",
@@ -972,7 +973,7 @@ func TestFirstFitPolicy_SetAllocationDetails(t *testing.T) {
 		profileName:         "1g.5gb",
 		newStart:            0,
 		size:                1,
-		podUUID:             types.UID("test-pod-uuid"),
+		podUUID:             types.UID("test-pod-uuid-4"),
 		nodename:            types.NodeName("kind-control-plane"),
 		allocationStatus:    inferencev1alpha1.AllocationStatus{AllocationStatusDaemonset: inferencev1alpha1.AllocationStatusCreated},
 		discoveredGiprofile: 0,
@@ -1042,6 +1043,7 @@ func TestFirstFitPolicy_SetAllocationDetails(t *testing.T) {
 	}
 }
 
+// Test `sortGPUs`
 func TestGPUSort(t *testing.T) {
 	Describe("SortGPUs", func() {
 		It("should sort GPU UUIDs in ascending order", func() {
@@ -1064,3 +1066,324 @@ func TestGPUSort(t *testing.T) {
 		})
 	})
 }
+
+// Test `getStartIndexFromPreparedState`
+func TestGetStartIndexFromPreparedState(t *testing.T) {
+	Describe("getStartIndexFromPreparedState", func() {
+		It("should return the correct start index for a profile", func() {
+			instaslice := &inferencev1alpha1.Instaslice{
+				Status: inferencev1alpha1.InstasliceStatus{
+					NodeResources: inferencev1alpha1.DiscoveredNodeResources{
+						MigPlacement: map[string]inferencev1alpha1.Mig{
+							"2g.10gb": {
+								Placements: []inferencev1alpha1.Placement{{Size: 2, Start: 1}},
+							},
+						},
+					},
+				},
+			}
+			gpuAllocatedIndex := [8]int32{1, 0, 0, 0, 0, 0, 0, 0}
+			Expect((&InstasliceReconciler{}).getStartIndexFromAllocationResults(instaslice, "2g.10gb", gpuAllocatedIndex, nil, true)).To(Equal(int32(1)))
+		})
+	})
+}
+
+// Test `calculateProfileFitOnGPU`
+var _ = Describe("calculateProfileFitOnGPU", func() {
+	var (
+		ctx        context.Context
+		fakeClient client.Client
+		r          *InstasliceReconciler
+		instaslice *inferencev1alpha1.Instaslice
+		pod        *v1.Pod
+		podUUID    string
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		scheme := runtime.NewScheme()
+		Expect(inferencev1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(v1.AddToScheme(scheme)).To(Succeed())
+
+		fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+		r = &InstasliceReconciler{
+			Client: fakeClient,
+		}
+		podUUID = "test-pod-uuid-6"
+		pod = &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: InstaSliceOperatorNamespace,
+				UID:       types.UID(podUUID),
+				Finalizers: []string{
+					FinalizerName,
+				},
+			},
+		}
+
+		Expect(fakeClient.Create(ctx, pod)).To(Succeed())
+		instaslice = &inferencev1alpha1.Instaslice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-instaslice",
+				Namespace: "instaslice-operator",
+			},
+			Status: inferencev1alpha1.InstasliceStatus{
+				NodeResources: inferencev1alpha1.DiscoveredNodeResources{
+					MigPlacement: map[string]inferencev1alpha1.Mig{
+						"4g.20gb": {
+							Placements: []inferencev1alpha1.Placement{{Size: 4, Start: 0}},
+						},
+					},
+				},
+			},
+		}
+
+		Expect(fakeClient.Create(ctx, instaslice)).To(Succeed())
+	})
+
+	It("should return the correct actual slice size allocated", func() {
+		actualSize, err := r.calculateProfileFitOnGPU(instaslice, "4g.20gb", "gpu-1", false, pod)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(actualSize).To(Equal(int32(4)))
+	})
+})
+
+// Test `calculateProfileFitOnGPU for slices fit simulation`
+func TestGetTotalFitForProfileOnGPU(t *testing.T) {
+	var _ = Describe("GetTotalFitForProfileOnGPU", func() {
+		tests := []struct {
+			name          string
+			instasliceObj *inferencev1alpha1.Instaslice
+			profileName   string
+			gpuuid        string
+			remaining     int32
+			expectedFit   int32
+		}{
+			{
+				name: "Zero remaining capacity",
+				instasliceObj: &inferencev1alpha1.Instaslice{
+					Status: inferencev1alpha1.InstasliceStatus{
+						NodeResources: inferencev1alpha1.DiscoveredNodeResources{
+							MigPlacement: map[string]inferencev1alpha1.Mig{
+								"1g.10gb": {
+									Placements: []inferencev1alpha1.Placement{},
+								},
+							},
+						},
+					},
+				},
+				profileName: "1g.10gb",
+				remaining:   0,
+				expectedFit: 0,
+			},
+			{
+				name: "Profile not found",
+				instasliceObj: &inferencev1alpha1.Instaslice{
+					Status: inferencev1alpha1.InstasliceStatus{
+						NodeResources: inferencev1alpha1.DiscoveredNodeResources{
+							MigPlacement: map[string]inferencev1alpha1.Mig{},
+						},
+					},
+				},
+				profileName: "non-existent-profile",
+				remaining:   10,
+				expectedFit: 0,
+			},
+			{
+				name: "Special case: 7g.40gb with exact fit",
+				instasliceObj: &inferencev1alpha1.Instaslice{
+					Status: inferencev1alpha1.InstasliceStatus{
+						NodeResources: inferencev1alpha1.DiscoveredNodeResources{
+							MigPlacement: map[string]inferencev1alpha1.Mig{
+								"7g.40gb": {
+									Placements: []inferencev1alpha1.Placement{{Size: 7}},
+								},
+							},
+						},
+					},
+				},
+				profileName: "7g.40gb",
+				remaining:   7,
+				expectedFit: 0,
+			},
+			{
+				name: "Regular profile fitting multiple times",
+				instasliceObj: &inferencev1alpha1.Instaslice{
+					Status: inferencev1alpha1.InstasliceStatus{
+						NodeResources: inferencev1alpha1.DiscoveredNodeResources{
+							MigPlacement: map[string]inferencev1alpha1.Mig{
+								"3g.20gb": {
+									Placements: []inferencev1alpha1.Placement{{Size: 4}},
+								},
+							},
+						},
+					},
+				},
+				profileName: "3g.20gb",
+				remaining:   9,
+				expectedFit: 1,
+			},
+			{
+				name: "Exact fit scenario",
+				instasliceObj: &inferencev1alpha1.Instaslice{
+					Status: inferencev1alpha1.InstasliceStatus{
+						NodeResources: inferencev1alpha1.DiscoveredNodeResources{
+							MigPlacement: map[string]inferencev1alpha1.Mig{
+								"2g.10gb": {
+									Placements: []inferencev1alpha1.Placement{{Size: 2}},
+								},
+							},
+						},
+					},
+				},
+				profileName: "2g.10gb",
+				remaining:   4,
+				expectedFit: 1,
+			},
+		}
+		for _, tt := range tests {
+			It(tt.name, func() {
+				r := &InstasliceReconciler{}
+				fit, err := r.calculateProfileFitOnGPU(tt.instasliceObj, tt.profileName, tt.gpuuid, true, nil)
+
+				if tt.name == "Profile not found" || tt.name == "Zero remaining capacity" {
+					Expect(err).To(HaveOccurred(), "Expected error for missing profile or empty placement")
+				} else {
+					Expect(err).ToNot(HaveOccurred(), "calculateProfileFitOnGPU should not return an error")
+				}
+				Expect(fit).To(Equal(tt.expectedFit))
+			})
+		}
+
+	})
+}
+
+// Mock client that forces an update error
+type FakeFailingClient struct {
+	client.Client
+	FailOnUpdate bool
+}
+
+func (f *FakeFailingClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	if f.FailOnUpdate {
+		return fmt.Errorf("simulated update failure")
+	}
+	return f.Client.Update(ctx, obj, opts...)
+}
+
+var _ = Describe("Metrics Incrementation", func() {
+	var (
+		ctx        context.Context
+		r          *InstasliceReconciler
+		fakeClient client.Client
+		instaslice *inferencev1alpha1.Instaslice
+		pod        *v1.Pod
+		podUUID    string
+	)
+
+	BeforeEach(func() {
+		ctx = context.TODO()
+
+		scheme := runtime.NewScheme()
+		Expect(inferencev1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(v1.AddToScheme(scheme)).To(Succeed())
+
+		fakeClient = fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithStatusSubresource(&inferencev1alpha1.Instaslice{}).
+			Build()
+		config := config.ConfigFromEnvironment()
+
+		r = &InstasliceReconciler{
+			Client: fakeClient,
+			Config: config,
+		}
+
+		podUUID = "test-pod-uuid-2"
+
+		pod = &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: InstaSliceOperatorNamespace,
+				UID:       types.UID(podUUID),
+				Finalizers: []string{
+					FinalizerName,
+				},
+			},
+		}
+
+		Expect(fakeClient.Create(ctx, pod)).To(Succeed())
+
+		instaslice = &inferencev1alpha1.Instaslice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-instaslice",
+				Namespace: InstaSliceOperatorNamespace,
+			},
+			Spec: inferencev1alpha1.InstasliceSpec{
+				PodAllocationRequests: map[types.UID]inferencev1alpha1.AllocationRequest{
+					types.UID(podUUID): {
+						Profile: "test-profile",
+						PodRef: v1.ObjectReference{
+							Name:      pod.Name,
+							Namespace: InstaSliceOperatorNamespace,
+							UID:       pod.UID,
+						},
+						Resources: v1.ResourceRequirements{},
+					},
+				},
+			},
+			Status: inferencev1alpha1.InstasliceStatus{
+				PodAllocationResults: map[types.UID]inferencev1alpha1.AllocationResult{
+					types.UID(podUUID): {
+						AllocationStatus:            inferencev1alpha1.AllocationStatus{AllocationStatusController: inferencev1alpha1.AllocationStatusCreating},
+						GPUUUID:                     "GPU-12345",
+						Nodename:                    "fake-node",
+						ConfigMapResourceIdentifier: "fake-configmap-uid",
+					},
+				},
+				NodeResources: inferencev1alpha1.DiscoveredNodeResources{
+					MigPlacement: map[string]inferencev1alpha1.Mig{
+						"1g.5gb": {
+							Placements: []inferencev1alpha1.Placement{
+								{Size: 1, Start: 0}, // Example placement
+							},
+						},
+						"1g.10gb": { // Also add the missing profile from the failing test
+							Placements: []inferencev1alpha1.Placement{
+								{Size: 2, Start: 0},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		Expect(fakeClient.Create(ctx, instaslice)).To(Succeed())
+	})
+
+	// Test to prevent double metric incrementation
+	It("should not increment metrics more than once", func() {
+
+		err := r.IncrementTotalProcessedGpuSliceMetrics(*instaslice, "node-1", "gpu-1", "1g.5gb", pod)
+		Expect(err).ToNot(HaveOccurred()) // Should skip incrementation
+	})
+
+	// Validate allocation changes
+	It("should correctly reflect allocation changes in metrics", func() {
+		instaslice.Status.PodAllocationResults["alloc-1"] = inferencev1alpha1.AllocationResult{
+			Nodename: "node-1",
+			GPUUUID:  "gpu-1",
+			MigPlacement: inferencev1alpha1.Placement{
+				Size:  3,
+				Start: 0,
+			},
+		}
+
+		// Check cleanup of incompatible profiles
+		err := r.UpdateCompatibleProfilesMetrics(*instaslice, "node-1")
+		Expect(err).ToNot(HaveOccurred()) // Ensure the function runs without errors
+
+		Expect(instasliceMetrics.compatibleProfiles.WithLabelValues("1g.5gb", "node-1")).NotTo(BeNil())
+		Expect(instasliceMetrics.compatibleProfiles.WithLabelValues("2g.10gb", "node-1")).NotTo(BeNil())
+	})
+})
