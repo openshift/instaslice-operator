@@ -5,6 +5,9 @@ It also requires Multi-Instance GPU (MIG) to be enabled on a node's GPUs *withou
 The recommended way to accomplish both on OpenShift is via the NVIDIA GPU Operator.
 The operator will install the drivers, and its MIG manager will gracefully take care of everything that is needed to set the correct MIG mode.
 
+:warning: Note that it is currently not possible to mix InstaSlice with MIG allocations
+by the NVIDIA GPU operator in the same cluster.
+
 1. Install the [NVIDIA GPU Operator for OpenShift](https://docs.nvidia.com/datacenter/cloud-native/openshift/latest/index.html) (not for Kubernetes).
 
 2. Create a cluster policy with the following changes:
@@ -23,7 +26,13 @@ The operator will install the drivers, and its MIG manager will gracefully take 
     env:
       - name: WITH_REBOOT
         value: 'true'
+      - name: MIG_PARTED_MODE_CHANGE_ONLY
+        value: 'true'
 ```
+
+:warning: **Warning:** Setting `MIG_PARTED_MODE_CHANGE_ONLY=true` will prevent the MIG Manager from trying to delete MIG partitions managed
+by InstaSlice in some corner cases (e.g. restarting a MIG manager pod). However, this also means that you will have to clean up any existing
+MIG partitions before enabling InstaSlice.
 
 ```yaml
   mig:
