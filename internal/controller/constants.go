@@ -37,8 +37,15 @@ const (
 	daemonSetImageName               = "quay.io/amalvank/instaslicev2-daemonset:latest"
 	daemonSetName                    = "daemonset"
 	serviceAccountName               = "instaslice-operator-controller-manager"
+	profile3g20gb                    = "3g.20gb"
+	profile1g10gb                    = "1g.10gb"
 
-	Requeue1sDelay  = 1 * time.Second
-	Requeue2sDelay  = 2 * time.Second
-	requeue10sDelay = 10 * time.Second
+	Requeue1sDelay     = 1 * time.Second
+	Requeue2sDelay     = 2 * time.Second
+	requeue10sDelay    = 10 * time.Second
+	maxSlices7g40gb    = 7
+	EndPosSlices3g20gb = 3
+	EndPosSlices1g10gb = 1
+	EndStartPos3g20gb  = 4
+	EndStartPos1g10gb  = 6
 )

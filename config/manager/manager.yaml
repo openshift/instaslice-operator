@@ -78,6 +78,7 @@ spec:
           capabilities:
             drop:
             - "ALL"
+          runAsUser: 1000
         livenessProbe:
           httpGet:
             path: /healthz
@@ -104,5 +105,7 @@ spec:
             value: <IMG_DMST>
           - name: EMULATOR_MODE
             value: "false"
+          - name: INSTASLICE-PROMETHEUS-METRICS-URL
+            value: "http://0.0.0.0:8443"
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
