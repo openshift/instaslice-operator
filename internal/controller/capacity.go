@@ -63,14 +63,14 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 				updatedInstaSliceObject.Spec.PodAllocationRequests = make(map[types.UID]inferencev1alpha1.AllocationRequest)
 			}
 
-			newStart := r.getStartIndexFromPreparedState(updatedInstaSliceObject, gpuuuid, profileName)
+			gpuAllocatedIndex := r.gpuAllocatedSlices(updatedInstaSliceObject, gpuuuid)
+			newStart := r.getStartIndexFromPreparedState(updatedInstaSliceObject, profileName, gpuAllocatedIndex)
 			// For example, a newStart of 9 is considered invalid.
 			notValidIndex := int32(9)
 			if newStart == notValidIndex {
 				// Move to next GPU if the index is not valid.
 				continue
 			}
-
 			size, discoveredGiprofile, Ciprofileid, Ciengprofileid := r.extractGpuProfile(updatedInstaSliceObject, profileName)
 			resourceIdentifier := pod.Spec.Containers[0].EnvFrom[0].ConfigMapRef.Name
 
@@ -93,13 +93,21 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 					v1.ResourceMemory: memoryRequest,
 				},
 			)
+			// update deployed pod total metrics
+			if err := r.UpdateDeployedPodTotalMetrics(string(allocResult.Nodename), gpuuuid, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, allocResult.MigPlacement.Size); err != nil {
+				log.FromContext(ctx).Error(err, "Failed to update deployed pod metrics (node: %s, namespce: %s, pod: %s): %w", allocResult.Nodename, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, err)
+			}
+			// update total processed GPU slices metrics
+			if err = r.IncrementTotalProcessedGpuSliceMetrics(*updatedInstaSliceObject, string(allocResult.Nodename), allocResult.GPUUUID, profileName); err != nil {
+				log.FromContext(ctx).Error(err, "Failed to update total processed GPU slices metric", "nodeName", allocResult.Nodename, "gpuID", allocResult.GPUUUID)
+			}
 			return allocRequest, allocResult, nil
 		}
 	}
-
 	return nil, nil, fmt.Errorf("failed to find allocatable node and gpu")
 }
 
+// sortGPUs returns the sorted gpu IDs stored in the instaslice object
 func sortGPUs(updatedInstaSliceObject *inferencev1alpha1.Instaslice) []string {
 	gpuUUIDs := make([]string, 0, len(updatedInstaSliceObject.Status.NodeResources.NodeGPUs))
 	for _, discoveredGpu := range updatedInstaSliceObject.Status.NodeResources.NodeGPUs {
@@ -109,8 +117,9 @@ func sortGPUs(updatedInstaSliceObject *inferencev1alpha1.Instaslice) []string {
 	return gpuUUIDs
 }
 
-// accounting logic that finds the correct GPU and index where a slice could be placed.
-func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferencev1alpha1.Instaslice, gpuUUID string, profileName string) int32 {
+// gpuAllocatedSlices stores already allocated slices in indexes
+// returning a slice to minimize expense instead of returning s copy of the array
+func (r *InstasliceReconciler) gpuAllocatedSlices(instaslice *inferencev1alpha1.Instaslice, gpuUUID string) []int32 {
 	//TODO: generalize, A100 and H100 have 8 indexes for 3g and 7g and 7 for rest, so go with 8 and we are bounded by
 	//only valid placement indexes for a profile.
 	var gpuAllocatedIndex [8]int32
@@ -127,6 +136,11 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 			}
 		}
 	}
+	return gpuAllocatedIndex[:]
+}
+
+// getStartIndexFromPreparedState finds the correct GPU and index where a slice could be placed.
+func (r *InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferencev1alpha1.Instaslice, profileName string, gpuAllocatedIndex []int32) int32 {
 	// Check if all indices are allocated
 	allAllocated := true
 	for _, allocated := range gpuAllocatedIndex {
@@ -191,7 +205,6 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 		}
 
 	}
-
 	return newStart
 }
 
