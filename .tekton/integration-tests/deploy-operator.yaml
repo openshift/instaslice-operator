@@ -92,6 +92,8 @@ spec:
                 - name: pathInRepo
                   value: stepactions/eaas-create-ephemeral-cluster-hypershift-aws/0.1/eaas-create-ephemeral-cluster-hypershift-aws.yaml
             params:
+              - name: instanceType
+                value: m5.xlarge
               - name: eaasSpaceSecretRef
                 value: $(tasks.provision-eaas-space.results.secretRef)
               - name: version
@@ -216,8 +218,9 @@ spec:
             args:
               - run
               - bundle
+              - --verbose
               - --timeout
-              - 2h
+              - 30m
               - --namespace
               - "$(params.namespace)"
               - "$(params.bundleImage)"
