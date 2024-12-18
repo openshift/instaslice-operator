@@ -33,6 +33,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsfilters "sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -102,8 +103,10 @@ func main() {
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress:   metricsAddr,
-			SecureServing: secureMetrics,
+			SecureServing: true,
 			TLSOpts:       tlsOpts,
+			// enabling the authNauthZ filter to support the deprecation of kube-rbac-proxy from kubebuilder repository
+			FilterProvider: metricsfilters.WithAuthenticationAndAuthorization,
 		},
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
