@@ -88,6 +88,10 @@ KIND ?= kind
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+# CVE updates to apply as a space-separated list
+CONTROLLER_CVE_UPDATES ?= ""
+DAEMONSET_CVE_UPDATES ?= ""
+
 # GOOS?=linux
 # GOARCH?=arm64
 # CGO_ENABLED?=0
@@ -232,8 +236,8 @@ run-daemonset: manifests generate fmt vet ## Run a controller from your host.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build -t ${IMG} -f Dockerfile.controller .
-	$(CONTAINER_TOOL) build -t ${IMG_DMST} -f Dockerfile.daemonset .
+	$(CONTAINER_TOOL) build -t ${IMG} --build-arg CVE_UPDATES="$(CONTROLLER_CVE_UPDATES)" -f Dockerfile.controller .
+	$(CONTAINER_TOOL) build -t ${IMG_DMST} --build-arg CVE_UPDATES="$(DAEMONSET_CVE_UPDATES)" -f Dockerfile.daemonset .
 
 .PHONY: container-build-ocp
 container-build-ocp: ## Build docker image with the manager.
