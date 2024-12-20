@@ -21,7 +21,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"time"
+
+	"github.com/openshift/instaslice-operator/test/utils"
+	"k8s.io/apimachinery/pkg/util/json"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -61,6 +66,11 @@ var (
 
 	cfg       *rest.Config
 	k8sClient client.Client
+)
+
+const (
+	instasliceMetricSvc      = "instaslice-operator-controller-manager-metrics-service"
+	instasliceServiceAccount = "instaslice-operator-controller-manager"
 )
 
 type TemplateVars struct {
@@ -189,6 +199,71 @@ var _ = Describe("controller", Ordered, func() {
 
 				return fmt.Errorf("finalizer %s not found on Pod %s", controller.FinalizerName, pod.Name)
 			}, time.Minute, 5*time.Second).Should(Succeed(), "Failed to verify finalizer on Pod")
+		})
+		It("should ensure the metrics endpoint is serving metrics", func() {
+			By("creating a ClusterRole to access /metrics endpoint")
+			clusterRole := resources.GetClusterRole()
+			err := k8sClient.Create(ctx, clusterRole)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create the ClusterRole")
+
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, clusterRole)
+				if err != nil {
+					log.Printf("Error deleting the ClusterRole %+v: %+v", clusterRole, err)
+				}
+			})
+			By("creating a ClusterRoleBinding for the service account to allow access to metrics")
+			clusterRoleBinding := resources.GetClusterRoleBinding()
+			err = k8sClient.Create(ctx, clusterRoleBinding)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create the ClusterRoleBinding")
+
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, clusterRoleBinding)
+				if err != nil {
+					log.Printf("Error deleting the ClusterRoleBinding %+v: %+v", clusterRole, err)
+				}
+			})
+
+			By("validating that the metrics service is available")
+			var svc corev1.Service
+			err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: instasliceMetricSvc}, &svc)
+			Expect(err).NotTo(HaveOccurred(), "Metrics service should exist")
+
+			By("getting the service account token")
+			token, err := serviceAccountToken()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(token).NotTo(BeEmpty())
+
+			By("waiting for the metrics endpoint to be ready")
+			verifyMetricsEndpointReady := func(g Gomega) {
+				var endPoints corev1.Endpoints
+				err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: instasliceMetricSvc}, &endPoints)
+				g.Expect(err).NotTo(HaveOccurred())
+				if len(endPoints.Subsets) != 0 {
+					g.Expect(endPoints.Subsets[0].String()).To(ContainSubstring("8443"), "Metrics endpoint is not ready")
+				}
+			}
+			Eventually(verifyMetricsEndpointReady).Should(Succeed())
+
+			By("creating the curl-metrics pod to access the metrics endpoint")
+			metricsPod := resources.GetMetricPod(token)
+			err = k8sClient.Create(ctx, metricsPod)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create curl-metrics pod")
+
+			By("waiting for the curl-metrics pod to complete.")
+			verifyCurlUp := func(g Gomega) {
+				var pod corev1.Pod
+				err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: metricsPod.Name}, &pod)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(pod.Status.Phase).To(Equal("Succeeded"), "Metrics pod status not matched")
+			}
+			Eventually(verifyCurlUp, 5*time.Minute).Should(Succeed())
+
+			By("getting the metrics by checking curl-metrics logs")
+			metricsOutput := getMetricsOutput()
+			Expect(metricsOutput).To(ContainSubstring(
+				"controller_runtime_reconcile_total",
+			))
 		})
 		It("should create a pod with no requests and check the allocation in instaslice object", func() {
 			pod := resources.GetVectorAddNoReqPod()
@@ -543,4 +618,63 @@ func getNodeName(label map[string]string) (string, error) {
 	}
 
 	return "", fmt.Errorf("no node name found for pods with label: %v", label)
+}
+
+// tokenRequest is a simplified representation of the Kubernetes TokenRequest API response,
+// containing only the token field that we need to extract.
+type tokenRequest struct {
+	Status struct {
+		Token string `json:"token"`
+	} `json:"status"`
+}
+
+// serviceAccountToken returns a token for the specified service account in the given namespace.
+// It uses the Kubernetes TokenRequest API to generate a token by directly sending a request
+// and parsing the resulting token from the API response.
+func serviceAccountToken() (string, error) {
+	const tokenRequestRawString = `{
+		"apiVersion": "authentication.k8s.io/v1",
+		"kind": "TokenRequest"
+	}`
+
+	// Temporary file to store the token request
+	secretName := fmt.Sprintf("%s-token-request", instasliceServiceAccount)
+	tokenRequestFile := filepath.Join("/tmp", secretName)
+	err := os.WriteFile(tokenRequestFile, []byte(tokenRequestRawString), os.FileMode(0o644))
+	if err != nil {
+		return "", err
+	}
+
+	var out string
+	verifyTokenCreation := func(g Gomega) {
+		// Execute kubectl command to create the token
+		cmd := exec.Command("kubectl", "create", "--raw", fmt.Sprintf(
+			"/api/v1/namespaces/%s/serviceaccounts/%s/token",
+			namespace,
+			instasliceServiceAccount,
+		), "-f", tokenRequestFile)
+
+		output, err := cmd.CombinedOutput()
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Parse the JSON output to extract the token
+		var token tokenRequest
+		err = json.Unmarshal(output, &token)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		out = token.Status.Token
+	}
+	Eventually(verifyTokenCreation).Should(Succeed())
+
+	return out, err
+}
+
+// getMetricsOutput retrieves and returns the logs from the curl pod used to access the metrics endpoint.
+func getMetricsOutput() string {
+	By("getting the curl-metrics logs")
+	cmd := exec.Command("kubectl", "logs", "curl-metrics", "-n", namespace)
+	metricsOutput, err := utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "Failed to retrieve logs from curl pod")
+	Expect(metricsOutput).To(ContainSubstring("< HTTP/1.1 200 OK"))
+	return string(metricsOutput)
 }
