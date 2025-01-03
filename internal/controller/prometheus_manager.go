@@ -51,7 +51,7 @@ var (
 		// Total number of GPU slices
 		GpuSliceTotal: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "instaslice_gpu_slices_total",
-			Help: "Total number of GPU slices allocated per GPU slot.",
+			Help: "Total number of GPU slices allocated per node.",
 		},
 			[]string{"node", "slot_status"}), // Labels: node, GPU ID, slot status.
 		// Pending GPU slice requests
