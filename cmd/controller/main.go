@@ -55,13 +55,25 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 }
 
+func getEnv(key, defval string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return defval
+}
+
 func main() {
-	controller.RegisterMetrics()
+	//var instaslicePrometheusMetricsUrl string = "http://0.0.0.0:8080"
+
+	// NOTE: these can be set as env or flag, flag takes precedence over env
+	//instaslicePrometheusMetricsUrlEnv := getEnv("INSTASLICE-PROMETHEUS-METRICS-URL", instaslicePrometheusMetricsUrl)
+
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	//flag.StringVar(&instaslicePrometheusMetricsUrl, "instaslice-prometheus-metrics-url", instaslicePrometheusMetricsUrlEnv, "The URL for the Prometheus metrics where Instaslice exposes metrics")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -79,6 +91,8 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	//setupLog.Info(("instaslicePrometheusMetricsUrl=" + instaslicePrometheusMetricsUrl))
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will

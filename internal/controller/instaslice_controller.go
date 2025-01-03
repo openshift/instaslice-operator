@@ -400,17 +400,74 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	}
 
-	// Example: Updating GPU slice metrics
-	UpdateGpuSliceMetrics("node1", "gpu0", 3, 5)
+	// Updating GPU slice metrics
+	for _, instaslice := range instasliceList.Items {
+		for _, allocation := range instaslice.Spec.Allocations {
+			nodeName := allocation.Nodename
+			// Calculate total slots
+			totalSlots, err := r.getTotalGpuSlots(instaslice)
 
-	// Example: Updating pending GPU slice requests
-	pendingCount := getPendingGpuRequests(r.Client)
-	UpdatePendingSliceRequests(pendingCount)
+			// Aggregate used slots for all allocations
+			usedSlots := uint32(0)
+			for _, allocation := range instaslice.Spec.Allocations {
+				if allocation.Nodename == nodeName {
+					usedSlots += allocation.Size // Add used slots for this allocation
+				}
+			}
 
-	// Example: Updating ConfigMap metrics
-	updateConfigMaps(r.Client)
+			if err != nil {
+				log.Error(err, "Failed to determine total slots for node", "nodeName", nodeName)
+				continue
+			}
+
+			// Validate that allocation.Size does not exceed totalSlots
+			if usedSlots > totalSlots {
+				log.Error(fmt.Errorf("allocation size exceeds total slots"), "Invalid allocation size",
+					"allocationSize", usedSlots, "totalSlots", totalSlots, "nodeName", nodeName)
+				continue
+			}
+
+			// Calculate updated free and used slots
+			freeSlots := totalSlots - usedSlots // The released allocation increases free slots
+
+			// Update Prometheus metrics
+			err = r.UpdateGpuSliceMetrics(nodeName, usedSlots, freeSlots)
+			if err != nil {
+				log.Error(err, "Failed to update GPU slice metrics", "nodeName", nodeName)
+			}
+		}
+	}
+
+	// Updating pending GPU slice requests
+	pendingCount, err := r.getPendingGpuRequests(ctx, r.Client)
+	if err != nil {
+		log.Error(err, "Failed to count pending GPU slice requests")
+		return ctrl.Result{}, err
+	}
+	// Update the Prometheus metric
+	err = r.UpdatePendingSliceRequests(pendingCount)
+	if err != nil {
+		log.Error(err, "Failed to update pending GPU slice requests metric")
+	}
+	// ToDo: Updating ConfigMap metrics
+	r.updateConfigMaps(r.Client)
 
 	return ctrl.Result{}, nil
+}
+
+// calculate total GPU slots dynamically
+func (r *InstasliceReconciler) getTotalGpuSlots(instaslice inferencev1alpha1.Instaslice) (uint32, error) {
+	const slotsPerGPU = 8 // Each GPU has 7 slots (A100 and H100 have 8 indexes for 3g and 7g and 7 for rest)
+
+	// Count the number of GPUs in the Mig GPUUUID map
+	gpuCount := len(instaslice.Spec.MigGPUUUID)
+	if gpuCount == 0 {
+		return 0, fmt.Errorf("no GPUs found in Instaslice object")
+	}
+
+	// Total slots = Number of GPUs × 7
+	totalSlots := uint32(gpuCount * slotsPerGPU)
+	return totalSlots, nil
 }
 
 // create the DaemonSet object
@@ -579,10 +636,18 @@ func (r *InstasliceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).
+	controllerManager := ctrl.NewControllerManagedBy(mgr).
 		For(&v1.Pod{}).Named("InstaSlice-controller").
 		Watches(&inferencev1alpha1.Instaslice{}, handler.EnqueueRequestsFromMapFunc(r.podMapFunc)).
 		Complete(r)
+
+	// Log info before initializing metrics exporter
+	ctrl.Log.Info("[SetupWithManager] Initializing Metrics Exporter.")
+	r.InitializeMetricsExporter()
+	// Log info after the metrics exporter is initialized
+	ctrl.Log.Info("[SetupWithManager] Metrics Exporter Initialized.")
+
+	return controllerManager
 }
 
 func (r *InstasliceReconciler) unGatePod(podUpdate *v1.Pod) *v1.Pod {

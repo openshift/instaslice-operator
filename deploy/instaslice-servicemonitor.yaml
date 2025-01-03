@@ -2,11 +2,19 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: instaslice-monitor
-  namespace: default  # Replace with your namespace if needed
+  namespace: instaslice-monitoring
+  labels:
+    release: prometheus  # Label to match Prometheus serviceMonitorSelector
 spec:
   selector:
     matchLabels:
-      app: instaslice  # Replace with your operator’s label
+      control-plane: controller-manager # Match labels of the Service exposing metrics
+  namespaceSelector:
+    matchNames:
+      - instaslice-system  # Namespace where the Service resides
   endpoints:
-    - port: metrics
-      interval: 30s  # Scrape interval, adjust as needed
+    - port: metrics  # Port name exposed in the Service for kube-rbac-proxy
+      interval: 15s
+      path: /metrics
+      scheme: http
+      honorLabels: true

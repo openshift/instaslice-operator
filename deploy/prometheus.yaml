@@ -1,0 +1,32 @@
+alertmanager:
+    enabled: false
+kube-state-metrics:
+    enabled: false
+prometheus-node-exporter:
+    enabled: false
+prometheus-pushgateway:
+    enabled: false
+server:
+    name: instaslice
+    service:
+        enabled: true
+        type: NodePort
+        servicePort: 9090
+    persistentVolume:
+        existingClaim: prometheus-instaslice
+        enabled: false
+    securityContext:
+        runAsUser:
+        runAsNonRoot:
+        runAsGroup:
+        fsGroup:
+extraScrapeConfigs: |
+    - job_name: instaslice-metrics
+      metrics_path: /metrics
+      scrape_interval: 15s
+      static_configs:
+          - targets:
+              - instaslice-metrics.instaslice-system.svc.cluster.local:8080
+serviceMonitorSelector:
+    matchLabels:
+        release: prometheus
