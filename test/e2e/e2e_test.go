@@ -534,7 +534,7 @@ var _ = Describe("controller", Ordered, func() {
 			Eventually(func() string {
 				Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: templateVars.NodeName}, &instasliceObj)).To(Succeed())
 
-				allocation, _ := instasliceObj.Spec.Allocations[string(pod.UID)]
+				allocation := instasliceObj.Spec.Allocations[string(pod.UID)]
 				currentStatus := string(allocation.Allocationstatus)
 				if currentStatus != "" {
 					if len(observedStatuses) == 0 || (observedStatuses[len(observedStatuses)-1] != currentStatus) {
