@@ -518,6 +518,33 @@ var _ = Describe("controller", Ordered, func() {
 			Expect(acceleratorMemory.Value()/(1024*1024*1024)).To(Equal(int64(totalMemoryGB)),
 				fmt.Sprintf("%s on node does not match total GPU memory in Instaslice object", controller.QuotaResourceName))
 		})
+		It("should create a pod with small requests and check the allocation state in instaslice object", func() {
+			pod := resources.GetVectorAddSmallReqPod()
+			err := k8sClient.Create(ctx, pod)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create the pod")
+
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, pod)
+				if err != nil {
+					log.Printf("Error deleting the pod %+v: %+v", pod, err)
+				}
+			})
+
+			observedStatuses := []string{}
+			Eventually(func() string {
+				Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: templateVars.NodeName}, &instasliceObj)).To(Succeed())
+
+				allocation := instasliceObj.Spec.Allocations[string(pod.UID)]
+				currentStatus := string(allocation.Allocationstatus)
+				if currentStatus != "" {
+					if len(observedStatuses) == 0 || (observedStatuses[len(observedStatuses)-1] != currentStatus) {
+						observedStatuses = append(observedStatuses, currentStatus)
+					}
+				}
+				return currentStatus
+			}, time.Minute, time.Millisecond*5).Should(Equal("ungated"))
+			Expect(observedStatuses).To(Equal([]string{"creating", "created", "ungated"}))
+		})
 	})
 
 	AfterEach(func() {
