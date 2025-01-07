@@ -345,6 +345,11 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocations := range instaslice.Spec.Allocations {
 				if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusCreated && allocations.PodUUID == string(pod.UID) {
+					// To make test cases run reliably and in light-weight manner
+					// delay has been added in emulator mode only
+					if r.Config.EmulatorModeEnable {
+						time.Sleep(2 * time.Second)
+					}
 					allocations.Allocationstatus = inferencev1alpha1.AllocationStatusUngated
 					if err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, podUuid, allocations); err != nil {
 						return ctrl.Result{Requeue: true}, nil
