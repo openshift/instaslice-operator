@@ -17,29 +17,30 @@ limitations under the License.
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
 	"github.com/openshift/instaslice-operator/internal/controller/daemonset"
 	"github.com/openshift/instaslice-operator/test/e2e/resources"
 
 	appsv1 "k8s.io/api/apps/v1"
+	authv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-
-	"k8s.io/client-go/kubernetes/scheme"
-
-	"k8s.io/client-go/rest"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -61,6 +62,12 @@ var (
 
 	cfg       *rest.Config
 	k8sClient client.Client
+	clientSet *kubernetes.Clientset
+)
+
+const (
+	instasliceMetricSvc      = "instaslice-operator-controller-manager-metrics-service"
+	instasliceServiceAccount = "instaslice-operator-controller-manager"
 )
 
 type TemplateVars struct {
@@ -105,6 +112,10 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+
+	clientSet, err = kubernetes.NewForConfig(cfg)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(clientSet).NotTo(BeNil())
 
 	ctx = context.TODO()
 
@@ -189,6 +200,70 @@ var _ = Describe("controller", Ordered, func() {
 
 				return fmt.Errorf("finalizer %s not found on Pod %s", controller.FinalizerName, pod.Name)
 			}, time.Minute, 5*time.Second).Should(Succeed(), "Failed to verify finalizer on Pod")
+		})
+		It("should ensure the metrics endpoint is serving metrics", func() {
+			By("creating a ClusterRole to access /metrics endpoint")
+			clusterRole := resources.GetClusterRole()
+			err := k8sClient.Create(ctx, clusterRole)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create the ClusterRole")
+
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, clusterRole)
+				if err != nil {
+					log.Printf("Error deleting the ClusterRole %+v: %+v", clusterRole, err)
+				}
+			})
+			By("creating a ClusterRoleBinding for the service account to allow access to metrics")
+			clusterRoleBinding := resources.GetClusterRoleBinding()
+			err = k8sClient.Create(ctx, clusterRoleBinding)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create the ClusterRoleBinding")
+
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, clusterRoleBinding)
+				if err != nil {
+					log.Printf("Error deleting the ClusterRoleBinding %+v: %+v", clusterRole, err)
+				}
+			})
+
+			By("validating that the metrics service is available")
+			var svc corev1.Service
+			err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: instasliceMetricSvc}, &svc)
+			Expect(err).NotTo(HaveOccurred(), "Metrics service should exist")
+
+			By("getting the service account token")
+			token := serviceAccountToken()
+			Expect(token).NotTo(BeEmpty())
+
+			By("waiting for the metrics endpoint to be ready")
+			verifyMetricsEndpointReady := func(g Gomega) {
+				var endPoints corev1.Endpoints
+				err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: instasliceMetricSvc}, &endPoints)
+				g.Expect(err).NotTo(HaveOccurred())
+				if len(endPoints.Subsets) != 0 {
+					g.Expect(endPoints.Subsets[0].String()).To(ContainSubstring("8443"), "Metrics endpoint is not ready")
+				}
+			}
+			Eventually(verifyMetricsEndpointReady).Should(Succeed())
+
+			By("creating the curl-metrics pod to access the metrics endpoint")
+			metricsPod := resources.GetMetricPod(token)
+			err = k8sClient.Create(ctx, metricsPod)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create curl-metrics pod")
+
+			By("waiting for the curl-metrics pod to complete.")
+			verifyCurlUp := func(g Gomega) {
+				var pod corev1.Pod
+				err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: metricsPod.Name}, &pod)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(string(pod.Status.Phase)).To(Equal("Succeeded"), "Metrics pod status not matched")
+			}
+			Eventually(verifyCurlUp, 5*time.Minute).Should(Succeed())
+
+			By("getting the metrics by checking curl-metrics logs")
+			metricsOutput := getMetricsOutput()
+			Expect(metricsOutput).To(ContainSubstring(
+				"controller_runtime_reconcile_total",
+			))
 		})
 		It("should create a pod with no requests and check the allocation in instaslice object", func() {
 			pod := resources.GetVectorAddNoReqPod()
@@ -570,4 +645,51 @@ func getNodeName(label map[string]string) (string, error) {
 	}
 
 	return "", fmt.Errorf("no node name found for pods with label: %v", label)
+}
+
+// serviceAccountToken returns a token for the specified service account in the given namespace.
+// It uses the Kubernetes TokenRequest API to generate a token by directly sending a request
+// and parsing the resulting token from the API response.
+func serviceAccountToken() string {
+	var out string
+	verifyTokenCreation := func(g Gomega) {
+		// Construct the TokenRequest object
+		tokenRequest := &authv1.TokenRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      instasliceServiceAccount,
+				Namespace: namespace,
+			},
+			Spec: authv1.TokenRequestSpec{
+				ExpirationSeconds: new(int64),
+			},
+		}
+		// Optionally Set expiration time to 1 hour (3600 seconds)
+		*tokenRequest.Spec.ExpirationSeconds = 3600
+		// Create the token for the service account
+		token, err := clientSet.CoreV1().ServiceAccounts(namespace).CreateToken(context.Background(), instasliceServiceAccount, tokenRequest, metav1.CreateOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		out = token.Status.Token
+	}
+	Eventually(verifyTokenCreation).Should(Succeed())
+
+	return out
+}
+
+// getMetricsOutput retrieves and returns the logs from the curl pod used to access the metrics endpoint.
+func getMetricsOutput() string {
+	By("getting the curl-metrics logs")
+	options := corev1.PodLogOptions{}
+	req := clientSet.CoreV1().Pods(namespace).GetLogs("curl-metrics", &options)
+	podLogs, err := req.Stream(ctx)
+	Expect(err).NotTo(HaveOccurred(), "Failed to retrieve logs from curl-metrics pod")
+	defer func() {
+		err := podLogs.Close()
+		Expect(err).NotTo(HaveOccurred(), "Failed to close pod logs reader")
+	}()
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, podLogs)
+	Expect(err).NotTo(HaveOccurred(), "Failed to retrieve logs from curl-metrics pod")
+	metricsOutput := buf.String()
+	Expect(metricsOutput).To(ContainSubstring("< HTTP/1.1 200 OK"))
+	return metricsOutput
 }
