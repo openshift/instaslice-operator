@@ -596,12 +596,17 @@ func (r *InstasliceReconciler) deleteInstasliceAllocation(ctx context.Context, i
 		log.Error(err, "error getting latest instaslice object")
 		return ctrl.Result{RequeueAfter: Requeue2sDelay}, err
 	}
-	delete(updateInstasliceObject.Spec.Allocations, allocation.PodUUID)
-	errUpdatingAllocation := r.Update(ctx, &updateInstasliceObject)
-	if errUpdatingAllocation != nil {
-		log.Error(errUpdatingAllocation, "Error updating InstaSlice object for ", "pod", allocation.PodName)
+	OriginalInstasliceObj := updateInstasliceObject.DeepCopy()
+	for uuid, alloc := range updateInstasliceObject.Spec.Allocations {
+		if alloc.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
+			delete(updateInstasliceObject.Spec.Allocations, uuid)
+		}
+	}
+	err = r.Patch(ctx, &updateInstasliceObject, client.MergeFrom(OriginalInstasliceObj))
+	if err != nil {
+		log.Error(err, "Error updating InstaSlice object for ", "pod", allocation.PodName)
 		// deleted allocations are re-used by the controller, we can be slow to delete these
-		return ctrl.Result{Requeue: true}, errUpdatingAllocation
+		return ctrl.Result{Requeue: true}, err
 	}
 	log.Info("Done deleting allocation for ", "pod", allocation.PodName)
 	return ctrl.Result{}, nil
@@ -682,19 +687,19 @@ func (r *InstasliceReconciler) setInstasliceAllocationToDeleting(ctx context.Con
 	var updateInstasliceObject inferencev1alpha1.Instaslice
 	typeNamespacedName := types.NamespacedName{
 		Name:      instasliceName,
-		Namespace: InstaSliceOperatorNamespace, // TODO: modify if needed
+		Namespace: InstaSliceOperatorNamespace,
 	}
 	errRetrievingInstaSlice := r.Get(ctx, typeNamespacedName, &updateInstasliceObject)
 	if errRetrievingInstaSlice != nil {
 		log.Error(errRetrievingInstaSlice, "error getting latest instaslice object")
 		return ctrl.Result{Requeue: true}, errRetrievingInstaSlice
 	}
-
+	OriginalInstasliceObj := updateInstasliceObject.DeepCopy()
 	updateInstasliceObject.Spec.Allocations[podUUID] = allocation
-	errUpdatingInstaslice := r.Update(ctx, &updateInstasliceObject)
-	if errUpdatingInstaslice != nil {
+	err := r.Patch(ctx, &updateInstasliceObject, client.MergeFrom(OriginalInstasliceObj))
+	if err != nil {
 		log.Info("unable to set instaslice to state ", "state", allocation.Allocationstatus, "pod", allocation.PodName)
-		return ctrl.Result{Requeue: true}, errUpdatingInstaslice
+		return ctrl.Result{Requeue: true}, err
 	}
 
 	return ctrl.Result{}, nil
