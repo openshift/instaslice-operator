@@ -27,21 +27,30 @@ import (
 
 const InstaSliceOperatorNamespace = "instaslice-system"
 
-func UpdateInstasliceAllocations(ctx context.Context, client client.Client, name, podUUID string, allocation inferencev1alpha1.AllocationDetails) error {
+func UpdateInstasliceAllocations(ctx context.Context, kubeClient client.Client, name, podUUID string, allocation inferencev1alpha1.AllocationDetails) error {
 	var newInstaslice inferencev1alpha1.Instaslice
 	typeNamespacedName := types.NamespacedName{
 		Name:      name,
 		Namespace: InstaSliceOperatorNamespace,
 	}
-	err := client.Get(ctx, typeNamespacedName, &newInstaslice)
+	err := kubeClient.Get(ctx, typeNamespacedName, &newInstaslice)
 	if err != nil {
 		return fmt.Errorf("error fetching the instaslice object: %s", name)
 	}
+
+	original := newInstaslice.DeepCopy()
+
 	if newInstaslice.Spec.Allocations == nil {
 		newInstaslice.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
 	}
+
+	for uuid, alloc := range newInstaslice.Spec.Allocations {
+		if alloc.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
+			delete(newInstaslice.Spec.Allocations, uuid)
+		}
+	}
 	newInstaslice.Spec.Allocations[podUUID] = allocation
-	err = client.Update(ctx, &newInstaslice)
+	err = kubeClient.Patch(ctx, &newInstaslice, client.MergeFrom(original))
 	if err != nil {
 		return fmt.Errorf("error updating the instaslie object, %s, err: %v", name, err)
 	}
