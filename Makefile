@@ -158,10 +158,18 @@ cleanup-test-e2e-kind-emulated: KIND_NAME=kind-e2e
 cleanup-test-e2e-kind-emulated:
 	$(KIND) delete clusters ${KIND_NAME}
 
+.PHONY: check-gpu-nodes
+check-gpu-nodes:
+    # Check for nodes with the label "nvidia.com/mig.capable=true"
+	@if oc get nodes -l nvidia.com/mig.capable=true --no-headers | grep -q '.'; then \
+	    echo "Error: Nodes with label 'nvidia.com/mig.capable=true' exist. Cannot run in emulated mode."; \
+	    exit 1; \
+	fi
+
 .PHONY: test-e2e-ocp-emulated
 test-e2e-ocp-emulated: export IMG_TAG=latest
 test-e2e-ocp-emulated: export EMULATOR_MODE=true
-test-e2e-ocp-emulated: docker-build docker-push deploy-instaslice-emulated-on-ocp
+test-e2e-ocp-emulated: check-gpu-nodes docker-build docker-push deploy-instaslice-emulated-on-ocp
 test-e2e-ocp-emulated:
 	$(eval FOCUS_ARG := $(if $(FOCUS),--focus="$(FOCUS)"))
 	export KUBECTL=oc IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
@@ -170,6 +178,38 @@ test-e2e-ocp-emulated:
 PHONY: cleanup-test-e2e-ocp-emulated
 cleanup-test-e2e-ocp-emulated: KUBECTL=oc
 cleanup-test-e2e-ocp-emulated: ocp-undeploy-emulated
+
+.PHONY: test-e2e-ocp
+test-e2e-ocp: export IMG_TAG=latest
+test-e2e-ocp: export EMULATOR_MODE=false
+test-e2e-ocp: docker-build docker-push ocp-deploy wait-for-instaslice-operator-stable
+test-e2e-ocp:
+	$(eval FOCUS_ARG := $(if $(FOCUS),--focus="$(FOCUS)"))
+	export KUBECTL=oc IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
+	ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m $(FOCUS_ARG) ./test/e2e
+
+PHONY: cleanup-test-e2e-ocp
+cleanup-test-e2e-ocp: KUBECTL=oc
+cleanup-test-e2e-ocp: ocp-undeploy
+
+wait-for-instaslice-operator-stable:
+	@echo "---- Waiting for instaslice-operator stable state ----"
+	oc wait --for=condition=Available deployment/instaslice-operator-controller-manager \
+		-n instaslice-system --timeout=120s || $(MAKE) test-e2e-debug-instaslice
+	oc rollout status daemonset/instaslice-operator-controller-daemonset \
+		-n instaslice-system --timeout=120s || $(MAKE) test-e2e-debug-instaslice
+	@echo "---- /Waiting for instaslice-operator stable state ----"
+.PHONY: wait-for-instaslice-operator-stable
+
+test-e2e-debug-instaslice:
+	@echo "---- Debugging instaslice-operator current state ----"
+	- oc get pod -n instaslice-system
+	- oc get ds -n instaslice-system
+	- oc get deployments -n instaslice-system
+	- oc logs deployment/instaslice-operator-controller-manager -n instaslice-system
+	- oc logs daemonset/instaslice-operator-controller-daemonset -n instaslice-system
+	@echo "---- /Debugging instaslice-operator current state ----"
+.PHONY: test-e2e-debug-instaslice
 
 .PHONY: create-kind-cluster
 create-kind-cluster:
