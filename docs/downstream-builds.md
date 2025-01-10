@@ -6,7 +6,7 @@
 ```console
 $ export IMG=quay.io/<username>/instaslice-operator:test
 $ export IMG_DMST=quay.io/<username>/instaslice-daemonset:test
-$ export BUNDLE_IMAGE=quay.io/<username>/instaslice-bundle:test
+$ export BUNDLE_IMG=quay.io/<username>/instaslice-bundle:test
 ```
 1. Build operator and daemonset using OpenShift specifig containerfiles
 ```console
@@ -35,7 +35,6 @@ $ make bundle-push
 ```console
 $ oc new-project instaslice-system
 $ operator-sdk run bundle $BUNDLE_IMAGE -n instaslice-system (FOR OCP 4.18: --security-context-config restricted)
-$ oc apply -f config/rbac/instaslice-operator-scc.yaml (FIXME)
 ```
 1. Enable the emulator
 Set EMULATOR_MODE=true in CSV
