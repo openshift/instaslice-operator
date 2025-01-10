@@ -448,7 +448,7 @@ func GetMultiPods() []*corev1.Pod {
 						Name:  "vectoradd",
 						Image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8",
 						Command: []string{
-							"sh", "-c", "sleep 20",
+							"sh", "-c", "sleep 40",
 						},
 						Resources: corev1.ResourceRequirements{
 							Limits: corev1.ResourceList{
@@ -536,4 +536,52 @@ func GetMetricPod(token string) *corev1.Pod {
 		},
 	}
 	return pod
+}
+
+func GetTestGPURunToCompletionWorkload() *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "vectoradd-finalizer",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyOnFailure,
+			Containers: []corev1.Container{
+				{
+					Name:  "vectoradd-finalizer",
+					Image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8",
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
+						},
+					},
+					Command: []string{"sh", "-c", "nvidia-smi -L; /cuda-samples/vectorAdd"},
+				},
+			},
+		},
+	}
+}
+
+func GetTestGPULongRunningWorkload() *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "vectoradd-finalizer",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyOnFailure,
+			Containers: []corev1.Container{
+				{
+					Name:  "vectoradd-finalizer",
+					Image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8",
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
+						},
+					},
+					Command: []string{"sh", "-c", "nvidia-smi -L; /cuda-samples/vectorAdd && sleep infinity"},
+				},
+			},
+		},
+	}
 }

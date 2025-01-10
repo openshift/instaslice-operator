@@ -631,6 +631,119 @@ var _ = Describe("controller", Ordered, func() {
 					fmt.Sprintf("%s on node does not match total GPU memory in Instaslice object", controller.QuotaResourceName))
 			}
 		})
+		It("should verify run to completion GPU workload on GPUs", func() {
+			if emulated {
+				Skip("Skipping because EmulatorMode is true")
+			}
+			err := k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
+			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve Instaslice object")
+			referenceLen := len(instasliceObjs.Items[0].Spec.MigGPUUUID)
+			for _, obj := range instasliceObjs.Items {
+				currentLen := len(obj.Spec.MigGPUUUID)
+				Expect(currentLen).To(Equal(referenceLen), "Object %s has a different MigGPUUUID length", obj.Name)
+			}
+			numNewNames := referenceLen * 7
+			podTemplate := resources.GetTestGPURunToCompletionWorkload()
+
+			DeferCleanup(func() {
+				podList := &corev1.PodList{}
+				err := k8sClient.List(ctx, podList, client.InNamespace(podTemplate.Namespace))
+				if err != nil {
+					log.Printf("Failed to list pods: %v\n", err)
+					return
+				}
+
+				for _, pod := range podList.Items {
+					err := k8sClient.Delete(ctx, &pod)
+					if err != nil {
+						log.Printf("Failed to delete pod %s: %v\n", pod.Name, err)
+					} else {
+						log.Printf("Deleted pod: %s\n", pod.Name)
+					}
+				}
+			})
+			for i := 1; i <= numNewNames; i++ {
+				newName := fmt.Sprintf("cuda-vectoradd-%d", i+1)
+				pod := podTemplate.DeepCopy()
+				pod.Name = newName
+				pod.Spec.Containers[0].Name = newName
+
+				err := k8sClient.Create(ctx, pod)
+				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Failed to create pod %s", newName))
+			}
+
+			Eventually(func() bool {
+				allCompleted := true
+				for i := 1; i <= numNewNames; i++ {
+					podName := fmt.Sprintf("cuda-vectoradd-%d", i+1)
+					pod := &corev1.Pod{}
+					err := k8sClient.Get(ctx, client.ObjectKey{Namespace: podTemplate.Namespace, Name: podName}, pod)
+					if err != nil || pod.Status.Phase != corev1.PodSucceeded {
+						allCompleted = false
+						break
+					}
+				}
+				return allCompleted
+			}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Not all pods completed successfully")
+		})
+		It("should verify all 1g profiles of GPUs are consumed", func() {
+			if emulated {
+				Skip("Skipping because EmulatorMode is true")
+			}
+			podTemplateLongRunning := resources.GetTestGPULongRunningWorkload()
+			err := k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
+			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve Instaslice object")
+			referenceLen := len(instasliceObjs.Items[0].Spec.MigGPUUUID)
+			for _, obj := range instasliceObjs.Items {
+				currentLen := len(obj.Spec.MigGPUUUID)
+				Expect(currentLen).To(Equal(referenceLen), "Object %s has a different MigGPUUUID length", obj.Name)
+			}
+			longRunningCount := referenceLen*7 + 1
+			for i := 1; i <= longRunningCount; i++ {
+				newName := fmt.Sprintf("cuda-vectoradd-longrunning%d", i+1)
+				pod := podTemplateLongRunning.DeepCopy()
+				pod.Name = newName
+				pod.Spec.Containers[0].Name = newName
+
+				err := k8sClient.Create(ctx, pod)
+				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Failed to create pod %s", newName))
+			}
+			DeferCleanup(func() {
+				podList := &corev1.PodList{}
+				err := k8sClient.List(ctx, podList, client.InNamespace(podTemplateLongRunning.Namespace))
+				if err != nil {
+					fmt.Printf("Failed to list pods: %v\n", err)
+					return
+				}
+
+				for _, pod := range podList.Items {
+					err := k8sClient.Delete(ctx, &pod)
+					if err != nil {
+						fmt.Printf("Failed to delete pod %s: %v\n", pod.Name, err)
+					} else {
+						fmt.Printf("Deleted pod: %s\n", pod.Name)
+					}
+				}
+			})
+			Eventually(func() bool {
+				countRunning := 0
+				for i := 1; i <= longRunningCount; i++ {
+					podName := fmt.Sprintf("cuda-vectoradd-longrunning%d", i+1)
+					pod := &corev1.Pod{}
+					err := k8sClient.Get(ctx, client.ObjectKey{Namespace: podTemplateLongRunning.Namespace, Name: podName}, pod)
+					if err != nil {
+						log.Printf("Failed to get pod %s: %v", podName, err)
+						return false
+					}
+
+					if pod.Status.Phase == corev1.PodRunning {
+						countRunning++
+					}
+				}
+				return longRunningCount-countRunning == 1
+			}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "1 workload should be pending")
+		})
+
 	})
 
 	AfterEach(func() {
