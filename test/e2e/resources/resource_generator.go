@@ -515,7 +515,7 @@ func GetMetricPod(token string) *corev1.Pod {
 			Containers: []corev1.Container{
 				{
 					Name:  "metrics-consumer",
-					Image: "curlimages/curl:7.78.0",
+					Image: "quay.io/curl/curl:8.11.1",
 					Command: []string{
 						"/bin/sh",
 					},

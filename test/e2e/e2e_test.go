@@ -655,7 +655,7 @@ var _ = Describe("controller", Ordered, func() {
 					}
 				}
 				return currentStatus
-			}, time.Minute, time.Millisecond*500).Should(Equal("ungated"))
+			}, time.Minute, time.Millisecond*5).Should(Equal("ungated"))
 			Expect(observedStatuses).To(Equal([]string{"creating", "created", "ungated"}))
 		})
 		// we are running real cuda vectoradd GPU workload on below tests to test
@@ -744,7 +744,6 @@ var _ = Describe("controller", Ordered, func() {
 			Eventually(func() bool {
 				Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: templateVars.NodeName}, &instasliceObj)).To(Succeed())
 				expectedCountRunning := len(instasliceObj.Spec.MigGPUUUID) * 7
-				log.Printf("expected count running is %v", expectedCountRunning)
 				countRunning := 0
 				for i := 1; i <= longRunningCount; i++ {
 					podName := fmt.Sprintf("cuda-vectoradd-longrunning-%d", i+1)
