@@ -63,6 +63,7 @@ func getEnv(key, defval string) string {
 }
 
 func main() {
+	controller.RegisterMetrics()
 	//var instaslicePrometheusMetricsUrl string = "http://0.0.0.0:8080"
 
 	// NOTE: these can be set as env or flag, flag takes precedence over env

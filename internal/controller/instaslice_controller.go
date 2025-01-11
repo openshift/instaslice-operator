@@ -404,6 +404,10 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	for _, instaslice := range instasliceList.Items {
 		for _, allocation := range instaslice.Spec.Allocations {
 			nodeName := allocation.Nodename
+			gpuID := allocation.GPUUUID
+			namespace := allocation.Namespace
+			podname := allocation.PodName
+			profile := allocation.Profile
 			// Calculate total slots
 			totalSlots, err := r.getTotalGpuSlots(instaslice)
 
@@ -431,9 +435,13 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			freeSlots := totalSlots - usedSlots // The released allocation increases free slots
 
 			// Update Prometheus metrics
-			err = r.UpdateGpuSliceMetrics(nodeName, usedSlots, freeSlots)
+			err = r.UpdateGpuSliceMetrics(nodeName, gpuID, namespace, podname, profile, usedSlots, freeSlots)
 			if err != nil {
 				log.Error(err, "Failed to update GPU slice metrics", "nodeName", nodeName)
+			}
+			err = r.UpdateCompatibleProfilesMetrics(instaslice, totalSlots, usedSlots)
+			if err != nil {
+				log.Error(err, "Failed to update Compatiable Profiles Metrics", "nodeName", nodeName)
 			}
 		}
 	}
@@ -449,8 +457,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err != nil {
 		log.Error(err, "Failed to update pending GPU slice requests metric")
 	}
-	// ToDo: Updating ConfigMap metrics
-	r.updateConfigMaps(r.Client)
 
 	return ctrl.Result{}, nil
 }
@@ -643,7 +649,7 @@ func (r *InstasliceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// Log info before initializing metrics exporter
 	ctrl.Log.Info("[SetupWithManager] Initializing Metrics Exporter.")
-	r.InitializeMetricsExporter()
+	// r.InitializeMetricsExporter()
 	// Log info after the metrics exporter is initialized
 	ctrl.Log.Info("[SetupWithManager] Metrics Exporter Initialized.")
 
