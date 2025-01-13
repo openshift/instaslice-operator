@@ -41,6 +41,7 @@ import (
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
 	"github.com/openshift/instaslice-operator/internal/controller/config"
+	"github.com/openshift/instaslice-operator/internal/controller/version"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -79,6 +80,8 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	setupLog.Info("Instaslice Operator", "version", version.Version, "git_commit", version.GitCommit)
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
