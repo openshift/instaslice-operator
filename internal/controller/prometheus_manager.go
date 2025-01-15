@@ -24,38 +24,46 @@ import (
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	v1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
+var baseProfileSliceMap = map[string]uint32{ // slice profiles and respective size
+	"1g.5gb":    1,
+	"1g.5gb+me": 1,
+	"1g.10gb":   2,
+	"2g.10gb":   2,
+	"3g.20gb":   4,
+	"4g.20gb":   4,
+	"7g.40gb":   8,
+}
+
+var profileSliceMap = generateProfileSliceMap() // including instaslice.redhat.com/mig-" & "nvidia.com/mig-
+
 type InstasliceMetrics struct {
 	GpuSliceTotal        *prometheus.GaugeVec
 	PendingSliceRequests prometheus.Gauge
 	compatibleProfiles   *prometheus.GaugeVec
+	processedSlices      *prometheus.GaugeVec
+	deployedPodTotal     *prometheus.GaugeVec
 }
-
-var baseProfileSliceMap = map[string]uint32{ // slice profiles and respective size
-	"1g.5gb":  1,
-	"1g.10gb": 2,
-	"2g.10gb": 2,
-	"3g.20gb": 4,
-	"4g.20gb": 4,
-	"7g.40gb": 8,
-}
-
-var profileSliceMap = generateProfileSliceMap() // including instaslice.redhat.com/mig-" & "nvidia.com/mig-
 
 var (
 	instasliceMetrics = &InstasliceMetrics{
 		// Total number of GPU slices
 		GpuSliceTotal: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "instaslice_gpu_slices_total",
-			Help: "Total number of GPU slices allocated per node.",
+			Help: "Total number of GPU slices utilized/ free per gpu in a node.",
 		},
-			[]string{"node", "gpu_id", "namespace", "podname", "profile", "slot_status"}), // Labels: node, GPU ID, namespace, "odname, profile, slot status.
+			[]string{"node", "gpu_id", "slot_status"}), // Labels: node, GPU ID, slot status.
+		// Total number of GPU slices
+		deployedPodTotal: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "instaslice_deployed_pod_total",
+			Help: "Pods that are deployed on slices.",
+		},
+			[]string{"node", "gpu_id", "namespace", "podname", "profile"}), // Labels: node, GPU ID, namespace, podname, profile
 		// Pending GPU slice requests
 		PendingSliceRequests: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "instaslice_pending_gpu_slice_requests",
@@ -66,7 +74,13 @@ var (
 			Name: "instaslice_gpu_compatible_profiles",
 			Help: "Profiles compatible with remaining GPU slices.",
 		},
-			[]string{"profile", "remaining_slices"}),
+			[]string{"profile", "node", "remaining_slices"}),
+		// processed slices
+		processedSlices: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "instaslice_total_processed_gpu_slices",
+			Help: "Number of total processed GPU slices.",
+		},
+			[]string{"node", "gpu_id"}),
 	}
 
 	prometheusRegistry *prometheus.Registry
@@ -74,59 +88,65 @@ var (
 )
 
 // InitializeMetricsExporter registers all Prometheus metrics
-func (r *InstasliceReconciler) InitializeMetricsExporter() {
-	// Initiate the exporting of prometheus metrics for instaslice
-	ctrl.Log.Info("Entering InitializeMetricsExporter().")
-	if prometheusRegistry == nil {
-		ctrl.Log.Info("Prometheus registry is nil, initializing new registry and metrics.")
-		prometheusRegistry = prometheus.NewRegistry()
+// func (r *InstasliceReconciler) InitializeMetricsExporter() {
+// 	// Initiate the exporting of prometheus metrics for instaslice
+// 	ctrl.Log.Info("Entering InitializeMetricsExporter().")
+// 	if prometheusRegistry == nil {
+// 		ctrl.Log.Info("Prometheus registry is nil, initializing new registry and metrics.")
+// 		prometheusRegistry = prometheus.NewRegistry()
 
-		// Register the metrics
-		prometheus.MustRegister(instasliceMetrics.GpuSliceTotal, instasliceMetrics.PendingSliceRequests, instasliceMetrics.compatibleProfiles)
-		ctrl.Log.Info("Instaslice Metrics registered successfully.")
+// 		// Register the metrics
+// 		prometheus.MustRegister(instasliceMetrics.GpuSliceTotal, instasliceMetrics.PendingSliceRequests, instasliceMetrics.compatibleProfiles, instasliceMetrics.processedSlices)
+// 		ctrl.Log.Info("Instaslice Metrics registered successfully.")
 
-		// Create and register the Prometheus handler
-		prometheusHandler = promhttp.HandlerFor(prometheusRegistry, promhttp.HandlerOpts{Registry: prometheusRegistry})
-		http.Handle("/metrics", prometheusHandler)
-		ctrl.Log.Info("Prometheus handler for /metrics endpoint registered.")
-		// go func() {
-		// 	err := http.ListenAndServe(":8080", nil)
+// 		// Create and register the Prometheus handler
+// 		prometheusHandler = promhttp.HandlerFor(prometheusRegistry, promhttp.HandlerOpts{Registry: prometheusRegistry})
+// 		http.Handle("/metrics", prometheusHandler)
+// 		ctrl.Log.Info("Prometheus handler for /metrics endpoint registered.")
+// 		// go func() {
+// 		// 	err := http.ListenAndServe(":8080", nil)
 
-		// 	if err != nil {
-		// 		ctrl.Log.Error(err, "PANIC [InitializeMetricsExporter] ListenAndServe")
-		// 		panic("PANIC [InitializeMetricsExporter]: ListenAndServe: " + err.Error())
-		// 	}
-		// }()
-	} else {
-		ctrl.Log.Info("Prometheus registry already initialized, skipping initialization.")
-	}
-}
+//			// 	if err != nil {
+//			// 		ctrl.Log.Error(err, "PANIC [InitializeMetricsExporter] ListenAndServe")
+//			// 		panic("PANIC [InitializeMetricsExporter]: ListenAndServe: " + err.Error())
+//			// 	}
+//			// }()
+//		} else {
+//			ctrl.Log.Info("Prometheus registry already initialized, skipping initialization.")
+//		}
+//	}
 func RegisterMetrics() {
 	// Register custom metrics with the global prometheus registry
-	metrics.Registry.MustRegister(instasliceMetrics.GpuSliceTotal, instasliceMetrics.PendingSliceRequests, instasliceMetrics.compatibleProfiles)
+	metrics.Registry.MustRegister(instasliceMetrics.GpuSliceTotal, instasliceMetrics.PendingSliceRequests, instasliceMetrics.compatibleProfiles, instasliceMetrics.processedSlices, instasliceMetrics.deployedPodTotal)
 }
 
 // UpdateGpuSliceMetrics updates GPU slice allocation metrics
-func (r *InstasliceReconciler) UpdateGpuSliceMetrics(nodeName, gpuID, namespace, podname, profile string, usedSlots, freeSlots uint32) error {
+func (r *InstasliceReconciler) IncrementTotalProcessedGpuSliceMetrics(nodeName, gpuID string, processedSlices uint32) error {
+	instasliceMetrics.processedSlices.WithLabelValues(
+		nodeName, gpuID).Set(float64(processedSlices))
+	ctrl.Log.Info(fmt.Sprintf("[IncrementTotalProcessedGpuSliceMetrics] Incremented Total Processed GPU Slices: %d total processed slices, for node -> %v, GPUID -> %v.", processedSlices, nodeName, gpuID)) // trace
+	return nil
+}
+
+// UpdateGpuSliceMetrics updates GPU slice allocation metrics
+func (r *InstasliceReconciler) UpdateGpuSliceMetrics(nodeName, gpuID string, usedSlots, freeSlots uint32) error {
 	instasliceMetrics.GpuSliceTotal.WithLabelValues(
-		nodeName,
-		gpuID,
-		namespace,
-		podname,
-		profile,
-		"used").Set(float64(usedSlots))
+		nodeName, gpuID, "used").Set(float64(usedSlots))
 	instasliceMetrics.GpuSliceTotal.WithLabelValues(
-		nodeName,
-		gpuID,
-		namespace,
-		podname,
-		profile,
-		"free").Set(float64(freeSlots))
+		nodeName, gpuID, "free").Set(float64(freeSlots))
 	// log check
 	// ctrl.Log.Info("GpuSliceTotal metric updated",
 	// 	"node", nodeName, "gpuID", gpuID, "used", usedSlots,
 	// 	"value", instasliceMetrics.GpuSliceTotal.WithLabelValues(nodeName, gpuID, namespace, podname, profile, "used").Desc())
-	ctrl.Log.Info(fmt.Sprintf("[UpdateGpuSliceMetrics] Updated GPU Slices: %d used slot/s, %d freeslot for node -> %v, slice allocated GPUID -> %v, deployed pod -> %v, namespace -> %v, allocated profile -> %v.", usedSlots, freeSlots, nodeName, gpuID, podname, namespace, profile)) // trace
+	ctrl.Log.Info(fmt.Sprintf("[UpdateGpuSliceMetrics] Updated GPU Slices: %d used slot/s, %d freeslot for node -> %v, GPUID -> %v", usedSlots, freeSlots, nodeName, gpuID)) // trace
+	return nil
+}
+
+// UpdateGpuSliceMetrics updates GPU slice allocation metrics
+func (r *InstasliceReconciler) UpdateDeployedPodTotalMetrics(nodeName, gpuID, namespace, podname, profile string, size uint32) error {
+	instasliceMetrics.deployedPodTotal.WithLabelValues(
+		nodeName, gpuID, namespace, podname, profile).Set(float64(size))
+	ctrl.Log.Info(fmt.Sprintf("[UpdateDeployedPodTotalMetrics] Updated Deployed Pod: %d used slice/s, for node -> %v, GPUID -> %v, namespace -> %v, podname -> %v, profile -> %v", size, nodeName, gpuID, namespace, podname, profile)) // trace
 	return nil
 }
 
@@ -138,33 +158,62 @@ func (r *InstasliceReconciler) UpdatePendingSliceRequests(count uint32) error {
 }
 
 // UpdateCompatibleProfilesMetrics updates metrics based on remaining GPU slices and calculates compatible profiles dynamically
-func (r *InstasliceReconciler) UpdateCompatibleProfilesMetrics(instasliceObj inferencev1alpha1.Instaslice, totalSlices, usedSlices uint32) error {
-	remaining := totalSlices - usedSlices
-	ctrl.Log.Info("Calculated remaining GPU slices", "totalSlices", totalSlices, "usedSlices", usedSlices, "remainingSlices", remaining)
-
+func (r *InstasliceReconciler) UpdateCompatibleProfilesMetrics(instasliceObj inferencev1alpha1.Instaslice, nodeName string, remainingSlices map[string]uint32) error {
+	totalRemaining := uint32(0)
+	for _, remaining := range remainingSlices {
+		totalRemaining += remaining
+	}
 	// Reset compatible profiles
 	instasliceMetrics.compatibleProfiles.Reset()
 	ctrl.Log.Info("Reset compatible profiles metric")
-	// Initialize counter for incremental values
-	counter := 1
+
+	recommendedProfileMap := map[string]int{
+		"1g.5gb":    1,
+		"1g.10gb":   2,
+		"1g.5gb+me": 3,
+		"2g.10gb":   4,
+		"3g.20gb":   5,
+		"4g.20gb":   6,
+		"7g.40gb":   7,
+	}
+
+	// Maintain a map to track currently compatible profiles
+	currentProfiles := make(map[string]struct{})
 
 	// Parse the MIG placements for profiles and their sizes
 	for _, migPlacement := range instasliceObj.Spec.Migplacement {
 		profileName := migPlacement.Profile
 
+		// Skip if profile is already recommended
+		if _, exists := currentProfiles[profileName]; exists {
+			continue
+		}
+
 		// Check the first size value from the placements for this profile
 		if len(migPlacement.Placements) > 0 {
 			size := uint32(migPlacement.Placements[0].Size)
 
-			// Check if the profile is compatible with the remaining slices
-			if size <= remaining {
-				instasliceMetrics.compatibleProfiles.WithLabelValues(profileName, fmt.Sprintf("%d", remaining)).Set(float64(counter)) // Indicate compatibility
-				ctrl.Log.Info("UpdateCompatiableProfilesMetrics] Added compatible profile", "profile", profileName, "size", size, "remainingSlices", remaining)
-				// Increment the counter for the next profile
-				counter++
+			// Check if the profile is compatible with any remaining slices
+			for gpuID, remaining := range remainingSlices {
+				if size <= remaining {
+					currentProfiles[profileName] = struct{}{}
+					instasliceMetrics.compatibleProfiles.WithLabelValues(profileName, nodeName, fmt.Sprintf("%d", totalRemaining)).Set(float64(recommendedProfileMap[profileName])) // Indicate compatibility
+					ctrl.Log.Info("Added compatible profile", "profile", profileName, "size", size, "gpuID", gpuID, "remainingSlices", totalRemaining)
+					break
+				}
 			}
 		}
 	}
+
+	// Clean up metrics for profiles that are no longer compatible
+	for profileName := range baseProfileSliceMap { // baseProfileSliceMap contains all possible profiles
+		if _, exists := currentProfiles[profileName]; !exists {
+			// Profile is no longer compatible; set its value to 0
+			instasliceMetrics.compatibleProfiles.WithLabelValues(profileName, nodeName, fmt.Sprintf("%d", totalRemaining)).Set(0)
+			ctrl.Log.Info("Removed incompatible profile", "profile", profileName, "nodeName", nodeName)
+		}
+	}
+
 	return nil
 }
 
