@@ -166,6 +166,10 @@ check-gpu-nodes:
 	    exit 1; \
 	fi
 
+.PHONY: deploy-latest-cert-manager-ocp
+deploy-latest-cert-manager-ocp:
+	hack/deploy-cert-manager-ocp.sh stable-v1.14 v1.14.1
+
 .PHONY: test-e2e-ocp-emulated
 test-e2e-ocp-emulated: export IMG_TAG=latest
 test-e2e-ocp-emulated: export EMULATOR_MODE=true
