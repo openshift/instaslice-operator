@@ -170,7 +170,7 @@ check-gpu-nodes:
 test-e2e-ocp-emulated: container-build-ocp docker-push bundle-ocp-emulated bundle-build-ocp bundle-push deploy-cert-manager-ocp deploy-instaslice-on-ocp
 	hack/label-node.sh
 	$(eval FOCUS_ARG := $(if $(FOCUS),--focus="$(FOCUS)"))
-	ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m $(FOCUS_ARG) ./test/e2e
+	EMULATOR_MODE=true ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m $(FOCUS_ARG) ./test/e2e
 
 PHONY: cleanup-test-e2e-ocp-emulated
 cleanup-test-e2e-ocp-emulated: KUBECTL=oc
@@ -206,8 +206,18 @@ test-e2e-debug-instaslice:
 	@echo "---- /Debugging instaslice-operator current state ----"
 .PHONY: test-e2e-debug-instaslice
 
+# requires cert-manager and instaslice operators to be install (EMULATOR_MODE: false)
 .PHONY: test-e2e-konflux
-test-e2e-konflux:
+test-e2e-konflux: wait-for-instaslice-operator-stable
+	# the following is for when we need to ship konflux builds and test with emulated mode enabled post install
+	# oc patch csv/instaslice-operator.v0.0.2 --type=json --patch-file hack/emulator_mode-patch.json
+	# oc rollout status deployment/instaslice-operator-controller-manager -n instaslice-system
+	# oc delete daemonset/instaslice-operator-controller-daemonset -n instaslice-system
+	# @echo "---- Waiting for daemonset to get recreated ----"
+	# # sleep 10
+	# @if oc get daemonset -n instaslice-system; then echo "daemonset was created"; \
+	# else exit 1; \
+	# fi
 	hack/label-node.sh
 	ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m ./test/e2e
 
