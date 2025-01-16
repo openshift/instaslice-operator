@@ -25,22 +25,22 @@ metadata:
     containerImage: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:19f0baa4a6d3a0e126e054b4341788fd99f125a6f68224661d21294c95873aa6
     createdAt: "2024-11-01T14:26:33Z"
     description: InstaSlice works with GPU operator to create mig slices on demand
-    operators.operatorframework.io/builder: operator-sdk-v1.34.2
+    operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
-    features.operators.openshift.io/cnf: "false"
-    features.operators.openshift.io/cni: "false"
-    features.operators.openshift.io/csi: "false"
-    features.operators.openshift.io/disconnected: "true"
-    features.operators.openshift.io/fips-compliant: "false"
-    features.operators.openshift.io/proxy-aware: "false"
-    features.operators.openshift.io/tls-profiles: "false"
-    features.operators.openshift.io/token-auth-aws: "false"
-    features.operators.openshift.io/token-auth-azure: "false"
-    features.operators.openshift.io/token-auth-gcp: "false"
+    features.operators.openshift.io/cnf: "false"		
+    features.operators.openshift.io/cni: "false"		
+    features.operators.openshift.io/csi: "false"		
+    features.operators.openshift.io/disconnected: "true"		
+    features.operators.openshift.io/fips-compliant: "false"		
+    features.operators.openshift.io/proxy-aware: "false"		
+    features.operators.openshift.io/tls-profiles: "false"		
+    features.operators.openshift.io/token-auth-aws: "false"		
+    features.operators.openshift.io/token-auth-azure: "false"		
+    features.operators.openshift.io/token-auth-gcp: "false"		
     operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift Platform Plus"]'
     repository: https://github.com/openshift/instaslice-operator
     support: https://github.com/openshift/instaslice-operator/issues
-  name: instaslice-operator.v0.1.0
+  name: instaslice-operator.v0.0.2
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -49,9 +49,9 @@ spec:
     - kind: Instaslice
       name: instaslices.inference.redhat.com
       version: v1alpha1
-  description: "### Introduction\nInstaSlice works with GPU operator to create mig
-    slices on demand.\n\n### Prerequisites\n\n1. Install the [NVIDIA GPU drivers and
-    CUDA toolkit](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#driver-installation)
+  description: "### Introduction\nInstaSlice uses stable APIs and works with GPU operator
+    to create mig slices on demand.\n\n### Prerequisites\n\n1. Install the [NVIDIA
+    GPU drivers and CUDA toolkit](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#driver-installation)
     on the host.\n2. Install the [NVIDIA Container Toolkit (CTK)](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).\n3.
     Configure the NVIDIA Container Runtime as the default Docker runtime:\n      `sudo
     nvidia-ctk runtime configure --runtime=docker --set-as-default`\n4. Restart Docker
@@ -78,9 +78,23 @@ spec:
     `0.1.0` by\nfollowing [uninstall operator section](https://github.com/openshift/instaslice-operator)\nand
     install the new version.\n\nChanges to patch version (major.minor.patch) indicates
     that no breaking changes\nare introduced, thus upgrade can be done without uninstalling
-    and reinstalling\nthe operator.\n\n### Documentation\nDocumentation and installation
-    guide can be found below:\n  * [Installation Guide](https://github.com/openshift/instaslice-operator)\n
-    \ * [Instaslice Operator](https://github.com/openshift/instaslice-operator/blob/main/README.md)\n\n###
+    and reinstalling\nthe operator.\n\n### Why Instaslice\n\nPartitionable accelerators
+    provided by vendors need partition to be created at node boot-time or to change
+    partitions one would have to evict all the workloads at the node level to create
+    new set of partitions.\n\nInstaSlice will help if:\n\n- user does not know all
+    the accelerators partitions needed a priori on every node on the cluster\n\n-
+    user partition requirements change at the workload level rather than the node
+    level\n\n- user does not want to learn or use new API to request accelerators
+    slices\n\n- user prefers to use stable device plugins APIs for creating partitions\n\n###Features
+    Overview\n\n- Integration with Kubernetes [quota management](https://github.com/openshift/instaslice-operator/blob/main/docs/instaslice_kube_quota_int.md)\n\n-
+    Integration with project [Kueue](https://github.com/openshift/instaslice-operator/blob/main/docs/kueue.md)\n\n-
+    [Emulator](https://github.com/openshift/instaslice-operator/blob/main/docs/emulator.md)
+    mode to run test InstaSlice firstfit placement strategy\n\n- Integration with
+    vLLM, Kserve, [Deployments](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_deployment.yaml),
+    [Jobs](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_job.yaml),
+    and [Statefulsets](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_statefulset.yaml)\n\n###
+    Documentation\nDocumentation and installation guide can be found below:\n  * [Installation
+    Guide](https://github.com/openshift/instaslice-operator)\n  * [Instaslice Operator](https://github.com/openshift/instaslice-operator/blob/main/README.md)\n\n###
     License\ninstaslice-operator is licensed under the Apache 2.0 license"
   displayName: Instaslice
   icon:
@@ -158,6 +172,102 @@ spec:
           - get
           - patch
           - update
+        - nonResourceURLs:
+          - /metrics
+          verbs:
+          - get
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        - apiGroups:
+          - security.openshift.io
+          resourceNames:
+          - instaslice-operator-scc
+          resources:
+          - securitycontextconstraints
+          verbs:
+          - use
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          - pods
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - nodes
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - nodes/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - apps
+          resources:
+          - daemonsets
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - update
+          - watch
+        - apiGroups:
+          - inference.redhat.com
+          resources:
+          - instaslices
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - inference.redhat.com
+          resources:
+          - instaslices/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - inference.redhat.com
+          resources:
+          - instaslices/status
+          verbs:
+          - get
+          - patch
+          - update
+        - nonResourceURLs:
+          - /metrics
+          verbs:
+          - get
         - apiGroups:
           - authentication.k8s.io
           resources:
@@ -205,7 +315,7 @@ spec:
               containers:
               - args:
                 - --health-probe-bind-address=:8081
-                - --metrics-bind-address=127.0.0.1:8080
+                - --metrics-bind-address=:8443
                 - --leader-elect
                 command:
                 - /manager
@@ -311,8 +421,24 @@ spec:
   maintainers:
   - email: amalvank@redhat.com
     name: Abhishek Malvankar
+  - email: cmeadors@redhat.com
+    name: Cameron Meadors
+  - email: harpatil@redhat.com
+    name: Harshal Patil
+  - email: kehannon@redhat.com
+    name: Kevin Hannon
   - email: mmunirab@redhat.com
     name: Mohammed Abdi
+  - email: mpatel@redhat.com
+    name: Mrunal Patel
+  - email: tardieu@us.ibm.com
+    name: Olivier Tardieu
+  - email: rphillip@redhat.com
+    name: Ryan Phillips
+  - email: svanka@redhat.com
+    name: Sai Ramesh Vanka
+  - email: vemporop@redhat.com
+    name: Vitaliy Emporopulo
   maturity: alpha
   minKubeVersion: 1.16.0
   provider:
@@ -321,7 +447,7 @@ spec:
   relatedImages:
   - image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:04dd785a51aaa94888c724c395f7e8dba1ae5f1103a9aa505e9ec7bf5ca03b60
     name: instaslice-daemonset
-  version: 0.1.0
+  version: 0.0.2
   webhookdefinitions:
   - admissionReviewVersions:
     - v1
