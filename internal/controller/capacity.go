@@ -106,6 +106,9 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 	// ungated allocations are already counted in prepared
 	for uuid, item := range instaslice.Spec.Allocations {
 		statuses := instaslice.Status.AllocationStatus[uuid]
+		if len(statuses) == 0 {
+			continue
+		}
 		mostRecentStatus := statuses[len(statuses)-1]
 		if item.GPUUUID == gpuUUID && mostRecentStatus != inferencev1alpha1.AllocationStatusDeleted {
 			for i := 0; i < int(item.Size); i++ {

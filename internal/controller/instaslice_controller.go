@@ -172,9 +172,9 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			for _, allocation := range instaslice.Spec.Allocations {
 				if pod.UID == types.UID(allocation.PodUUID) {
 					statuses := instaslice.Status.AllocationStatus[string(pod.UID)]
-					// if len(statuses) == 0 {
-					// 	return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
-					// }
+					if len(statuses) == 0 {
+						break
+					}
 					mostRecentStatus := statuses[len(statuses)-1]
 					if mostRecentStatus == inferencev1alpha1.AllocationStatusCreating {
 						return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
@@ -217,9 +217,9 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		for _, instaslice := range instasliceList.Items {
 			for _, allocation := range instaslice.Spec.Allocations {
 				statuses := instaslice.Status.AllocationStatus[string(pod.UID)]
-				// if len(statuses) == 0 {
-				// 	return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
-				// }
+				if len(statuses) == 0 {
+					break
+				}
 				mostRecentStatus := statuses[len(statuses)-1]
 				if allocation.PodUUID == string(pod.UID) {
 					if mostRecentStatus != inferencev1alpha1.AllocationStatusDeleted {
@@ -263,9 +263,9 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocation := range instaslice.Spec.Allocations {
 				statuses := instaslice.Status.AllocationStatus[string(pod.UID)]
-				// if len(statuses) == 0 {
-				// 	return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
-				// }
+				if len(statuses) == 0 {
+					break
+				}
 				mostRecentStatus := statuses[len(statuses)-1]
 				if podUuid == string(pod.UID) && (mostRecentStatus == inferencev1alpha1.AllocationStatusCreated) {
 					//instaslice.Status.AllocationStatus[string(pod.UID)] = inferencev1alpha1.AllocationStatusDeleting
@@ -301,9 +301,9 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				for podUuid, allocation := range instaslice.Spec.Allocations {
 					if podUuid == string(pod.UID) {
 						statuses := instaslice.Status.AllocationStatus[string(pod.UID)]
-						// if len(statuses) == 0 {
-						// 	return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
-						// }
+						if len(statuses) == 0 {
+							break
+						}
 						mostRecentStatus := statuses[len(statuses)-1]
 						if mostRecentStatus == inferencev1alpha1.AllocationStatusDeleted {
 							resultDelete, errDeletingAllocation := r.deleteInstasliceAllocation(ctx, instaslice.Name, allocation)
@@ -635,13 +635,15 @@ func (r *InstasliceReconciler) deleteInstasliceAllocation(ctx context.Context, i
 	}
 	for _, uuid := range keysToDelete {
 		delete(updateInstasliceObject.Spec.Allocations, uuid)
-		delete(updateInstasliceObject.Status.AllocationStatus, uuid)
 	}
 	err = r.Patch(ctx, &updateInstasliceObject, client.MergeFrom(OriginalInstasliceObj))
 	if err != nil {
 		log.Error(err, "Error updating InstaSlice object for ", "pod", allocation.PodName)
 		// deleted allocations are re-used by the controller, we can be slow to delete these
 		return ctrl.Result{Requeue: true}, err
+	}
+	for _, uuid := range keysToDelete {
+		delete(updateInstasliceObject.Status.AllocationStatus, uuid)
 	}
 	err = r.Status().Patch(ctx, &updateInstasliceObject, client.MergeFrom(OriginalInstasliceObj))
 	if err != nil {
