@@ -187,8 +187,8 @@ func newInstaslice(name, podUUID string, status inferencev1alpha1.AllocationStat
 	spec := inferencev1alpha1.InstasliceSpec{
 		Allocations: map[string]inferencev1alpha1.AllocationDetails{
 			podUUID: {
-				PodUUID:            podUUID,
-				Allocationstatus:   status,
+				PodUUID: podUUID,
+				//Allocationstatus:   status,
 				Nodename:           name,
 				Resourceidentifier: name,
 			},

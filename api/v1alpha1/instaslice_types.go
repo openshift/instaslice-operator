@@ -44,19 +44,17 @@ const (
 
 // Define the struct for allocation details
 type AllocationDetails struct {
-	Profile  string `json:"profile"`
-	Start    uint32 `json:"start"`
-	Size     uint32 `json:"size"`
-	PodUUID  string `json:"podUUID"`
-	GPUUUID  string `json:"gpuUUID"`
-	Nodename string `json:"nodename"`
-	// +kubebuilder:validation:Enum:=deleted;deleting;ungated;creating;created
-	Allocationstatus   AllocationStatus `json:"allocationStatus"`
-	Resourceidentifier string           `json:"resourceIdentifier"`
-	Namespace          string           `json:"namespace"`
-	PodName            string           `json:"podName"`
-	Cpu                int64            `json:"cpu"`
-	Memory             int64            `json:"memory"`
+	Profile            string `json:"profile"`
+	Start              uint32 `json:"start"`
+	Size               uint32 `json:"size"`
+	PodUUID            string `json:"podUUID"`
+	GPUUUID            string `json:"gpuUUID"`
+	Nodename           string `json:"nodename"`
+	Resourceidentifier string `json:"resourceIdentifier"`
+	Namespace          string `json:"namespace"`
+	PodName            string `json:"podName"`
+	Cpu                int64  `json:"cpu"`
+	Memory             int64  `json:"memory"`
 }
 
 // InstasliceSpec defines the desired state of Instaslice
@@ -70,13 +68,15 @@ type InstasliceSpec struct {
 
 // InstasliceStatus defines the observed state of Instaslice
 type InstasliceStatus struct {
-	Processed bool `json:"processed,omitempty"`
+	Processed        bool                          `json:"processed,omitempty"`
+	AllocationStatus map[string][]AllocationStatus `json:"allocationStatus,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
 // Instaslice is the Schema for the instaslices API
+// +kubebuilder:subresource:status
 type Instaslice struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

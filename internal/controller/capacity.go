@@ -75,7 +75,7 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 			size, discoveredGiprofile, Ciprofileid, Ciengprofileid := r.extractGpuProfile(updatedInstaSliceObject, profileName)
 			resourceIdentifier := pod.Spec.Containers[0].EnvFrom[0].ConfigMapRef.Name
 			allocDetails := policy.SetAllocationDetails(profileName, newStart, uint32(size),
-				string(pod.UID), updatedInstaSliceObject.Name, string(inferencev1alpha1.AllocationStatusCreating), discoveredGiprofile,
+				string(pod.UID), updatedInstaSliceObject.Name, discoveredGiprofile,
 				Ciprofileid, Ciengprofileid, pod.Namespace, pod.Name, gpuuuid, resourceIdentifier, userCpuCoresCeil, userMemoryBytes)
 			return allocDetails, nil
 		}
@@ -104,8 +104,10 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 	}
 	// deleted allocations can be reused
 	// ungated allocations are already counted in prepared
-	for _, item := range instaslice.Spec.Allocations {
-		if item.GPUUUID == gpuUUID && item.Allocationstatus != inferencev1alpha1.AllocationStatusDeleted {
+	for uuid, item := range instaslice.Spec.Allocations {
+		statuses := instaslice.Status.AllocationStatus[uuid]
+		mostRecentStatus := statuses[len(statuses)-1]
+		if item.GPUUUID == gpuUUID && mostRecentStatus != inferencev1alpha1.AllocationStatusDeleted {
 			for i := 0; i < int(item.Size); i++ {
 				gpuAllocatedIndex[int(item.Start)+i] = 1
 			}
