@@ -87,34 +87,7 @@ var (
 	prometheusHandler  http.Handler
 )
 
-// InitializeMetricsExporter registers all Prometheus metrics
-// func (r *InstasliceReconciler) InitializeMetricsExporter() {
-// 	// Initiate the exporting of prometheus metrics for instaslice
-// 	ctrl.Log.Info("Entering InitializeMetricsExporter().")
-// 	if prometheusRegistry == nil {
-// 		ctrl.Log.Info("Prometheus registry is nil, initializing new registry and metrics.")
-// 		prometheusRegistry = prometheus.NewRegistry()
-
-// 		// Register the metrics
-// 		prometheus.MustRegister(instasliceMetrics.GpuSliceTotal, instasliceMetrics.PendingSliceRequests, instasliceMetrics.compatibleProfiles, instasliceMetrics.processedSlices)
-// 		ctrl.Log.Info("Instaslice Metrics registered successfully.")
-
-// 		// Create and register the Prometheus handler
-// 		prometheusHandler = promhttp.HandlerFor(prometheusRegistry, promhttp.HandlerOpts{Registry: prometheusRegistry})
-// 		http.Handle("/metrics", prometheusHandler)
-// 		ctrl.Log.Info("Prometheus handler for /metrics endpoint registered.")
-// 		// go func() {
-// 		// 	err := http.ListenAndServe(":8080", nil)
-
-//			// 	if err != nil {
-//			// 		ctrl.Log.Error(err, "PANIC [InitializeMetricsExporter] ListenAndServe")
-//			// 		panic("PANIC [InitializeMetricsExporter]: ListenAndServe: " + err.Error())
-//			// 	}
-//			// }()
-//		} else {
-//			ctrl.Log.Info("Prometheus registry already initialized, skipping initialization.")
-//		}
-//	}
+// RegisterMetrics registers all Prometheus metrics
 func RegisterMetrics() {
 	// Register custom metrics with the global prometheus registry
 	metrics.Registry.MustRegister(instasliceMetrics.GpuSliceTotal, instasliceMetrics.PendingSliceRequests, instasliceMetrics.compatibleProfiles, instasliceMetrics.processedSlices, instasliceMetrics.deployedPodTotal)
@@ -123,7 +96,7 @@ func RegisterMetrics() {
 // UpdateGpuSliceMetrics updates GPU slice allocation metrics
 func (r *InstasliceReconciler) IncrementTotalProcessedGpuSliceMetrics(nodeName, gpuID string, processedSlices uint32) error {
 	instasliceMetrics.processedSlices.WithLabelValues(
-		nodeName, gpuID).Set(float64(processedSlices))
+		nodeName, gpuID).Add(float64(processedSlices))
 	ctrl.Log.Info(fmt.Sprintf("[IncrementTotalProcessedGpuSliceMetrics] Incremented Total Processed GPU Slices: %d total processed slices, for node -> %v, GPUID -> %v.", processedSlices, nodeName, gpuID)) // trace
 	return nil
 }
