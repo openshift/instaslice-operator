@@ -167,10 +167,8 @@ check-gpu-nodes:
 	fi
 
 .PHONY: test-e2e-ocp-emulated
-test-e2e-ocp-emulated: export IMG_TAG=latest
-test-e2e-ocp-emulated: export EMULATOR_MODE=true
-test-e2e-ocp-emulated: check-gpu-nodes docker-build docker-push deploy-instaslice-emulated-on-ocp
-test-e2e-ocp-emulated:
+test-e2e-ocp-emulated: container-build-ocp docker-push bundle-ocp-emulated bundle-build-ocp bundle-push deploy-cert-manager-ocp deploy-instaslice-emulated-on-ocp 
+	hack/label-node.sh
 	$(eval FOCUS_ARG := $(if $(FOCUS),--focus="$(FOCUS)"))
 	ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m $(FOCUS_ARG) ./test/e2e
 
@@ -207,6 +205,11 @@ test-e2e-debug-instaslice:
 	@echo "---- /Debugging instaslice-operator current state ----"
 .PHONY: test-e2e-debug-instaslice
 
+.PHONY: test-e2e-konflux
+test-e2e-konflux:
+	hack/label-node.sh
+	ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m ./test/e2e
+
 .PHONY: create-kind-cluster
 create-kind-cluster:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
@@ -222,6 +225,10 @@ deploy-cert-manager:
 	export KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
                 hack/deploy-cert-manager.sh
 
+.PHONY: deploy-cert-manager-ocp
+deploy-cert-manager-ocp:
+	oc apply -f hack/manifests/cert-manager-rh.yaml
+
 .PHONY: deploy-instaslice-emulated-on-kind
 deploy-instaslice-emulated-on-kind:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
@@ -229,8 +236,8 @@ deploy-instaslice-emulated-on-kind:
 
 .PHONY: deploy-instaslice-emulated-on-ocp
 deploy-instaslice-emulated-on-ocp:
-	export  KUBECTL=oc IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
-                hack/deploy-instaslice-emulated-on-ocp.sh
+	oc new-project instaslice-system
+	operator-sdk run bundle ${BUNDLE_IMG} -n instaslice-system --security-context-config restricted
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.61.0
@@ -428,10 +435,17 @@ bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metada
 
 .PHONY: bundle-ocp
 bundle-ocp: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
-	$(OPERATOR_SDK) generate kustomize manifests -q
+	$(OPERATOR_SDK) generate kustomize manifests --output-dir config/manifests-ocp -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | sed -e "s|<IMG>|$(IMG)|g" | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS) --output-dir bundle-ocp
-	$(OPERATOR_SDK) bundle validate ./bundle
+	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp | sed -e "s|<IMG>|$(IMG)|g" | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS) --output-dir bundle-ocp --overwrite=false
+	$(OPERATOR_SDK) bundle validate ./bundle-ocp
+
+.PHONY: bundle-ocp-emulated
+bundle-ocp-emulated: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
+	$(OPERATOR_SDK) generate kustomize manifests --output-dir config/manifests-ocp-emulated -q
+	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp-emulated | sed -e "s|<IMG>|$(IMG)|g" | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS) --output-dir bundle-ocp --overwrite=false
+	$(OPERATOR_SDK) bundle validate ./bundle-ocp
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
