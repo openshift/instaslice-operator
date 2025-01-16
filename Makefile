@@ -244,6 +244,10 @@ golangci-lint:
 lint: golangci-lint ## Run golangci-lint linter & yamllint
 	$(GOLANGCI_LINT) run --timeout 5m
 
+.PHONY: lint-no-download
+lint-no-download:
+	$(GOLANGCI_LINT) run
+
 .PHONY: lint-fix
 lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 	$(GOLANGCI_LINT) run --fix
