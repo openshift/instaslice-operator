@@ -243,6 +243,8 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			}
 			log.Info("finalizer deleted for succeeded ", "pod", pod.Name)
 		}
+		// If no allocations exist, update metrics with all slots free
+		r.updateMetricsAllSlotsFree(ctx, instasliceList)
 		return ctrl.Result{}, nil
 	}
 
@@ -428,6 +430,29 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	return ctrl.Result{}, nil
 }
 
+// If no allocations exist, update metrics with all slots free
+func (r *InstasliceReconciler) updateMetricsAllSlotsFree(ctx context.Context, instasliceList inferencev1alpha1.InstasliceList) {
+	log := logr.FromContext(ctx)
+	for _, instaslice := range instasliceList.Items {
+		remainingSlotsPerGPU := map[string]uint32{}
+		for gpuID := range instaslice.Spec.MigGPUUUID {
+			nodeName := instaslice.Name
+			if instaslice.Spec.Allocations == nil || len(instaslice.Spec.Allocations) == 0 {
+				totalSlots, err := r.getTotalGpuSlotsForGPU(instaslice, gpuID)
+				if err != nil {
+					log.Error(err, "Failed to determine total GPU slots for GPU without allocations", "gpuID", gpuID)
+					continue
+				}
+				if err := r.UpdateGpuSliceMetrics(nodeName, gpuID, 0, totalSlots); err != nil {
+					log.Error(err, "Failed to update GPU slice metrics for unallocated GPU", "nodeName", nodeName, "gpuID", gpuID)
+				}
+				remainingSlotsPerGPU[gpuID] = totalSlots
+				continue
+			}
+		}
+	}
+}
+
 // updates UpdateGpuSliceMetrics and UpdateCompatibleProfilesMetrics
 func (r *InstasliceReconciler) updateMetrics(ctx context.Context, instasliceList inferencev1alpha1.InstasliceList) {
 	log := logr.FromContext(ctx)
@@ -438,11 +463,14 @@ func (r *InstasliceReconciler) updateMetrics(ctx context.Context, instasliceList
 
 			// If no allocations exist, update metrics with all slots free
 			if instaslice.Spec.Allocations == nil || len(instaslice.Spec.Allocations) == 0 {
+				log.Info("No allocations found, resetting GPU slice metrics", "node", nodeName, "gpuID", gpuID)
 				totalSlots, err := r.getTotalGpuSlotsForGPU(instaslice, gpuID)
+				log.Info("Total slots", totalSlots)
 				if err != nil {
 					log.Error(err, "Failed to determine total GPU slots for GPU without allocations", "gpuID", gpuID)
 					continue
 				}
+				log.Info("Updating GPU slice metrics", "node", nodeName, "gpuID", gpuID, "used", 0, "free", totalSlots)
 				if err := r.UpdateGpuSliceMetrics(nodeName, gpuID, 0, totalSlots); err != nil {
 					log.Error(err, "Failed to update GPU slice metrics for unallocated GPU", "nodeName", nodeName, "gpuID", gpuID)
 				}
