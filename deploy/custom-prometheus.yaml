@@ -1,0 +1,6 @@
+server:
+  configMapOverrideName: instaslice-scrape-config
+additionalScrapeConfigs:
+  enabled: true
+  name: instaslice-scrape-config
+  key: additional-scrape-configs.yaml
