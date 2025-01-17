@@ -395,8 +395,12 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 
 		// Patch the node capacity with GPU memory in emulator mode
 		if r.Config.EmulatorModeEnable {
-			totalEmulatedGPUMemory := CalculateTotalMemoryGB(instaslice.Spec.MigGPUUUID)
-			if err := r.patchNodeStatusForNode(ctx, r.NodeName, totalEmulatedGPUMemory); err != nil {
+			totalEmulatedGPUMemory, err := CalculateTotalMemoryGB(r.Config.EmulatorModeEnable, instaslice.Spec.MigGPUUUID)
+			if err != nil {
+				log.Error(err, "unable to get the total GPU memory")
+				return err
+			}
+			if err := r.patchNodeStatusForNode(ctx, r.NodeName, int(totalEmulatedGPUMemory)); err != nil {
 				return err
 			}
 		}
@@ -418,21 +422,39 @@ func (r *InstaSliceDaemonsetReconciler) setupWithManager(mgr ctrl.Manager) error
 		Complete(r)
 }
 
-func CalculateTotalMemoryGB(gpuInfoList map[string]string) int {
-	totalMemoryGB := 0
-	re := regexp.MustCompile(`(\d+)(GB)`)
-	for _, gpuInfo := range gpuInfoList {
-		matches := re.FindStringSubmatch(gpuInfo)
-		if len(matches) == 3 {
-			memoryGB, err := strconv.Atoi(matches[1])
-			if err != nil {
-				logr.FromContext(context.TODO()).Error(err, "unable to parse gpu memory value")
-				continue
+func CalculateTotalMemoryGB(isEmulated bool, gpuInfoList map[string]string) (float64, error) {
+	var totalMemoryGB float64
+	if isEmulated {
+		re := regexp.MustCompile(`(\d+)(GB)`)
+		for _, gpuInfo := range gpuInfoList {
+			matches := re.FindStringSubmatch(gpuInfo)
+			if len(matches) == 3 {
+				memoryGB, err := strconv.Atoi(matches[1])
+				if err != nil {
+					logr.FromContext(context.TODO()).Error(err, "unable to parse gpu memory value")
+					continue
+				}
+				totalMemoryGB += float64(memoryGB)
 			}
-			totalMemoryGB += memoryGB
+		}
+		return totalMemoryGB, nil
+	} else {
+		for uuid := range gpuInfoList {
+			device, retCodeForDevice := nvml.DeviceGetHandleByUUID(uuid)
+			if retCodeForDevice != nvml.SUCCESS {
+				err := goerror.New("error getting GPU device handle by UUID")
+				return totalMemoryGB, err
+			}
+			// Get memory info
+			memInfo, ret := device.GetMemoryInfo()
+			if ret != nvml.SUCCESS {
+				err := goerror.New("error getting memory info for the device")
+				return totalMemoryGB, err
+			}
+			totalMemoryGB += float64(memInfo.Total / (1024 * 1024 * 1024))
 		}
 	}
-	return totalMemoryGB
+	return totalMemoryGB, nil
 }
 
 // This function discovers MIG devices as the plugin comes up. this is run exactly once.
@@ -449,8 +471,12 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 		return nil, err
 	}
 
-	totalMemoryGB := CalculateTotalMemoryGB(gpuModelMap)
-	cpu, memory, err := r.classicalResourcesAndGPUMemOnNode(context.TODO(), r.NodeName, strconv.Itoa(totalMemoryGB))
+	totalMemoryGB, err := CalculateTotalMemoryGB(r.Config.EmulatorModeEnable, gpuModelMap)
+	if err != nil {
+		log.Error(err, "unable to get GPU memory")
+		return nil, err
+	}
+	cpu, memory, err := r.classicalResourcesAndGPUMemOnNode(context.TODO(), r.NodeName, strconv.FormatFloat(totalMemoryGB, 'f', 2, 64))
 	if err != nil {
 		log.Error(err, "unable to get classical resources")
 		os.Exit(1)
@@ -476,7 +502,7 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 	}
 
 	// Patch the node capacity to reflect the total GPU memory
-	if err := r.patchNodeStatusForNode(customCtx, r.NodeName, totalMemoryGB); err != nil {
+	if err := r.patchNodeStatusForNode(customCtx, r.NodeName, int(totalMemoryGB)); err != nil {
 		return nil, err
 	}
 

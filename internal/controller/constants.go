@@ -23,6 +23,8 @@ const (
 	GateName                         = OrgInstaslicePrefix + "accelerator"
 	FinalizerName                    = GateName
 	QuotaResourceName                = OrgInstaslicePrefix + "accelerator-memory-quota"
+	GPUMemoryLabelName               = "nvidia.com/gpu.memory"
+	GPUCountLabelName                = "nvidia.com/gpu.count"
 	EmulatorModeFalse                = "false"
 	EmulatorModeTrue                 = "true"
 	AttributeMediaExtensions         = "me"
