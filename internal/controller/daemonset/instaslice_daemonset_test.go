@@ -18,6 +18,7 @@ package daemonset
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -196,24 +197,6 @@ func newInstaslice(name, podUUID string, status inferencev1alpha1.AllocationStat
 	}
 	instaslice.Spec = spec
 	return instaslice
-}
-
-func Test_calculateTotalMemoryGB(t *testing.T) {
-	type args struct {
-		gpuInfoList map[string]string
-	}
-	tests := []struct {
-		name string
-		args args
-		want int
-	}{
-		{"test-1", args{map[string]string{"gpu-1": "1g.5GB", "gpu-2": "2g.10GB"}}, 15},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, CalculateTotalMemoryGB(tt.args.gpuInfoList), "calculateTotalMemoryGB(%v)", tt.args.gpuInfoList)
-		})
-	}
 }
 
 func TestInstaSliceDaemonsetReconciler_addMigCapacityToNode(t *testing.T) {
@@ -447,4 +430,28 @@ func TestInstaSliceDaemonsetReconciler_checkConfigMapExists(t *testing.T) {
 	exists, err = reconciler.checkConfigMapExists(ctx, "test-configmap", controller.InstaSliceOperatorNamespace)
 	assert.NoError(t, err)
 	assert.True(t, !exists)
+}
+
+func TestCalculateTotalMemoryGB(t *testing.T) {
+	type args struct {
+		isEmulated  bool
+		gpuInfoList map[string]string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    float64
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{"test-case-emulated-mode", args{true, map[string]string{"gpu-1": "1g.5GB", "gpu-2": "2g.10GB"}}, 15, assert.NoError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CalculateTotalMemoryGB(tt.args.isEmulated, tt.args.gpuInfoList)
+			if !tt.wantErr(t, err, fmt.Sprintf("CalculateTotalMemoryGB(%v, %v)", tt.args.isEmulated, tt.args.gpuInfoList)) {
+				return
+			}
+			assert.Equalf(t, tt.want, got, "CalculateTotalMemoryGB(%v, %v)", tt.args.isEmulated, tt.args.gpuInfoList)
+		})
+	}
 }

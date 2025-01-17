@@ -23,6 +23,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -87,9 +88,9 @@ func init() {
 		daemonsetImage = env
 	}
 	switch os.Getenv("EMULATOR_MODE") {
-	case "true":
+	case "true", "TRUE", "True":
 		emulated = true
-	case "false":
+	case "false", "FALSE", "False":
 		emulated = false
 	default:
 		emulated = true
@@ -609,27 +610,43 @@ var _ = Describe("controller", Ordered, func() {
 			}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Expected Instaslice object Allocations to be empty")
 		})
 		It("should verify that the Kubernetes node has the specified resource and matches total GPU memory", func() {
-			if emulated {
-				Expect(len(instasliceObjs.Items[0].Spec.MigGPUUUID)).To(Equal(2))
-			}
-
+			var totalMemoryGB float64
 			err := k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
 			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve Instaslice object")
-
-			for _, instasliceObj := range instasliceObjs.Items {
-				totalMemoryGB := daemonset.CalculateTotalMemoryGB(instasliceObj.Spec.MigGPUUUID)
-
-				By(fmt.Sprintf("Verifying that node has custom resource %s", controller.QuotaResourceName))
-				node := &corev1.Node{}
-				err := k8sClient.Get(ctx, client.ObjectKey{Name: templateVars.NodeNames[0]}, node)
-				Expect(err).NotTo(HaveOccurred(), "Failed to get the node")
-
-				acceleratorMemory, exists := node.Status.Capacity[corev1.ResourceName(controller.QuotaResourceName)]
-				Expect(exists).To(BeTrue(), fmt.Sprintf("%s not found in Node object", controller.QuotaResourceName))
-
-				Expect(acceleratorMemory.Value()/(1024*1024*1024)).To(Equal(int64(totalMemoryGB)),
-					fmt.Sprintf("%s on node does not match total GPU memory in Instaslice object", controller.QuotaResourceName))
+			node := &corev1.Node{}
+			err = k8sClient.Get(ctx, client.ObjectKey{Name: templateVars.NodeNames[0]}, node)
+			if emulated {
+				// Here, we compare the accelerator memory with the memory fetched from parsing the GPU name
+				// Ex: Parsing the "NVIDIA A100-SXM4-40GB" GPU results in 40GB
+				// This gets compared with the memory that the daemonset patches the node
+				Expect(len(instasliceObjs.Items[0].Spec.MigGPUUUID)).To(Equal(2))
+				for _, instasliceObj := range instasliceObjs.Items {
+					memoryGB, err := daemonset.CalculateTotalMemoryGB(emulated, instasliceObj.Spec.MigGPUUUID)
+					Expect(err).NotTo(HaveOccurred(), "Failed to get total GPU memory")
+					totalMemoryGB += memoryGB
+				}
+			} else {
+				// This test case assumes that all the associated GPUs of a node have homogeneous configuration
+				// Ex: 4 GPUs of type "NVIDIA A100-SXM4-40GB", 2 GPUs of type "NVIDIA A100-SXM4-80GB" etc.
+				// This helps in correct calculation of total GPU memory(i.e. count * memory) that gets compared with the accelerator memory
+				gpuMemory, exists := node.Labels[controller.GPUMemoryLabelName]
+				Expect(exists).To(BeTrue(), fmt.Sprintf("%s not found in Node object", controller.GPUMemoryLabelName))
+				memory, err := strconv.Atoi(gpuMemory)
+				Expect(err).To(BeNil(), fmt.Sprintf("unable to fetch gpu memory from node object %s, node: %s", controller.GPUMemoryLabelName, node.Name))
+				gpuCount, exists := node.Labels[controller.GPUCountLabelName]
+				Expect(exists).To(BeTrue(), fmt.Sprintf("%s not found in Node object", controller.GPUCountLabelName))
+				count, err := strconv.Atoi(gpuCount)
+				Expect(err).To(BeNil(), fmt.Sprintf("unable to fetch gpu count from node object %s, node: %s", controller.GPUCountLabelName, node.Name))
+				totalMemoryGB = float64((memory * count) / 1024)
 			}
+			By(fmt.Sprintf("Verifying that node has custom resource %s", controller.QuotaResourceName))
+			Expect(err).NotTo(HaveOccurred(), "Failed to get the node")
+
+			acceleratorMemory, exists := node.Status.Capacity[corev1.ResourceName(controller.QuotaResourceName)]
+			Expect(exists).To(BeTrue(), fmt.Sprintf("%s not found in Node object", controller.QuotaResourceName))
+
+			Expect(acceleratorMemory.Value()/(1024*1024*1024)).To(Equal(int64(totalMemoryGB)),
+				fmt.Sprintf("%s on node does not match total GPU memory in Instaslice object", controller.QuotaResourceName))
 		})
 		It("should verify run to completion GPU workload on GPUs", func() {
 			if emulated {
