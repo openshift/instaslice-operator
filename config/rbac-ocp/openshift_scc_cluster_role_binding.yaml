@@ -8,5 +8,5 @@ subjects:
   namespace: instaslice-system
 roleRef:
   kind: ClusterRole
-  name: system:openshift:scc:instaslice-operator-scc
+  name: instaslice-operator-scc
   apiGroup: rbac.authorization.k8s.io

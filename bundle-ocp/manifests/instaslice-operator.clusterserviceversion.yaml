@@ -22,10 +22,10 @@ metadata:
       ]
     capabilities: Basic Install
     categories: Drivers and plugins
-    containerImage: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:88e86042e77902e308da4d51105175edc14a96a2483d4d41e8782f1c84a5ca9b
-    createdAt: "2025-01-20T16:31:55Z"
+    containerImage: quay.io/amalvank/instaslicev2-controller:latest
+    createdAt: "2025-01-20T17:36:28Z"
     description: InstaSlice works with GPU operator to create mig slices on demand
-    operators.operatorframework.io/builder: operator-sdk-v1.37.0
+    operators.operatorframework.io/builder: operator-sdk-v1.38.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/openshift/instaslice-operator
     support: https://github.com/openshift/instaslice-operator/issues
@@ -313,11 +313,6 @@ spec:
                   value: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:04dd785a51aaa94888c724c395f7e8dba1ae5f1103a9aa505e9ec7bf5ca03b60
                 - name: EMULATOR_MODE
                   value: "false"
-<<<<<<< HEAD
-                image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:19f0baa4a6d3a0e126e054b4341788fd99f125a6f68224661d21294c95873aa6
-=======
-                image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:88e86042e77902e308da4d51105175edc14a96a2483d4d41e8782f1c84a5ca9b
->>>>>>> 415176e (fix base files and regenerate bundle-ocp and dockerfile and bump)
                 livenessProbe:
                   httpGet:
                     path: /healthz
