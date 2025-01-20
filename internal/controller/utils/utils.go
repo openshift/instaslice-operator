@@ -20,9 +20,14 @@ import (
 	"context"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logr "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const InstaSliceOperatorNamespace = "instaslice-system"
@@ -55,4 +60,23 @@ func UpdateInstasliceAllocations(ctx context.Context, kubeClient client.Client, 
 		return fmt.Errorf("error updating the instaslie object, %s, err: %v", name, err)
 	}
 	return nil
+}
+
+func RunningOnOpenshift(ctx context.Context, cl client.Client) bool {
+	gvk := schema.GroupVersionKind{Group: "route.openshift.io", Version: "v1", Kind: "route"}
+	return isGvkPresent(ctx, cl, gvk)
+}
+
+// isGvkPresent returns whether the given gvk is present or not
+func isGvkPresent(ctx context.Context, cl client.Client, gvk schema.GroupVersionKind) bool {
+	log := logr.FromContext(ctx)
+	list := &unstructured.UnstructuredList{}
+	list.SetGroupVersionKind(gvk)
+	if err := cl.List(ctx, list, &client.ListOptions{}); err != nil {
+		if !meta.IsNoMatchError(err) {
+			log.Error(err, "Unable to query", "gvk", gvk.String())
+		}
+		return false
+	}
+	return true
 }

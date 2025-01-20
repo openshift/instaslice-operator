@@ -237,7 +237,7 @@ deploy-instaslice-emulated-on-kind:
 .PHONY: deploy-instaslice-emulated-on-ocp
 deploy-instaslice-emulated-on-ocp:
 	oc new-project instaslice-system
-	operator-sdk run bundle ${BUNDLE_IMG} -n instaslice-system --security-context-config restricted
+	operator-sdk run bundle ${BUNDLE_IMG} -n instaslice-system
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.61.0
@@ -333,12 +333,10 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 	$(KUSTOMIZE) build config/$(KUSTOMIZATION) | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(KUBECTL) apply -f -
 
 .PHONY: ocp-deploy
+ocp-deploy: KUSTOMIZATION=manifests-ocp
 ocp-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUBECTL) apply -f config/rbac/instaslice-operator-scc.yaml
-	$(KUBECTL) apply -f config/rbac/openshift_scc_cluster_role_binding.yaml
-	$(KUBECTL) apply -f config/rbac/openshift_cluster_role.yaml
-	$(KUSTOMIZE) build config/$(KUSTOMIZATION) | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(KUBECTL) apply -f -
+	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/$(KUSTOMIZATION) | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(KUBECTL) apply -f -
 
 .PHONY: deploy-emulated ## Deploy controller in emulator mode
 deploy-emulated: KUSTOMIZATION=emulator
@@ -360,9 +358,9 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 .PHONY: ocp-undeploy
 ocp-undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/$(KUSTOMIZATION) | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
-	$(KUBECTL) delete -f config/rbac/instaslice-operator-scc.yaml
-	$(KUBECTL) delete -f config/rbac/openshift_scc_cluster_role_binding.yaml
-	$(KUBECTL) apply -f config/rbac/openshift_cluster_role.yaml
+	$(KUBECTL) delete -f config/rbac-ocp/instaslice-operator-scc.yaml
+	$(KUBECTL) delete -f config/rbac-ocp/openshift_scc_cluster_role_binding.yaml
+	$(KUBECTL) apply -f config/rbac-ocp/openshift_cluster_role.yaml
 
 .PHONY: undeploy-emulated
 undeploy-emulated: KUSTOMIZATION=emulator ## Undeploy controller deployed in emulator mode

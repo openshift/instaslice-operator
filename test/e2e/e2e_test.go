@@ -24,12 +24,14 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
+
 	"github.com/openshift/instaslice-operator/internal/controller/daemonset"
 	"github.com/openshift/instaslice-operator/test/e2e/resources"
 
@@ -87,10 +89,10 @@ func init() {
 	if env := os.Getenv("IMG_DMST"); env != "" {
 		daemonsetImage = env
 	}
-	switch os.Getenv("EMULATOR_MODE") {
-	case "true", "TRUE", "True":
+	switch strings.ToLower(os.Getenv("EMULATOR_MODE")) {
+	case "true":
 		emulated = true
-	case "false", "FALSE", "False":
+	case "false":
 		emulated = false
 	default:
 		emulated = true
@@ -101,7 +103,6 @@ func init() {
 	if env := os.Getenv("KUBECTL_BIN"); env != "" {
 		kubectlBin = env
 	}
-
 }
 
 var _ = BeforeSuite(func() {
@@ -152,12 +153,6 @@ var _ = BeforeSuite(func() {
 // in state deleting
 var _ = Describe("controller", Ordered, func() {
 	BeforeEach(func() {
-		if emulated {
-			err := k8sClient.Create(ctx, resources.GenerateFakeCapacity(templateVars.NodeNames[0]))
-			Expect(err).NotTo(HaveOccurred(), "Failed to create instaslice object")
-
-		}
-
 		err := k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
 		Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice resource")
 
@@ -167,8 +162,10 @@ var _ = Describe("controller", Ordered, func() {
 		daemonSet := &appsv1.DaemonSet{}
 
 		Eventually(func() error {
-			err := k8sClient.Get(ctx, client.ObjectKey{Namespace: controller.InstaSliceOperatorNamespace,
-				Name: controller.InstasliceDaemonsetName}, daemonSet)
+			err := k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: controller.InstaSliceOperatorNamespace,
+				Name:      controller.InstasliceDaemonsetName,
+			}, daemonSet)
 			if err != nil {
 				return fmt.Errorf("failed to get DaemonSet: %v", err)
 			}
@@ -211,32 +208,9 @@ var _ = Describe("controller", Ordered, func() {
 			}, time.Minute, 5*time.Second).Should(Succeed(), "Failed to verify finalizer on Pod")
 		})
 		It("should ensure the metrics endpoint is serving metrics", func() {
-			By("creating a ClusterRole to access /metrics endpoint")
-			clusterRole := resources.GetClusterRole()
-			err := k8sClient.Create(ctx, clusterRole)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create the ClusterRole")
-
-			DeferCleanup(func() {
-				err = k8sClient.Delete(ctx, clusterRole)
-				if err != nil {
-					log.Printf("Error deleting the ClusterRole %+v: %+v", clusterRole, err)
-				}
-			})
-			By("creating a ClusterRoleBinding for the service account to allow access to metrics")
-			clusterRoleBinding := resources.GetClusterRoleBinding()
-			err = k8sClient.Create(ctx, clusterRoleBinding)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create the ClusterRoleBinding")
-
-			DeferCleanup(func() {
-				err = k8sClient.Delete(ctx, clusterRoleBinding)
-				if err != nil {
-					log.Printf("Error deleting the ClusterRoleBinding %+v: %+v", clusterRole, err)
-				}
-			})
-
 			By("validating that the metrics service is available")
 			var svc corev1.Service
-			err = k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: instasliceMetricSvc}, &svc)
+			err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: instasliceMetricSvc}, &svc)
 			Expect(err).NotTo(HaveOccurred(), "Metrics service should exist")
 
 			By("getting the service account token")
@@ -760,15 +734,6 @@ var _ = Describe("controller", Ordered, func() {
 				return longRunningCount-countRunning == 1
 			}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "1 workload should be pending")
 		})
-
-	})
-
-	AfterEach(func() {
-		if emulated {
-			for _, instasliceObj := range instasliceObjs.Items {
-				_ = k8sClient.Delete(ctx, &instasliceObj)
-			}
-		}
 	})
 })
 

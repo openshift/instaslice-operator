@@ -161,6 +161,10 @@ spec:
           - get
           - patch
           - update
+        - nonResourceURLs:
+          - /metrics
+          verbs:
+          - get
         - apiGroups:
           - authentication.k8s.io
           resources:
@@ -244,7 +248,9 @@ spec:
                   name: cert
                   readOnly: true
               securityContext:
-                runAsNonRoot: false
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
               serviceAccountName: instaslice-operator-controller-manager
               terminationGracePeriodSeconds: 10
               volumes:
