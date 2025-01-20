@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/go-logr/logr"
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,7 +28,8 @@ import (
 
 const InstaSliceOperatorNamespace = "instaslice-system"
 
-func UpdateInstasliceAllocations(ctx context.Context, kubeClient client.Client, name, podUUID string, allocation inferencev1alpha1.AllocationDetails) error {
+func UpdateInstasliceAllocations(ctx context.Context, kubeClient client.Client, name, podUUID string, allocationState inferencev1alpha1.AllocationStatus, allocation inferencev1alpha1.AllocationDetails) error {
+	log, _ := logr.FromContext(ctx)
 	var newInstaslice inferencev1alpha1.Instaslice
 	typeNamespacedName := types.NamespacedName{
 		Name:      name,
@@ -43,16 +45,29 @@ func UpdateInstasliceAllocations(ctx context.Context, kubeClient client.Client, 
 	if newInstaslice.Spec.Allocations == nil {
 		newInstaslice.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
 	}
-
-	for uuid, alloc := range newInstaslice.Spec.Allocations {
-		if alloc.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
-			delete(newInstaslice.Spec.Allocations, uuid)
-		}
-	}
 	newInstaslice.Spec.Allocations[podUUID] = allocation
+	log.Info("the updated obj", "instaslice", newInstaslice)
 	err = kubeClient.Patch(ctx, &newInstaslice, client.MergeFrom(original))
 	if err != nil {
 		return fmt.Errorf("error updating the instaslie object, %s, err: %v", name, err)
+	}
+	if newInstaslice.Status.AllocationStatus == nil {
+		newInstaslice.Status.AllocationStatus = make(map[string][]inferencev1alpha1.AllocationStatus)
+	}
+	statuses := newInstaslice.Status.AllocationStatus[podUUID]
+	exists := false
+	for _, status := range statuses {
+		if status == allocationState {
+			exists = true
+			break
+		}
+	}
+	if !exists {
+		newInstaslice.Status.AllocationStatus[podUUID] = append(newInstaslice.Status.AllocationStatus[podUUID], allocationState)
+		err = kubeClient.Status().Patch(ctx, &newInstaslice, client.MergeFrom(original))
+		if err != nil {
+			return fmt.Errorf("error updating the instaslice status: %v", err)
+		}
 	}
 	return nil
 }

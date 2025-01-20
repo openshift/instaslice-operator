@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
+	"github.com/openshift/instaslice-operator/api/v1alpha1"
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
 	"github.com/openshift/instaslice-operator/internal/controller/config"
@@ -151,12 +152,17 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		return ctrl.Result{}, nil
 	}
 
-	for _, allocations := range instaslice.Spec.Allocations {
+	for uuid, allocations := range instaslice.Spec.Allocations {
 		// TODO: we make assumption that resources would always exists to delete
 		// if user deletes abruptly, cm, instaslice resource, ci and gi may not exists
 		// handle such scenario's.
 		// delete first before creating new slice
-		if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusDeleting && allocations.Nodename == nodeName {
+		statuses := instaslice.Status.AllocationStatus[uuid]
+		if len(statuses) == 0 {
+			return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
+		}
+		mostRecentStatus := statuses[len(statuses)-1]
+		if allocations.Nodename == nodeName && allocations.PodUUID == uuid && mostRecentStatus == inferencev1alpha1.AllocationStatusDeleting {
 			log.Info("performing cleanup ", "pod", allocations.PodName)
 			if !r.Config.EmulatorModeEnable {
 				err := r.cleanUpCiAndGi(ctx, allocations)
@@ -173,8 +179,17 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				return ctrl.Result{Requeue: true}, nil
 			}
 
-			allocations.Allocationstatus = inferencev1alpha1.AllocationStatusDeleted
-			err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, allocations.PodUUID, allocations)
+			// Ensure Status.AllocationStatus exists
+			if instaslice.Status.AllocationStatus == nil {
+				instaslice.Status.AllocationStatus = make(map[string][]inferencev1alpha1.AllocationStatus)
+			}
+
+			// Check if the key already exists in the status
+			// if _, exists := instaslice.Status.AllocationStatus[podUUID]; exists {
+
+			// 	instaslice.Status.AllocationStatus[podUUID] = v1alpha1.AllocationStatusDeleted
+			// }
+			err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, allocations.PodUUID, inferencev1alpha1.AllocationStatusDeleted, allocations)
 			if err != nil {
 				log.Error(err, "error updating InstaSlice object for ", "pod", allocations.PodName)
 				return ctrl.Result{Requeue: true}, nil
@@ -182,7 +197,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			return ctrl.Result{}, nil
 		}
 		// create new slice by obeying controller allocation
-		if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusCreating && allocations.Nodename == nodeName {
+		if allocations.PodUUID == uuid && allocations.Nodename == nodeName && mostRecentStatus == inferencev1alpha1.AllocationStatusCreating {
 			// Assume pod only has one container with one GPU request
 			log.Info("creating allocation for ", "pod", allocations.PodName)
 
@@ -272,8 +287,11 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			}
 
 			if updatedAllocation, ok := updateInstasliceObject.Spec.Allocations[allocations.PodUUID]; ok {
-				updatedAllocation.Allocationstatus = inferencev1alpha1.AllocationStatusCreated
-				if err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, updatedAllocation.PodUUID, updatedAllocation); err != nil {
+				if updateInstasliceObject.Status.AllocationStatus == nil {
+					updateInstasliceObject.Status.AllocationStatus = make(map[string][]v1alpha1.AllocationStatus)
+				}
+				//updateInstasliceObject.Status.AllocationStatus[podUUID] = v1alpha1.AllocationStatusCreated
+				if err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, updatedAllocation.PodUUID, inferencev1alpha1.AllocationStatusCreated, updatedAllocation); err != nil {
 					return ctrl.Result{Requeue: true}, nil
 				}
 				return ctrl.Result{}, nil
