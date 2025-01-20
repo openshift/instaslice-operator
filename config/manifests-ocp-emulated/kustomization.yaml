@@ -3,6 +3,7 @@
 resources:
 - bases/instaslice-operator.clusterserviceversion.yaml
 - ../ocp-emulated
+- ../rbac-ocp
 - ../samples
 - ../scorecard
 
