@@ -21,16 +21,30 @@ import (
 )
 
 type Mig struct {
-	Placements     []Placement `json:"placements,omitempty"`
-	Profile        string      `json:"profile,omitempty"`
-	Giprofileid    int         `json:"giprofileid"`
-	CIProfileID    int         `json:"ciProfileid"`
-	CIEngProfileID int         `json:"ciengprofileid"`
+	// placements provide vendor profile indexes and sizes
+	// +required
+	Placements []Placement `json:"placements"`
+	// profile provides name of the vendor profile
+	// +required
+	Profile string `json:"profile"`
+	// giprofileid provides gpu instance id of a profile
+	// +required
+	GIprofileid int32 `json:"giprofileid"`
+	// ciprofileid provides compute instance id of a profile
+	// +required
+	CIProfileID int32 `json:"ciprofileid"`
+	// ciengprofileid provides compute instance engineering id of a profile
+	// +optional
+	CIEngProfileID int32 `json:"ciengprofileid"`
 }
 
 type Placement struct {
-	Size  int `json:"size"`
-	Start int `json:"start"`
+	// size represents solts consumed by a profile on gpu
+	// +required
+	Size int32 `json:"size"`
+	// start represents the begin index driven by size for a profile
+	// +required
+	Start int32 `json:"start"`
 }
 type AllocationStatus string
 
@@ -44,33 +58,69 @@ const (
 
 // Define the struct for allocation details
 type AllocationDetails struct {
-	Profile  string `json:"profile"`
-	Start    uint32 `json:"start"`
-	Size     uint32 `json:"size"`
-	PodUUID  string `json:"podUUID"`
-	GPUUUID  string `json:"gpuUUID"`
+	// profile requested by user workload
+	// +required
+	Profile string `json:"profile"`
+	// start position of a profile on a gpu
+	// +required
+	Start int32 `json:"start"`
+	// size of profile that begins from start position
+	// +required
+	Size int32 `json:"size"`
+	// podUUID represents uuid of user workload
+	// +required
+	PodUUID string `json:"podUUID"`
+	// gpuUUID represents gpu uuid of selected gpu
+	// +required
+	GPUUUID string `json:"gpuUUID"`
+	// nodename represents name of the selected node
+	// +required
 	Nodename string `json:"nodename"`
+	// allocationStatus represents status of allocation
 	// +kubebuilder:validation:Enum:=deleted;deleting;ungated;creating;created
-	Allocationstatus   AllocationStatus `json:"allocationStatus"`
-	Resourceidentifier string           `json:"resourceIdentifier"`
-	Namespace          string           `json:"namespace"`
-	PodName            string           `json:"podName"`
-	Cpu                int64            `json:"cpu"`
-	Memory             int64            `json:"memory"`
+	// +required
+	Allocationstatus AllocationStatus `json:"allocationStatus"`
+	// resourceIdentifier represents uuid used for creating configmap resource
+	// +required
+	Resourceidentifier string `json:"resourceIdentifier"`
+	// namespace represents namespace of user workload
+	// +required
+	Namespace string `json:"namespace"`
+	// podName represents name of the user workload pod
+	// +required
+	PodName string `json:"podName"`
+	// cpu represents amount of cpu requested by user workload
+	// +required
+	Cpu int64 `json:"cpu"`
+	// memory represents amount of memory requested by user workload
+	// +required
+	Memory int64 `json:"memory"`
 }
 
 // InstasliceSpec defines the desired state of Instaslice
 type InstasliceSpec struct {
-	MigGPUUUID         map[string]string            `json:"MigGPUUUID,omitempty"`
-	Allocations        map[string]AllocationDetails `json:"allocations,omitempty"`
-	Migplacement       []Mig                        `json:"migplacement,omitempty"`
-	CpuOnNodeAtBoot    int64                        `json:"cpuonnodeatboot,omitempty"`
-	MemoryOnNodeAtBoot int64                        `json:"memoryonnodeatboot,omitempty"`
+	// migGpuUuid represents uuid of the mig device created on the gpu
+	// +required
+	MigGPUUUID map[string]string `json:"migGpuUuid"`
+	// allocations represents allocation details of user workloads
+	// +optional
+	Allocations map[string]AllocationDetails `json:"allocations"`
+	// migplacement represents gpu instance, compute instance with placement for a profile
+	// +required
+	Migplacement []Mig `json:"migplacement"`
+	// cpuonnodeatboot represents total amount of cpu present on the node
+	// +required
+	CpuOnNodeAtBoot int64 `json:"cpuonnodeatboot"`
+	// memoryonnodeatboot represents total amount of memory present on the node
+	// +required
+	MemoryOnNodeAtBoot int64 `json:"memoryonnodeatboot"`
 }
 
 // InstasliceStatus defines the observed state of Instaslice
 type InstasliceStatus struct {
-	Processed bool `json:"processed,omitempty"`
+	// processed represents state of the instaslice object after daemonset creation
+	// +required
+	Processed bool `json:"processed"`
 }
 
 //+kubebuilder:object:root=true
@@ -78,11 +128,21 @@ type InstasliceStatus struct {
 
 // Instaslice is the Schema for the instaslices API
 type Instaslice struct {
-	metav1.TypeMeta   `json:",inline"`
+	// TypeMeta contains metadata about the API resource type.
+	// It includes information such as API version and kind.
+	metav1.TypeMeta `json:",inline"`
+	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec   InstasliceSpec   `json:"spec,omitempty"`
-	Status InstasliceStatus `json:"status,omitempty"`
+	// spec defines the current state of different allocations in the Instaslice resource.
+	// It contains configuration details, such as GPU allocation settings,
+	// node-specific parameters, and placement preferences.
+	// +required
+	Spec InstasliceSpec `json:"spec"`
+	// status represents the observed state of the Instaslice resource.
+	// It provides runtime information about the resource, such as whether
+	// allocations have been processed.
+	// +optional
+	Status InstasliceStatus `json:"status"`
 }
 
 //+kubebuilder:object:root=true
@@ -90,8 +150,11 @@ type Instaslice struct {
 // InstasliceList contains a list of Instaslice
 type InstasliceList struct {
 	metav1.TypeMeta `json:",inline"`
+	// +optional
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Instaslice `json:"items"`
+	// items represents an entry of instaslice resource per node
+	// +required
+	Items []Instaslice `json:"items"`
 }
 
 func init() {

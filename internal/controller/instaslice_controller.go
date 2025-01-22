@@ -60,8 +60,8 @@ type InstasliceReconciler struct {
 
 // AllocationPolicy interface with a single method
 type AllocationPolicy interface {
-	SetAllocationDetails(profileName string, newStart, size uint32, podUUID string, nodename string, processed string,
-		discoveredGiprofile int, Ciprofileid int, Ciengprofileid int, namespace string, podName string, gpuUuid string, resourceIndetifier string,
+	SetAllocationDetails(profileName string, newStart, size int32, podUUID string, nodename string, processed string,
+		discoveredGiprofile int32, Ciprofileid int32, Ciengprofileid int32, namespace string, podName string, gpuUuid string, resourceIndetifier string,
 		cpumilli int64, memory int64) *inferencev1alpha1.AllocationDetails
 }
 
@@ -513,16 +513,16 @@ func (*InstasliceReconciler) extractProfileName(limits v1.ResourceList) string {
 }
 
 // Extract NVML specific attributes for GPUs, this will change for different generations of the GPU.
-func (*InstasliceReconciler) extractGpuProfile(instaslice *inferencev1alpha1.Instaslice, profileName string) (int, int, int, int) {
-	var size int
-	var discoveredGiprofile int
-	var Ciprofileid int
-	var Ciengprofileid int
+func (*InstasliceReconciler) extractGpuProfile(instaslice *inferencev1alpha1.Instaslice, profileName string) (int32, int32, int32, int32) {
+	var size int32
+	var discoveredGiprofile int32
+	var Ciprofileid int32
+	var Ciengprofileid int32
 	for _, item := range instaslice.Spec.Migplacement {
 		if item.Profile == profileName {
 			for _, aPlacement := range item.Placements {
 				size = aPlacement.Size
-				discoveredGiprofile = item.Giprofileid
+				discoveredGiprofile = item.GIprofileid
 				Ciprofileid = item.CIProfileID
 				Ciengprofileid = item.CIEngProfileID
 				break
@@ -646,8 +646,8 @@ func (r *InstasliceReconciler) removeInstaSliceFinalizer(ctx context.Context, re
 }
 
 // Policy based allocation - FirstFit
-func (r *FirstFitPolicy) SetAllocationDetails(profileName string, newStart, size uint32, podUUID, nodename string,
-	processed string, discoveredGiprofile int, Ciprofileid int, Ciengprofileid int,
+func (r *FirstFitPolicy) SetAllocationDetails(profileName string, newStart, size int32, podUUID, nodename string,
+	processed string, discoveredGiprofile int32, Ciprofileid int32, Ciengprofileid int32,
 	namespace string, podName string, gpuUuid string, resourceIdentifier string, cpuMilli int64, memory int64,
 ) *inferencev1alpha1.AllocationDetails {
 	return &inferencev1alpha1.AllocationDetails{
