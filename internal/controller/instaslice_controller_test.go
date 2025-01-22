@@ -768,10 +768,10 @@ func TestInstasliceReconciler_extractGpuProfile(t *testing.T) {
 		name   string
 		fields fields
 		args   args
-		want   int
-		want1  int
-		want2  int
-		want3  int
+		want   int32
+		want1  int32
+		want2  int32
+		want3  int32
 	}{
 		{"Test-case", newFields, newArgs, 1, 0, 1, 2},
 	}
