@@ -6,6 +6,8 @@ toolchain go1.22.2
 
 require (
 	github.com/evanphx/json-patch v4.12.0+incompatible
+	github.com/manifestival/controller-runtime-client v0.4.0
+	github.com/manifestival/manifestival v0.7.2
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/stretchr/testify v1.10.0
@@ -69,7 +71,7 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
 	github.com/google/uuid v1.6.0
-	github.com/imdario/mergo v0.3.6 // indirect
+	github.com/imdario/mergo v0.3.10 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect

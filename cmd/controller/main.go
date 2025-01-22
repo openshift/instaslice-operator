@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"os"
@@ -41,6 +42,7 @@ import (
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
 	"github.com/openshift/instaslice-operator/internal/controller/config"
+	"github.com/openshift/instaslice-operator/internal/controller/utils"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -132,6 +134,10 @@ func main() {
 
 	config := config.ConfigFromEnvironment()
 	setupLog.Info("using config", "config", config.ToString())
+	runningOnOpenShift := utils.RunningOnOpenshift(context.Background(), mgr.GetClient())
+	if runningOnOpenShift {
+		setupLog.Info("Running on OpenShift")
+	}
 
 	if config.WebhookEnable {
 		mgr.GetWebhookServer().Register("/mutate-v1-pod", &webhook.Admission{Handler: &controller.PodAnnotator{
@@ -140,9 +146,10 @@ func main() {
 	}
 
 	if err = (&controller.InstasliceReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Config: config,
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		Config:             config,
+		RunningOnOpenShift: runningOnOpenShift,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Instaslice")
 		os.Exit(1)

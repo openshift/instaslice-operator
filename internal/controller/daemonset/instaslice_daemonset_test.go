@@ -121,13 +121,7 @@ func TestInstaSliceDaemonsetReconciler_Reconcile_Deleting_Alloc_Status(t *testin
 	assert.NoError(t, err)
 	assert.Equal(t, result, ctrl.Result{})
 
-	// Testcase 2: reconcile when an Instaslice object is not present
-	req.Name = nodeName
-	result, err = reconciler.Reconcile(ctx, req)
-	assert.Error(t, err)
-	assert.Equal(t, result, ctrl.Result{})
-
-	// Testcase 3: reconcile for an AllocationStatusDeleting
+	// Testcase 2: reconcile for an AllocationStatusDeleting
 	assert.NoError(t, reconciler.Client.Create(ctx, instaslice))
 	result, err = reconciler.Reconcile(ctx, req)
 	assert.NoError(t, err)

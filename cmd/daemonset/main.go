@@ -100,6 +100,7 @@ func main() {
 	})
 
 	config := config.ConfigFromEnvironment()
+	setupLog.Info("using config", "config", config.ToString())
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
