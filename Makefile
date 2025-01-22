@@ -178,6 +178,7 @@ cleanup-test-e2e-ocp-emulated: ocp-undeploy-emulated
 
 .PHONY: test-e2e-ocp
 test-e2e-ocp: wait-for-instaslice-operator-stable
+test-e2e-ocp: export EMULATOR_MODE=false
 test-e2e-ocp:
 	$(eval FOCUS_ARG := $(if $(FOCUS),--focus="$(FOCUS)"))
 	ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m $(FOCUS_ARG) ./test/e2e
