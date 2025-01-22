@@ -204,8 +204,8 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				// if simulator mode is on do not perform NVML calls
 				// TODO: move this logic to a new vendor specific file
 				placement := nvml.GpuInstancePlacement{
-					Start: allocations.Start,
-					Size:  allocations.Size,
+					Start: uint32(allocations.Start),
+					Size:  uint32(allocations.Size),
 				}
 				// if the GPU is healthy DeviceGetHandleByUUID should never fail
 				// if the call fails then we look in the cache so see if we can reuse
@@ -683,8 +683,8 @@ func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*infe
 				placementsForProfile := []inferencev1alpha1.Placement{}
 				for _, p := range giPossiblePlacements {
 					placement := inferencev1alpha1.Placement{
-						Size:  p.Size,
-						Start: p.Start,
+						Size:  int32(p.Size),
+						Start: int32(p.Start),
 					}
 					placementsForProfile = append(placementsForProfile, placement)
 				}
@@ -883,8 +883,8 @@ func populateMigDeviceInfos(device nvml.Device) (map[string]*MigDeviceInfo, erro
 			uuid:   parentUuid,
 			giInfo: &giInfo,
 			ciInfo: &ciInfo,
-			start:  giInfo.Placement.Start,
-			size:   giInfo.Placement.Size,
+			start:  int32(giInfo.Placement.Start),
+			size:   int32(giInfo.Placement.Size),
 		}
 
 		return nil
@@ -946,7 +946,7 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 					return nil, fmt.Errorf("unable to obtain parent gpu uuuid: %v", ret)
 				}
 
-				if gpuInstanceInfo.Placement.Start == allocations.Start && parentUuid == allocations.GPUUUID {
+				if gpuInstanceInfo.Placement.Start == uint32(allocations.Start) && parentUuid == allocations.GPUUUID {
 					gi, ret = device.GetGpuInstanceById(int(gpuInstanceInfo.Id))
 					if ret != nvml.SUCCESS {
 						log.Error(ret, "unable to obtain gi post iteration")
