@@ -47,7 +47,7 @@ func GenerateFakeCapacity(nodeName string) *inferencev1alpha1.Instaslice {
 				{
 					CIProfileID:    0,
 					CIEngProfileID: 0,
-					Giprofileid:    0,
+					GIprofileid:    0,
 					Placements: []v1alpha1.Placement{
 						{Size: 1, Start: 0},
 						{Size: 1, Start: 1},
@@ -62,7 +62,7 @@ func GenerateFakeCapacity(nodeName string) *inferencev1alpha1.Instaslice {
 				{
 					CIProfileID:    1,
 					CIEngProfileID: 0,
-					Giprofileid:    1,
+					GIprofileid:    1,
 					Placements: []v1alpha1.Placement{
 						{Size: 2, Start: 0},
 						{Size: 2, Start: 2},
@@ -73,7 +73,7 @@ func GenerateFakeCapacity(nodeName string) *inferencev1alpha1.Instaslice {
 				{
 					CIProfileID:    2,
 					CIEngProfileID: 0,
-					Giprofileid:    2,
+					GIprofileid:    2,
 					Placements: []v1alpha1.Placement{
 						{Size: 4, Start: 0},
 						{Size: 4, Start: 4},
@@ -83,7 +83,7 @@ func GenerateFakeCapacity(nodeName string) *inferencev1alpha1.Instaslice {
 				{
 					CIProfileID:    3,
 					CIEngProfileID: 0,
-					Giprofileid:    3,
+					GIprofileid:    3,
 					Placements: []v1alpha1.Placement{
 						{Size: 4, Start: 0},
 					},
@@ -92,7 +92,7 @@ func GenerateFakeCapacity(nodeName string) *inferencev1alpha1.Instaslice {
 				{
 					CIProfileID:    4,
 					CIEngProfileID: 0,
-					Giprofileid:    4,
+					GIprofileid:    4,
 					Placements: []v1alpha1.Placement{
 						{Size: 8, Start: 0},
 					},
@@ -101,7 +101,7 @@ func GenerateFakeCapacity(nodeName string) *inferencev1alpha1.Instaslice {
 				{
 					CIProfileID:    7,
 					CIEngProfileID: 0,
-					Giprofileid:    7,
+					GIprofileid:    7,
 					Placements: []v1alpha1.Placement{
 						{Size: 1, Start: 0},
 						{Size: 1, Start: 1},
@@ -116,7 +116,7 @@ func GenerateFakeCapacity(nodeName string) *inferencev1alpha1.Instaslice {
 				{
 					CIProfileID:    9,
 					CIEngProfileID: 0,
-					Giprofileid:    9,
+					GIprofileid:    9,
 					Placements: []v1alpha1.Placement{
 						{Size: 2, Start: 0},
 						{Size: 2, Start: 2},

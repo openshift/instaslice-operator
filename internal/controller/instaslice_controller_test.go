@@ -757,7 +757,7 @@ func TestInstasliceReconciler_extractGpuProfile(t *testing.T) {
 	instaslice := new(inferencev1alpha1.Instaslice)
 	instaslice.Spec = inferencev1alpha1.InstasliceSpec{
 		Migplacement: []inferencev1alpha1.Mig{
-			{Profile: "1g.5gb", Placements: []inferencev1alpha1.Placement{{Size: 1, Start: 0}}, Giprofileid: 0, CIProfileID: 1, CIEngProfileID: 2},
+			{Profile: "1g.5gb", Placements: []inferencev1alpha1.Placement{{Size: 1, Start: 0}}, GIprofileid: 0, CIProfileID: 1, CIEngProfileID: 2},
 		},
 	}
 	newArgs := args{
@@ -842,14 +842,14 @@ func TestInstasliceReconciler_podMapFunc(t *testing.T) {
 func TestFirstFitPolicy_SetAllocationDetails(t *testing.T) {
 	type args struct {
 		profileName         string
-		newStart            uint32
-		size                uint32
+		newStart            int32
+		size                int32
 		podUUID             string
 		nodename            string
 		processed           string
-		discoveredGiprofile int
-		Ciprofileid         int
-		Ciengprofileid      int
+		discoveredGiprofile int32
+		Ciprofileid         int32
+		Ciengprofileid      int32
 		namespace           string
 		podName             string
 		gpuUuid             string

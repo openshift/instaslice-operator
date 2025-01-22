@@ -29,22 +29,22 @@ type Mig struct {
 	Profile string `json:"profile"`
 	// giprofileid provides gpu instance id of a profile
 	// +required
-	Giprofileid int `json:"giprofileid"`
-	// ciProfileid provides compute instance id of a profile
+	GIprofileid int32 `json:"giprofileid"`
+	// ciprofileid provides compute instance id of a profile
 	// +required
-	CIProfileID int `json:"ciProfileid"`
+	CIProfileID int32 `json:"ciprofileid"`
 	// ciengprofileid provides compute instance engineering id of a profile
 	// +optional
-	CIEngProfileID int `json:"ciengprofileid"`
+	CIEngProfileID int32 `json:"ciengprofileid"`
 }
 
 type Placement struct {
 	// size represents solts consumed by a profile on gpu
 	// +required
-	Size int `json:"size"`
+	Size int32 `json:"size"`
 	// start represents the begin index driven by size for a profile
 	// +required
-	Start int `json:"start"`
+	Start int32 `json:"start"`
 }
 type AllocationStatus string
 
@@ -63,10 +63,10 @@ type AllocationDetails struct {
 	Profile string `json:"profile"`
 	// start position of a profile on a gpu
 	// +required
-	Start uint32 `json:"start"`
+	Start int32 `json:"start"`
 	// size of profile that begins from start position
 	// +required
-	Size uint32 `json:"size"`
+	Size int32 `json:"size"`
 	// podUUID represents uuid of user workload
 	// +required
 	PodUUID string `json:"podUUID"`
@@ -103,7 +103,7 @@ type InstasliceSpec struct {
 	// +required
 	MigGPUUUID map[string]string `json:"migGpuUuid"`
 	// allocations represents allocation details of user workloads
-	// +required
+	// +optional
 	Allocations map[string]AllocationDetails `json:"allocations"`
 	// migplacement represents gpu instance, compute instance with placement for a profile
 	// +required
@@ -141,7 +141,7 @@ type Instaslice struct {
 	// status represents the observed state of the Instaslice resource.
 	// It provides runtime information about the resource, such as whether
 	// allocations have been processed.
-	// +required
+	// +optional
 	Status InstasliceStatus `json:"status"`
 }
 

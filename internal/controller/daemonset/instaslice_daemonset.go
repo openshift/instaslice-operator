@@ -91,8 +91,8 @@ type MigDeviceInfo struct {
 	uuid   string
 	giInfo *nvml.GpuInstanceInfo
 	ciInfo *nvml.ComputeInstanceInfo
-	start  uint32
-	size   uint32
+	start  int32
+	size   int32
 }
 
 func NewInstasliceDaemonsetReconciler(client client.Client, scheme *runtime.Scheme, nodeName string, config *config.Config) (*InstaSliceDaemonsetReconciler, error) {
@@ -217,15 +217,15 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					log.Error(retCodeForDevice, err.Error())
 					return ctrl.Result{}, err
 				}
-				var giProfileId, ciProfileId int
+				var giProfileId, ciProfileId int32
 				for _, item := range instaslice.Spec.Migplacement {
 					if item.Profile == allocations.Profile {
-						giProfileId = item.Giprofileid
-						ciProfileId = item.Giprofileid
+						giProfileId = item.GIprofileid
+						ciProfileId = item.GIprofileid
 						break
 					}
 				}
-				giProfileInfo, retCodeForGi := device.GetGpuInstanceProfileInfo(giProfileId)
+				giProfileInfo, retCodeForGi := device.GetGpuInstanceProfileInfo(int(giProfileId))
 				if retCodeForGi != nvml.SUCCESS {
 					log.Error(retCodeForGi, "error getting GPU instance profile info", "giProfileInfo", giProfileInfo, "retCodeForGi", retCodeForGi)
 				}
@@ -677,8 +677,8 @@ func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*infe
 				placementsForProfile := []inferencev1alpha1.Placement{}
 				for _, p := range giPossiblePlacements {
 					placement := inferencev1alpha1.Placement{
-						Size:  int(p.Size),
-						Start: int(p.Start),
+						Size:  p.Size,
+						Start: p.Start,
 					}
 					placementsForProfile = append(placementsForProfile, placement)
 				}
@@ -686,9 +686,9 @@ func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus() (*infe
 				aggregatedPlacementsForProfile := inferencev1alpha1.Mig{
 					Placements:     placementsForProfile,
 					Profile:        profile.String(),
-					Giprofileid:    i,
-					CIProfileID:    profile.CIProfileID,
-					CIEngProfileID: profile.CIEngProfileID,
+					GIprofileid:    int32(i),
+					CIProfileID:    int32(profile.CIProfileID),
+					CIEngProfileID: int32(profile.CIEngProfileID),
 				}
 				instaslice.Spec.Migplacement = append(instaslice.Spec.Migplacement, aggregatedPlacementsForProfile)
 			}
@@ -910,7 +910,7 @@ func (r *InstaSliceDaemonsetReconciler) getInstasliceObject(ctx context.Context,
 	return &updateInstasliceObject, nil
 }
 
-func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx context.Context, device nvml.Device, allocations inferencev1alpha1.AllocationDetails, giProfileInfo nvml.GpuInstanceProfileInfo, placement nvml.GpuInstancePlacement, ciProfileId int) (map[string]*MigDeviceInfo, error) {
+func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx context.Context, device nvml.Device, allocations inferencev1alpha1.AllocationDetails, giProfileInfo nvml.GpuInstanceProfileInfo, placement nvml.GpuInstancePlacement, ciProfileId int32) (map[string]*MigDeviceInfo, error) {
 	log := logr.FromContext(ctx)
 
 	log.Info("creating slice for", "pod", allocations.PodName)
@@ -955,7 +955,7 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 		}
 	}
 
-	ciProfileInfo, ret := gi.GetComputeInstanceProfileInfo(ciProfileId, 0)
+	ciProfileInfo, ret := gi.GetComputeInstanceProfileInfo(int(ciProfileId), 0)
 	if ret != nvml.SUCCESS {
 		log.Error(ret, "error getting compute instance profile info", "pod", allocations.PodName)
 		return nil, fmt.Errorf("error getting compute instance profile info: %v", ret)
