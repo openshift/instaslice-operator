@@ -381,9 +381,9 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 			}
 		} else {
 			if !instaslice.Status.Processed || (instaslice.Name == "" && instaslice.Namespace == "") {
-				_, errForDiscoveringGpus := r.discoverMigEnabledGpuWithSlices()
-				if errForDiscoveringGpus != nil {
-					log.Error(errForDiscoveringGpus, "error discovering GPUs")
+				_, err := r.discoverMigEnabledGpuWithSlices()
+				if err != nil {
+					log.Error(err, "error discovering GPUs")
 				}
 			}
 		}
@@ -503,8 +503,8 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 
 	// Object exists, update its status
 	instaslice.Status.Processed = true
-	if errForStatus := r.Status().Update(customCtx, instaslice); errForStatus != nil {
-		return nil, errForStatus
+	if err = r.Status().Update(customCtx, instaslice); err != nil {
+		return nil, err
 	}
 
 	// Patch the node capacity to reflect the total GPU memory
