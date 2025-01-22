@@ -167,7 +167,7 @@ check-gpu-nodes:
 	fi
 
 .PHONY: test-e2e-ocp-emulated
-test-e2e-ocp-emulated: container-build-ocp docker-push bundle-ocp-emulated bundle-build-ocp bundle-push deploy-cert-manager-ocp deploy-instaslice-emulated-on-ocp 
+test-e2e-ocp-emulated: container-build-ocp docker-push bundle-ocp-emulated bundle-build-ocp bundle-push deploy-cert-manager-ocp deploy-instaslice-on-ocp
 	hack/label-node.sh
 	$(eval FOCUS_ARG := $(if $(FOCUS),--focus="$(FOCUS)"))
 	ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m $(FOCUS_ARG) ./test/e2e
@@ -235,8 +235,8 @@ deploy-instaslice-emulated-on-kind:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
 		hack/deploy-instaslice-emulated-on-kind.sh
 
-.PHONY: deploy-instaslice-emulated-on-ocp
-deploy-instaslice-emulated-on-ocp:
+.PHONY: deploy-instaslice-on-ocp
+deploy-instaslice-on-ocp:
 	oc new-project instaslice-system
 	operator-sdk run bundle ${BUNDLE_IMG} -n instaslice-system
 
@@ -334,10 +334,7 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 	$(KUSTOMIZE) build config/$(KUSTOMIZATION) | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(KUBECTL) apply -f -
 
 .PHONY: ocp-deploy
-ocp-deploy: KUSTOMIZATION=manifests-ocp
-ocp-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/$(KUSTOMIZATION) | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(KUBECTL) apply -f -
+ocp-deploy: container-build-ocp docker-push bundle-ocp bundle-build-ocp bundle-push deploy-instaslice-on-ocp
 
 .PHONY: deploy-emulated ## Deploy controller in emulator mode
 deploy-emulated: KUSTOMIZATION=emulator
