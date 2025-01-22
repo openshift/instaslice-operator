@@ -172,6 +172,21 @@ spec:
           - get
           - patch
           - update
+        - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes
+          verbs:
+          - list
+        - apiGroups:
+          - security.openshift.io
+          resources:
+          - securitycontextconstraints
+          verbs:
+          - create
+          - get
+          - update
+          - watch
         - nonResourceURLs:
           - /metrics
           verbs:
@@ -264,6 +279,21 @@ spec:
           - get
           - patch
           - update
+        - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes
+          verbs:
+          - list
+        - apiGroups:
+          - security.openshift.io
+          resources:
+          - securitycontextconstraints
+          verbs:
+          - create
+          - get
+          - update
+          - watch
         - nonResourceURLs:
           - /metrics
           verbs:
@@ -325,6 +355,7 @@ spec:
                 - name: EMULATOR_MODE
                   value: "false"
                 image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:334367c69666e18ae7e4acc6d81c47dff79c004ffbaad8031fb0a0ecb7cdb92f
+                imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
                     path: /healthz

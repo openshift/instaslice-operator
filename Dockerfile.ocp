@@ -16,6 +16,7 @@ RUN go build -o bin/manager cmd/controller/main.go
 FROM registry.access.redhat.com/ubi9/ubi-micro
 WORKDIR /
 COPY --from=build /workspace/bin/manager .
+COPY --from=build /workspace/config /config
 USER 65532:65532
 
 ENTRYPOINT ["/manager"]

@@ -52,6 +52,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 WORKDIR /
 
 COPY --from=build /workspace/bin/daemonset .
+COPY --from=build /workspace/config /config
 
 # Install / upgrade packages here that are required to resolve CVEs
 ARG CVE_UPDATES
