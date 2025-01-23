@@ -38,6 +38,7 @@ import (
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller/config"
+	"github.com/openshift/instaslice-operator/internal/controller/utils"
 )
 
 func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
@@ -111,11 +112,9 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 				Allocationstatus: inferencev1alpha1.AllocationStatusDeleted,
 			}
 			Expect(fakeClient.Update(ctx, instaslice)).To(Succeed())
-
-			result, err := r.deleteInstasliceAllocation(ctx, instaslice.Name, instaslice.Spec.Allocations[podUUID])
+			err := utils.UpdateOrDeleteInstasliceAllocations(ctx, r.Client, instaslice.Name, nil)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal(ctrl.Result{}))
 
 			updatedInstaSlice := &inferencev1alpha1.Instaslice{}
 			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: instaslice.Name, Namespace: InstaSliceOperatorNamespace}, updatedInstaSlice)).To(Succeed())

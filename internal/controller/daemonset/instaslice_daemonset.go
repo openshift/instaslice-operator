@@ -174,7 +174,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			}
 
 			allocations.Allocationstatus = inferencev1alpha1.AllocationStatusDeleted
-			err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, allocations.PodUUID, allocations)
+			err := utils.UpdateOrDeleteInstasliceAllocations(ctx, r.Client, instaslice.Name, &allocations)
 			if err != nil {
 				log.Error(err, "error updating InstaSlice object for ", "pod", allocations.PodName)
 				return ctrl.Result{Requeue: true}, nil
@@ -273,7 +273,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 			if updatedAllocation, ok := updateInstasliceObject.Spec.Allocations[allocations.PodUUID]; ok {
 				updatedAllocation.Allocationstatus = inferencev1alpha1.AllocationStatusCreated
-				if err := utils.UpdateInstasliceAllocations(ctx, r.Client, instaslice.Name, updatedAllocation.PodUUID, updatedAllocation); err != nil {
+				if err := utils.UpdateOrDeleteInstasliceAllocations(ctx, r.Client, instaslice.Name, &updatedAllocation); err != nil {
 					return ctrl.Result{Requeue: true}, nil
 				}
 				return ctrl.Result{}, nil
@@ -328,7 +328,7 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 			}
 			log.Info("successfully destroyed GPU Instance", "GpuInstanceId", migdevice.giInfo.Id)
 
-			log.Info("deleted ci and gi for", "pod", allocation.PodName, logMigInfosSingleLine(migInfos))
+			log.Info("deleted ci and gi for", "pod", "miginfos", allocation.PodName, logMigInfosSingleLine(migInfos))
 			return nil
 
 		}
