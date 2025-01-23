@@ -619,7 +619,7 @@ var _ = Describe("controller", Ordered, func() {
 			acceleratorMemory, exists := node.Status.Capacity[corev1.ResourceName(controller.QuotaResourceName)]
 			Expect(exists).To(BeTrue(), fmt.Sprintf("%s not found in Node object", controller.QuotaResourceName))
 
-			Expect(acceleratorMemory.Value()/(1024*1024*1024)).To(Equal(int64(totalMemoryGB)),
+			Expect((acceleratorMemory.Value() / (1024 * 1024 * 1024) * int64(len(instasliceObjs.Items)))).To(Equal(int64(totalMemoryGB)),
 				fmt.Sprintf("%s on node does not match total GPU memory in Instaslice object", controller.QuotaResourceName))
 		})
 		It("should verify run to completion GPU workload on GPUs", func() {
