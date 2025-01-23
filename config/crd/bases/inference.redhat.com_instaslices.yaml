@@ -37,17 +37,17 @@ spec:
           metadata:
             type: object
           spec:
-            description: |-
-              spec defines the current state of different allocations in the Instaslice resource.
-              It contains configuration details, such as GPU allocation settings,
-              node-specific parameters, and placement preferences.
+            description: InstasliceSpec defines the desired state of Instaslice
             properties:
+              MigGPUUUID:
+                additionalProperties:
+                  type: string
+                type: object
               allocations:
                 additionalProperties:
                   description: Define the struct for allocation details
                   properties:
                     allocationStatus:
-                      description: allocationStatus represents status of allocation
                       enum:
                       - deleted
                       - deleting
@@ -56,43 +56,29 @@ spec:
                       - created
                       type: string
                     cpu:
-                      description: cpu represents amount of cpu requested by user
-                        workload
                       format: int64
                       type: integer
                     gpuUUID:
-                      description: gpuUUID represents gpu uuid of selected gpu
                       type: string
                     memory:
-                      description: memory represents amount of memory requested by
-                        user workload
                       format: int64
                       type: integer
                     namespace:
-                      description: namespace represents namespace of user workload
                       type: string
                     nodename:
-                      description: nodename represents name of the selected node
                       type: string
                     podName:
-                      description: podName represents name of the user workload pod
                       type: string
                     podUUID:
-                      description: podUUID represents uuid of user workload
                       type: string
                     profile:
-                      description: profile requested by user workload
                       type: string
                     resourceIdentifier:
-                      description: resourceIdentifier represents uuid used for creating
-                        configmap resource
                       type: string
                     size:
-                      description: size of profile that begins from start position
                       format: int32
                       type: integer
                     start:
-                      description: start position of a profile on a gpu
                       format: int32
                       type: integer
                   required:
@@ -109,55 +95,28 @@ spec:
                   - size
                   - start
                   type: object
-                description: allocations represents allocation details of user workloads
                 type: object
               cpuonnodeatboot:
-                description: cpuonnodeatboot represents total amount of cpu present
-                  on the node
                 format: int64
                 type: integer
               memoryonnodeatboot:
-                description: memoryonnodeatboot represents total amount of memory
-                  present on the node
                 format: int64
                 type: integer
-              migGpuUuid:
-                additionalProperties:
-                  type: string
-                description: migGpuUuid represents uuid of the mig device created
-                  on the gpu
-                type: object
               migplacement:
-                description: migplacement represents gpu instance, compute instance
-                  with placement for a profile
                 items:
                   properties:
-                    ciengprofileid:
-                      description: ciengprofileid provides compute instance engineering
-                        id of a profile
-                      format: int32
+                    ciProfileid:
                       type: integer
-                    ciprofileid:
-                      description: ciprofileid provides compute instance id of a profile
-                      format: int32
+                    ciengprofileid:
                       type: integer
                     giprofileid:
-                      description: giprofileid provides gpu instance id of a profile
-                      format: int32
                       type: integer
                     placements:
-                      description: placements provide vendor profile indexes and sizes
                       items:
                         properties:
                           size:
-                            description: size represents solts consumed by a profile
-                              on gpu
-                            format: int32
                             type: integer
                           start:
-                            description: start represents the begin index driven by
-                              size for a profile
-                            format: int32
                             type: integer
                         required:
                         - size
@@ -165,36 +124,20 @@ spec:
                         type: object
                       type: array
                     profile:
-                      description: profile provides name of the vendor profile
                       type: string
                   required:
-                  - ciprofileid
+                  - ciProfileid
+                  - ciengprofileid
                   - giprofileid
-                  - placements
-                  - profile
                   type: object
                 type: array
-            required:
-            - cpuonnodeatboot
-            - memoryonnodeatboot
-            - migGpuUuid
-            - migplacement
             type: object
           status:
-            description: |-
-              status represents the observed state of the Instaslice resource.
-              It provides runtime information about the resource, such as whether
-              allocations have been processed.
+            description: InstasliceStatus defines the observed state of Instaslice
             properties:
               processed:
-                description: processed represents state of the instaslice object after
-                  daemonset creation
                 type: boolean
-            required:
-            - processed
             type: object
-        required:
-        - spec
         type: object
     served: true
     storage: true

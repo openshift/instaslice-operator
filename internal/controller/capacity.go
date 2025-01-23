@@ -67,14 +67,14 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 			}
 			newStart := r.getStartIndexFromPreparedState(updatedInstaSliceObject, gpuuuid, profileName)
 			//size cannot be 9 atleast for A100s 40GB/80GB and H100 variants
-			notValidIndex := int32(9)
+			notValidIndex := uint32(9)
 			if newStart == notValidIndex {
 				//Move to next GPU
 				continue
 			}
 			size, discoveredGiprofile, Ciprofileid, Ciengprofileid := r.extractGpuProfile(updatedInstaSliceObject, profileName)
 			resourceIdentifier := pod.Spec.Containers[0].EnvFrom[0].ConfigMapRef.Name
-			allocDetails := policy.SetAllocationDetails(profileName, newStart, size,
+			allocDetails := policy.SetAllocationDetails(profileName, newStart, uint32(size),
 				string(pod.UID), updatedInstaSliceObject.Name, string(inferencev1alpha1.AllocationStatusCreating), discoveredGiprofile,
 				Ciprofileid, Ciengprofileid, pod.Namespace, pod.Name, gpuuuid, resourceIdentifier, userCpuCoresCeil, userMemoryBytes)
 			return allocDetails, nil
@@ -94,10 +94,10 @@ func sortGPUs(updatedInstaSliceObject *inferencev1alpha1.Instaslice) []string {
 }
 
 // accounting logic that finds the correct GPU and index where a slice could be placed.
-func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferencev1alpha1.Instaslice, gpuUUID string, profileName string) int32 {
+func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferencev1alpha1.Instaslice, gpuUUID string, profileName string) uint32 {
 	//TODO: generalize, A100 and H100 have 8 indexes for 3g and 7g and 7 for rest, so go with 8 and we are bounded by
 	//only valid placement indexes for a profile.
-	var gpuAllocatedIndex [8]int32
+	var gpuAllocatedIndex [8]uint32
 	// clean slate init
 	for i := range gpuAllocatedIndex {
 		gpuAllocatedIndex[i] = 0
@@ -121,10 +121,10 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 	}
 	if allAllocated {
 		// invalid index
-		return int32(9)
+		return uint32(9)
 	}
-	var neededContinousSlot int32
-	var possiblePlacements []int32
+	var neededContinousSlot int
+	var possiblePlacements []int
 	for _, placement := range instaslice.Spec.Migplacement {
 		if placement.Profile == profileName {
 			neededContinousSlot = placement.Placements[0].Size
@@ -136,26 +136,26 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 	}
 	//TODO: generalize for other hardware models like A30, no slices can be placed on 9th index
 	//if we return 9 then assume no valid index is found.
-	var newStart = int32(9)
+	var newStart = uint32(9)
 	for _, value := range possiblePlacements {
 		if gpuAllocatedIndex[value] == 0 {
 			if neededContinousSlot == 1 {
-				newStart = value
+				newStart = uint32(value)
 				break
 			}
 			if neededContinousSlot == 2 {
-				if value+neededContinousSlot <= int32(len(gpuAllocatedIndex)) {
+				if value+neededContinousSlot <= len(gpuAllocatedIndex) {
 					if gpuAllocatedIndex[value] == 0 && gpuAllocatedIndex[value+1] == 0 {
-						newStart = value
+						newStart = uint32(value)
 						break
 					}
 				}
 
 			}
 			if neededContinousSlot == 4 {
-				if value+neededContinousSlot <= int32(len(gpuAllocatedIndex)) {
+				if value+neededContinousSlot <= len(gpuAllocatedIndex) {
 					if gpuAllocatedIndex[value] == 0 && gpuAllocatedIndex[value+1] == 0 && gpuAllocatedIndex[value+2] == 0 && gpuAllocatedIndex[value+3] == 0 {
-						newStart = value
+						newStart = uint32(value)
 						break
 					}
 				}
@@ -163,12 +163,12 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 
 			if neededContinousSlot == 8 {
 				//special case
-				if value+neededContinousSlot <= int32(len(gpuAllocatedIndex)) {
+				if value+neededContinousSlot <= len(gpuAllocatedIndex) {
 					if gpuAllocatedIndex[value] == 0 && gpuAllocatedIndex[value+1] == 0 &&
 						gpuAllocatedIndex[value+2] == 0 && gpuAllocatedIndex[value+3] == 0 &&
 						gpuAllocatedIndex[value+4] == 0 && gpuAllocatedIndex[value+5] == 0 &&
 						gpuAllocatedIndex[value+6] == 0 && gpuAllocatedIndex[value+7] == 0 {
-						newStart = value
+						newStart = uint32(value)
 					}
 				}
 			}
