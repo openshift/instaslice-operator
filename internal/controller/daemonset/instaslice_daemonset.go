@@ -231,7 +231,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				}
 
 				log.Info("The profile id is", "giProfileInfo", giProfileInfo.Id, "Memory", giProfileInfo.MemorySizeMB, "pod", allocations.PodUUID)
-				createCiAndGi := true
 				createdMigInfos, err = populateMigDeviceInfos(device)
 				if err != nil {
 					// MIG walking can fail but at this point we are unsure if slices exists
@@ -239,23 +238,19 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					log.Error(err, "walking MIG devices failed")
 					return ctrl.Result{}, err
 				}
-				// we should skip ci and gi creation for cases where etcd update fails or configmap creation
-				// fails.
+				// we should delay ci and gi creation if an slice already exists when alloction is in state creating
+				// delay is important for supporting short tasks
 				for _, migDevice := range createdMigInfos {
 					if migDevice.uuid == allocations.GPUUUID && migDevice.start == allocations.Start {
-						createCiAndGi = false
-						log.Info("skipping ci and gi creation for ", "pod", allocations.PodName, "parentgpu", allocations.GPUUUID, "start", allocations.Start)
-						break
-					}
-				}
-				// if ci and gi exist, we need to assign those to the respective allocation
-				if createCiAndGi {
-					createdMigInfos, err = r.createSliceAndPopulateMigInfos(ctx, device, allocations, giProfileInfo, placement, ciProfileId)
-					if err != nil {
-						log.Error(err, "mig creation not successful")
 						return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, nil
 					}
 				}
+				createdMigInfos, err = r.createSliceAndPopulateMigInfos(ctx, device, allocations, giProfileInfo, placement, ciProfileId)
+				if err != nil {
+					log.Error(err, "mig creation not successful")
+					return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, nil
+				}
+
 				for migUuid, migDevice := range createdMigInfos {
 					if migDevice.start == allocations.Start && migDevice.uuid == allocations.GPUUUID && giProfileInfo.Id == migDevice.giInfo.ProfileId {
 						if err := r.createConfigMap(ctx, migUuid, existingAllocations.Namespace, allocations.Resourceidentifier); err != nil {
