@@ -37,6 +37,7 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 		return nil, err
 	}
 	nodeAvailableCpu, nodeAvailableMemory := r.availableClassicalResourcesOnNode(updatedInstaSliceObject)
+	log.FromContext(ctx).Info("del me", "nodeAvailableCpu", nodeAvailableCpu, "nodeAvailableMemory", nodeAvailableMemory)
 	cpuRequest, ok := pod.Spec.Containers[0].Resources.Requests[v1.ResourceCPU]
 	// a user pod can never provide cpu and memory requests in that case
 	// continue with just GPU allocation
@@ -61,11 +62,12 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 	if userCpuCoresCeil < nodeAvailableCpu && userMemoryBytes < nodeAvailableMemory {
 		//TODO: discover this value, this may work for A100 and H100 for now.
 		gpuUUIDs := sortGPUs(updatedInstaSliceObject)
+		log.FromContext(ctx).Info("del me", "sortedgpus", gpuUUIDs)
 		for _, gpuuuid := range gpuUUIDs {
 			if updatedInstaSliceObject.Spec.Allocations == nil {
 				updatedInstaSliceObject.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
 			}
-			newStart := r.getStartIndexFromPreparedState(updatedInstaSliceObject, gpuuuid, profileName)
+			newStart := r.getStartIndexFromPreparedState(ctx, updatedInstaSliceObject, gpuuuid, profileName)
 			//size cannot be 9 atleast for A100s 40GB/80GB and H100 variants
 			notValidIndex := int32(9)
 			if newStart == notValidIndex {
@@ -94,7 +96,7 @@ func sortGPUs(updatedInstaSliceObject *inferencev1alpha1.Instaslice) []string {
 }
 
 // accounting logic that finds the correct GPU and index where a slice could be placed.
-func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferencev1alpha1.Instaslice, gpuUUID string, profileName string) int32 {
+func (*InstasliceReconciler) getStartIndexFromPreparedState(ctx context.Context, instaslice *inferencev1alpha1.Instaslice, gpuUUID string, profileName string) int32 {
 	//TODO: generalize, A100 and H100 have 8 indexes for 3g and 7g and 7 for rest, so go with 8 and we are bounded by
 	//only valid placement indexes for a profile.
 	var gpuAllocatedIndex [8]int32
@@ -111,6 +113,7 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 			}
 		}
 	}
+	log.FromContext(ctx).Info("del me", "gpuAllocatedIndex", gpuAllocatedIndex)
 	// Check if all indices are allocated
 	allAllocated := true
 	for _, allocated := range gpuAllocatedIndex {
@@ -134,6 +137,7 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 			break
 		}
 	}
+	log.FromContext(ctx).Info("del me", "possibleplacements", possiblePlacements)
 	//TODO: generalize for other hardware models like A30, no slices can be placed on 9th index
 	//if we return 9 then assume no valid index is found.
 	var newStart = int32(9)
@@ -141,6 +145,7 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 		if gpuAllocatedIndex[value] == 0 {
 			if neededContinousSlot == 1 {
 				newStart = value
+				log.FromContext(ctx).Info("del me", "newstart", newStart)
 				break
 			}
 			if neededContinousSlot == 2 {
@@ -175,7 +180,7 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 		}
 
 	}
-
+	log.FromContext(ctx).Info("del me", "rnewstart", newStart)
 	return newStart
 }
 
