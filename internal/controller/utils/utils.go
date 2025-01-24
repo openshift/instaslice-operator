@@ -32,7 +32,7 @@ import (
 
 const InstaSliceOperatorNamespace = "instaslice-system"
 
-func UpdateInstasliceAllocations(ctx context.Context, kubeClient client.Client, name, podUUID string, allocation inferencev1alpha1.AllocationDetails) error {
+func UpdateOrDeleteInstasliceAllocations(ctx context.Context, kubeClient client.Client, name string, allocation *inferencev1alpha1.AllocationDetails) error {
 	var newInstaslice inferencev1alpha1.Instaslice
 	typeNamespacedName := types.NamespacedName{
 		Name:      name,
@@ -49,12 +49,19 @@ func UpdateInstasliceAllocations(ctx context.Context, kubeClient client.Client, 
 		newInstaslice.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
 	}
 
+	var keysToDelete []string
 	for uuid, alloc := range newInstaslice.Spec.Allocations {
 		if alloc.Allocationstatus == inferencev1alpha1.AllocationStatusDeleted {
-			delete(newInstaslice.Spec.Allocations, uuid)
+			keysToDelete = append(keysToDelete, uuid)
 		}
 	}
-	newInstaslice.Spec.Allocations[podUUID] = allocation
+
+	for _, uuid := range keysToDelete {
+		delete(newInstaslice.Spec.Allocations, uuid)
+	}
+	if allocation != nil {
+		newInstaslice.Spec.Allocations[allocation.PodUUID] = *allocation
+	}
 	err = kubeClient.Patch(ctx, &newInstaslice, client.MergeFrom(original))
 	if err != nil {
 		return fmt.Errorf("error updating the instaslie object, %s, err: %v", name, err)
