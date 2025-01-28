@@ -78,6 +78,7 @@ spec:
           capabilities:
             drop:
             - "ALL"
+          runAsUser: 1000
         livenessProbe:
           httpGet:
             path: /healthz
