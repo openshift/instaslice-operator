@@ -593,6 +593,9 @@ var _ = Describe("controller", Ordered, func() {
 				// Here, we compare the accelerator memory with the memory fetched from parsing the GPU name
 				// Ex: Parsing the "NVIDIA A100-SXM4-40GB" GPU results in 40GB
 				// This gets compared with the memory that the daemonset patches the node
+				if len(instasliceObjs.Items) == 0 {
+					Fail("No Instaslice items found")
+				}
 				Expect(len(instasliceObjs.Items[0].Spec.MigGPUUUID)).To(Equal(2))
 				for _, instasliceObj := range instasliceObjs.Items {
 					memoryGB, err := daemonset.CalculateTotalMemoryGB(emulated, instasliceObj.Spec.MigGPUUUID)
@@ -628,6 +631,9 @@ var _ = Describe("controller", Ordered, func() {
 			}
 			err := k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
 			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve Instaslice object")
+			if len(instasliceObjs.Items) == 0 {
+				Fail("No Instaslice items found")
+			}
 			referenceLen := len(instasliceObjs.Items[0].Spec.MigGPUUUID)
 			for _, obj := range instasliceObjs.Items {
 				currentLen := len(obj.Spec.MigGPUUUID)
@@ -684,6 +690,9 @@ var _ = Describe("controller", Ordered, func() {
 			podTemplateLongRunning := resources.GetTestGPULongRunningWorkload()
 			err := k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
 			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve Instaslice object")
+			if len(instasliceObjs.Items) == 0 {
+				Fail("No Instaslice items found")
+			}
 			referenceLen := len(instasliceObjs.Items[0].Spec.MigGPUUUID)
 			for _, obj := range instasliceObjs.Items {
 				currentLen := len(obj.Spec.MigGPUUUID)
