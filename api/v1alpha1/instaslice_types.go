@@ -1,5 +1,5 @@
 /*
-Copyright 2024.
+Copyright 2025.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,143 +17,204 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	types "k8s.io/apimachinery/pkg/types"
 )
 
+type (
+	AllocationStatusDaemonset  string
+	AllocationStatusController string
+)
+
+const (
+	AllocationStatusDeleted  AllocationStatusDaemonset  = "deleted"
+	AllocationStatusDeleting AllocationStatusController = "deleting"
+	AllocationStatusUngated  AllocationStatusController = "ungated"
+	AllocationStatusCreating AllocationStatusController = "creating"
+	AllocationStatusCreated  AllocationStatusDaemonset  = "created"
+)
+
+type AllocationRequest struct {
+	// profile specifies the MIG slice profile for allocation
+	// +optional
+	Profile string `json:"profile"`
+
+	// resources specifies resource requirements for the allocation
+	// +optional
+	Resources corev1.ResourceRequirements `json:"resources"`
+
+	// podRef is a reference to the gated Pod requesting the allocation
+	// +optional
+	PodRef corev1.ObjectReference `json:"podRef"`
+}
+
+type AllocationStatus struct {
+	// allocationStatusDaemonset represents the current status of the allocation from the DaemonSet's perspective
+	// +optional
+	AllocationStatusDaemonset `json:"allocationStatusDaemonset"`
+
+	// allocationStatusDaemonset represents the current status of the allocation from the Controller's perspective
+	// +optional
+	AllocationStatusController `json:"allocationStatusController"`
+}
+type AllocationResult struct {
+	// conditions provide additional information about the allocation
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	// +patchStrategy=merge
+	// +patchMergeKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
+
+	// migPlacement specifies the MIG placement details
+	// +required
+	MigPlacement Placement `json:"migPlacement"`
+
+	// gpuUUID represents the UUID of the selected GPU
+	// +required
+	GPUUUID string `json:"gpuUUID"`
+
+	// nodename represents the name of the selected node
+	// +required
+	Nodename types.NodeName `json:"nodename"`
+
+	// allocationStatus represents the current status of the allocation
+	// +required
+	AllocationStatus AllocationStatus `json:"allocationStatus"`
+
+	// configMapResourceIdentifier represents the UUID used for creating the ConfigMap resource
+	// +required
+	ConfigMapResourceIdentifier types.UID `json:"configMapResourceIdentifier"`
+}
+
+type DiscoveredGPU struct {
+	// gpuUuid represents the UUID of the GPU
+	// +required
+	GPUUUID string `json:"gpuUuid"`
+
+	// gpuName represents the name of the GPU
+	// +required
+	GPUName string `json:"gpuName"`
+
+	// gpuMemory represents the memory capacity of the GPU
+	// +required
+	GPUMemory resource.Quantity `json:"gpuMemory"`
+}
+
+type DiscoveredNodeResources struct {
+	// nodeGpus represents the discovered mig enabled GPUs on the node
+	// +required
+	NodeGPUs []DiscoveredGPU `json:"nodeGpus"`
+
+	// migPlacement represents GPU instance, compute instance with placement for a profile
+	// +required
+	MigPlacement map[string]Mig `json:"migPlacement"`
+
+	// nodeResources represents the resource list of the node at boot time
+	// +required
+	NodeResources corev1.ResourceList `json:"nodeResources"`
+}
+
 type Mig struct {
-	// placements provide vendor profile indexes and sizes
+	// placements specify vendor profile indexes and sizes
 	// +required
 	Placements []Placement `json:"placements"`
-	// profile provides name of the vendor profile
+
+	// giProfileId provides the GPU instance ID of a profile
 	// +required
-	Profile string `json:"profile"`
-	// giprofileid provides gpu instance id of a profile
+	GIProfileID int32 `json:"giProfileId"`
+
+	// ciProfileId provides the compute instance ID of a profile
 	// +required
-	GIprofileid int32 `json:"giprofileid"`
-	// ciprofileid provides compute instance id of a profile
-	// +required
-	CIProfileID int32 `json:"ciprofileid"`
-	// ciengprofileid provides compute instance engineering id of a profile
+	CIProfileID int32 `json:"ciProfileId"`
+
+	// ciEngProfileId provides the compute instance engineering ID of a profile
 	// +optional
-	CIEngProfileID int32 `json:"ciengprofileid"`
+	CIEngProfileID int32 `json:"ciEngProfileId,omitempty"`
 }
 
 type Placement struct {
-	// size represents solts consumed by a profile on gpu
+	// size represents slots consumed by a profile on GPU
 	// +required
 	Size int32 `json:"size"`
-	// start represents the begin index driven by size for a profile
+
+	// start represents the starting index driven by size for a profile
 	// +required
 	Start int32 `json:"start"`
 }
-type AllocationStatus string
 
-const (
-	AllocationStatusDeleted  AllocationStatus = "deleted"
-	AllocationStatusDeleting AllocationStatus = "deleting"
-	AllocationStatusUngated  AllocationStatus = "ungated"
-	AllocationStatusCreating AllocationStatus = "creating"
-	AllocationStatusCreated  AllocationStatus = "created"
-)
-
-// Define the struct for allocation details
-type AllocationDetails struct {
-	// profile requested by user workload
-	// +required
-	Profile string `json:"profile"`
-	// start position of a profile on a gpu
-	// +required
-	Start int32 `json:"start"`
-	// size of profile that begins from start position
-	// +required
-	Size int32 `json:"size"`
-	// podUUID represents uuid of user workload
-	// +required
-	PodUUID string `json:"podUUID"`
-	// gpuUUID represents gpu uuid of selected gpu
-	// +required
-	GPUUUID string `json:"gpuUUID"`
-	// nodename represents name of the selected node
-	// +required
-	Nodename string `json:"nodename"`
-	// allocationStatus represents status of allocation
-	// +kubebuilder:validation:Enum:=deleted;deleting;ungated;creating;created
-	// +required
-	Allocationstatus AllocationStatus `json:"allocationStatus"`
-	// resourceIdentifier represents uuid used for creating configmap resource
-	// +required
-	Resourceidentifier string `json:"resourceIdentifier"`
-	// namespace represents namespace of user workload
-	// +required
-	Namespace string `json:"namespace"`
-	// podName represents name of the user workload pod
-	// +required
-	PodName string `json:"podName"`
-	// cpu represents amount of cpu requested by user workload
-	// +required
-	Cpu int64 `json:"cpu"`
-	// memory represents amount of memory requested by user workload
-	// +required
-	Memory int64 `json:"memory"`
-}
-
-// InstasliceSpec defines the desired state of Instaslice
 type InstasliceSpec struct {
-	// migGpuUuid represents uuid of the mig device created on the gpu
-	// +required
-	MigGPUUUID map[string]string `json:"migGpuUuid"`
-	// allocations represents allocation details of user workloads
+	// podAllocationRequests specifies the allocation requests per pod
 	// +optional
-	Allocations map[string]AllocationDetails `json:"allocations"`
-	// migplacement represents gpu instance, compute instance with placement for a profile
-	// +required
-	Migplacement []Mig `json:"migplacement"`
-	// cpuonnodeatboot represents total amount of cpu present on the node
-	// +required
-	CpuOnNodeAtBoot int64 `json:"cpuonnodeatboot"`
-	// memoryonnodeatboot represents total amount of memory present on the node
-	// +required
-	MemoryOnNodeAtBoot int64 `json:"memoryonnodeatboot"`
+	PodAllocationRequests map[types.UID]AllocationRequest `json:"podAllocationRequests"`
 }
 
-// InstasliceStatus defines the observed state of Instaslice
 type InstasliceStatus struct {
-	// processed represents state of the instaslice object after daemonset creation
-	// +required
-	Processed bool `json:"processed"`
+	// conditions represent the observed state of the Instaslice object
+	// For example:
+	//   conditions:
+	//   - type: Ready
+	//     status: "True"
+	//     lastTransitionTime: "2025-01-22T12:34:56Z"
+	//     reason: "GPUsAccessible"
+	//     message: "All discovered GPUs are accessible and the driver is healthy."
+	//
+	// Or, in an error scenario (driver not responding):
+	//   conditions:
+	//   - type: Ready
+	//     status: "False"
+	//     lastTransitionTime: "2025-01-22T12:34:56Z"
+	//     reason: "DriverError"
+	//     message: "Could not communicate with the GPU driver on the node."
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	// +patchStrategy=merge
+	// +patchMergeKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
+
+	// podAllocationResults specify the allocation results per pod
+	// +optional
+	PodAllocationResults map[types.UID]AllocationResult `json:"podAllocationResults"`
+
+	// nodeResources specifies the discovered resources of the node
+	// +optional
+	NodeResources DiscoveredNodeResources `json:"nodeResources"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
 // Instaslice is the Schema for the instaslices API
+// +kubebuilder:validation:Required
+// +kubebuilder:subresource:status
 type Instaslice struct {
-	// TypeMeta contains metadata about the API resource type.
-	// It includes information such as API version and kind.
 	metav1.TypeMeta `json:",inline"`
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// spec defines the current state of different allocations in the Instaslice resource.
-	// It contains configuration details, such as GPU allocation settings,
-	// node-specific parameters, and placement preferences.
-	// +required
-	Spec InstasliceSpec `json:"spec"`
-	// status represents the observed state of the Instaslice resource.
-	// It provides runtime information about the resource, such as whether
-	// allocations have been processed.
+
+	// spec specifies the GPU slice requirements by workload pods
 	// +optional
-	Status InstasliceStatus `json:"status"`
+	Spec InstasliceSpec `json:"spec"`
+
+	// status provides the information about provisioned allocations and health of the instaslice object
+	// +optional
+	Status InstasliceStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// InstasliceList contains a list of Instaslice
+// InstasliceList contains a list of Instaslice resources
+// +optional
 type InstasliceList struct {
 	metav1.TypeMeta `json:",inline"`
 	// +optional
 	metav1.ListMeta `json:"metadata,omitempty"`
-	// items represents an entry of instaslice resource per node
-	// +required
+
+	// items provides the list of instaslice objects in the cluster
+	// +optional
 	Items []Instaslice `json:"items"`
 }
 

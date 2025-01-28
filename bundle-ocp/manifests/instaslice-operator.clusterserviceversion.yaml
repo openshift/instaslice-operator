@@ -22,22 +22,11 @@ metadata:
       ]
     capabilities: Basic Install
     categories: Drivers and plugins
-    containerImage: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:7eb142486518ca6021b5df03939b2fac191882a03a3a785c7e387f399ee58784
-    createdAt: "2024-11-01T14:26:33Z"
+    containerImage: quay.io/harpatil/instaslice2-controller:7.0
+    createdAt: "2025-02-13T19:46:42Z"
     description: InstaSlice works with GPU operator to create mig slices on demand
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
-    features.operators.openshift.io/cnf: "false"		
-    features.operators.openshift.io/cni: "false"		
-    features.operators.openshift.io/csi: "false"		
-    features.operators.openshift.io/disconnected: "true"		
-    features.operators.openshift.io/fips-compliant: "false"		
-    features.operators.openshift.io/proxy-aware: "false"		
-    features.operators.openshift.io/tls-profiles: "false"		
-    features.operators.openshift.io/token-auth-aws: "false"		
-    features.operators.openshift.io/token-auth-azure: "false"		
-    features.operators.openshift.io/token-auth-gcp: "false"		
-    operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift Platform Plus"]'
     repository: https://github.com/openshift/instaslice-operator
     support: https://github.com/openshift/instaslice-operator/issues
   name: instaslice-operator.v0.0.2
@@ -121,20 +110,13 @@ spec:
           - ""
           resources:
           - nodes
+          - nodes/status
           verbs:
           - get
           - list
           - patch
           - update
           - watch
-        - apiGroups:
-          - ""
-          resources:
-          - nodes/status
-          verbs:
-          - get
-          - patch
-          - update
         - apiGroups:
           - apps
           resources:
@@ -228,20 +210,13 @@ spec:
           - ""
           resources:
           - nodes
+          - nodes/status
           verbs:
           - get
           - list
           - patch
           - update
           - watch
-        - apiGroups:
-          - ""
-          resources:
-          - nodes/status
-          verbs:
-          - get
-          - patch
-          - update
         - apiGroups:
           - apps
           resources:
@@ -351,10 +326,10 @@ spec:
                 - /manager
                 env:
                 - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
-                  value: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:f3f163d8c64020a010c87e436a6a75e2539150503767d6be193c09174c6efcda
+                  value: quay.io/harpatil/instaslice2-daemonset:7.0
                 - name: EMULATOR_MODE
-                  value: "true"
-                image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:7eb142486518ca6021b5df03939b2fac191882a03a3a785c7e387f399ee58784
+                  value: "false"
+                image: quay.io/harpatil/instaslice2-controller:7.0
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -476,7 +451,7 @@ spec:
     name: Codeflare
     url: https://github.com/openshift/instaslice-operator
   relatedImages:
-  - image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:f3f163d8c64020a010c87e436a6a75e2539150503767d6be193c09174c6efcda
+  - image: quay.io/harpatil/instaslice2-daemonset:7.0
     name: instaslice-daemonset
   version: 0.0.2
   webhookdefinitions:

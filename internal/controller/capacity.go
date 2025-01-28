@@ -19,11 +19,12 @@ package controller
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -31,63 +32,78 @@ import (
 // before making an allocation.
 
 // find node, gpu and gpu index to place the slice
-func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, instaslice *inferencev1alpha1.Instaslice, profileName string, policy AllocationPolicy, pod *v1.Pod) (*inferencev1alpha1.AllocationDetails, error) {
+func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, instaslice *inferencev1alpha1.Instaslice, profileName string, policy AllocationPolicy, pod *v1.Pod) (*inferencev1alpha1.AllocationRequest, *inferencev1alpha1.AllocationResult, error) {
 	updatedInstaSliceObject, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	nodeAvailableCpu, nodeAvailableMemory := r.availableClassicalResourcesOnNode(updatedInstaSliceObject)
-	cpuRequest, ok := pod.Spec.Containers[0].Resources.Requests[v1.ResourceCPU]
-	// a user pod can never provide cpu and memory requests in that case
-	// continue with just GPU allocation
-	// consider only pod requests for allocation and not limits
-	var userCpuCoresCeil int64 = 0
-	if ok {
-		cpuMillicores := cpuRequest.MilliValue()
-		cpuCores := float64(cpuMillicores) / 1000.0
-		userCpuCoresCeil = int64(math.Ceil(cpuCores))
-		log.FromContext(ctx).Info("cpu request obtained ", "pod", pod.Name, "value", userCpuCoresCeil)
+
+	availableResources := r.availableClassicalResourcesOnNode(updatedInstaSliceObject)
+	nodeAvailableCpu := availableResources[v1.ResourceCPU]
+	nodeAvailableMemory := availableResources[v1.ResourceMemory]
+
+	cpuRequest, cpuOk := pod.Spec.Containers[0].Resources.Requests[v1.ResourceCPU]
+	if cpuOk {
+		log.FromContext(ctx).Info("cpu request obtained", "pod", pod.Name, "value", cpuRequest.String())
 	} else {
-		log.FromContext(ctx).Info("cpu request not set for ", "pod", pod.Name)
+		log.FromContext(ctx).Info("cpu request not set for", "pod", pod.Name)
 	}
-	memoryRequest, ok := pod.Spec.Containers[0].Resources.Requests[v1.ResourceMemory]
-	var userMemoryBytes int64 = 0
-	if ok {
-		userMemoryBytes = memoryRequest.Value()
-		log.FromContext(ctx).Info("memory request obtained ", "pod", pod.Name, "value", userMemoryBytes)
+	memoryRequest, memOk := pod.Spec.Containers[0].Resources.Requests[v1.ResourceMemory]
+	if memOk {
+		log.FromContext(ctx).Info("memory request obtained", "pod", pod.Name, "value", memoryRequest.String())
 	} else {
-		log.FromContext(ctx).Info(" memory requests not set for ", "pod", pod.Name)
+		log.FromContext(ctx).Info("memory request not set for", "pod", pod.Name)
 	}
-	if userCpuCoresCeil < nodeAvailableCpu && userMemoryBytes < nodeAvailableMemory {
-		//TODO: discover this value, this may work for A100 and H100 for now.
+
+	if cpuRequest.Cmp(nodeAvailableCpu) < 0 && memoryRequest.Cmp(nodeAvailableMemory) < 0 {
+		// TODO: Discover GPU UUIDs for selection. (This may work for A100 and H100 for now.)
 		gpuUUIDs := sortGPUs(updatedInstaSliceObject)
 		for _, gpuuuid := range gpuUUIDs {
-			if updatedInstaSliceObject.Spec.Allocations == nil {
-				updatedInstaSliceObject.Spec.Allocations = make(map[string]inferencev1alpha1.AllocationDetails)
+			if updatedInstaSliceObject.Spec.PodAllocationRequests == nil {
+				updatedInstaSliceObject.Spec.PodAllocationRequests = make(map[types.UID]inferencev1alpha1.AllocationRequest)
 			}
+
 			newStart := r.getStartIndexFromPreparedState(updatedInstaSliceObject, gpuuuid, profileName)
-			//size cannot be 9 atleast for A100s 40GB/80GB and H100 variants
+			// For example, a newStart of 9 is considered invalid.
 			notValidIndex := int32(9)
 			if newStart == notValidIndex {
-				//Move to next GPU
+				// Move to next GPU if the index is not valid.
 				continue
 			}
+
 			size, discoveredGiprofile, Ciprofileid, Ciengprofileid := r.extractGpuProfile(updatedInstaSliceObject, profileName)
 			resourceIdentifier := pod.Spec.Containers[0].EnvFrom[0].ConfigMapRef.Name
-			allocDetails := policy.SetAllocationDetails(profileName, newStart, size,
-				string(pod.UID), updatedInstaSliceObject.Name, string(inferencev1alpha1.AllocationStatusCreating), discoveredGiprofile,
-				Ciprofileid, Ciengprofileid, pod.Namespace, pod.Name, gpuuuid, resourceIdentifier, userCpuCoresCeil, userMemoryBytes)
-			return allocDetails, nil
+
+			allocRequest, allocResult := policy.SetAllocationDetails(
+				profileName,
+				newStart,
+				size,
+				pod.GetUID(),
+				types.NodeName(updatedInstaSliceObject.GetName()),
+				inferencev1alpha1.AllocationStatus{AllocationStatusController: inferencev1alpha1.AllocationStatusCreating},
+				discoveredGiprofile,
+				Ciprofileid,
+				Ciengprofileid,
+				pod.GetNamespace(),
+				pod.GetName(),
+				gpuuuid,
+				types.UID(resourceIdentifier),
+				v1.ResourceList{
+					v1.ResourceCPU:    cpuRequest,
+					v1.ResourceMemory: memoryRequest,
+				},
+			)
+			return allocRequest, allocResult, nil
 		}
 	}
 
-	return nil, fmt.Errorf("failed to find allocatable node and gpu")
+	return nil, nil, fmt.Errorf("failed to find allocatable node and gpu")
 }
 
 func sortGPUs(updatedInstaSliceObject *inferencev1alpha1.Instaslice) []string {
-	gpuUUIDs := make([]string, 0, len(updatedInstaSliceObject.Spec.MigGPUUUID))
-	for gpuuuid := range updatedInstaSliceObject.Spec.MigGPUUUID {
-		gpuUUIDs = append(gpuUUIDs, gpuuuid)
+	gpuUUIDs := make([]string, 0, len(updatedInstaSliceObject.Status.NodeResources.NodeGPUs))
+	for _, discoveredGpu := range updatedInstaSliceObject.Status.NodeResources.NodeGPUs {
+		gpuUUIDs = append(gpuUUIDs, discoveredGpu.GPUUUID)
 	}
 	sort.Strings(gpuUUIDs)
 	return gpuUUIDs
@@ -104,10 +120,10 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 	}
 	// deleted allocations can be reused
 	// ungated allocations are already counted in prepared
-	for _, item := range instaslice.Spec.Allocations {
-		if item.GPUUUID == gpuUUID && item.Allocationstatus != inferencev1alpha1.AllocationStatusDeleted {
-			for i := 0; i < int(item.Size); i++ {
-				gpuAllocatedIndex[int(item.Start)+i] = 1
+	for _, allocResult := range instaslice.Status.PodAllocationResults {
+		if allocResult.GPUUUID == gpuUUID && allocResult.AllocationStatus.AllocationStatusDaemonset != inferencev1alpha1.AllocationStatusDeleted {
+			for i := 0; i < int(allocResult.MigPlacement.Size); i++ {
+				gpuAllocatedIndex[int(allocResult.MigPlacement.Start)+i] = 1
 			}
 		}
 	}
@@ -125,8 +141,8 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 	}
 	var neededContinousSlot int32
 	var possiblePlacements []int32
-	for _, placement := range instaslice.Spec.Migplacement {
-		if placement.Profile == profileName {
+	for profile, placement := range instaslice.Status.NodeResources.MigPlacement {
+		if profile == profileName {
 			neededContinousSlot = placement.Placements[0].Size
 			for _, placement := range placement.Placements {
 				possiblePlacements = append(possiblePlacements, placement.Start)
@@ -179,14 +195,30 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 	return newStart
 }
 
-func (*InstasliceReconciler) availableClassicalResourcesOnNode(instaslice *inferencev1alpha1.Instaslice) (int64, int64) {
-	var allocatedCpu int64 = 0
-	var allocatedMemory int64 = 0
-	for _, allocations := range instaslice.Spec.Allocations {
-		allocatedCpu = allocatedCpu + allocations.Cpu
-		allocatedMemory = allocatedMemory + allocations.Memory
+func (r *InstasliceReconciler) availableClassicalResourcesOnNode(instaslice *inferencev1alpha1.Instaslice) v1.ResourceList {
+	allocatedCpu := resource.MustParse("0")
+	allocatedMemory := resource.MustParse("0")
+
+	for _, allocRequest := range instaslice.Spec.PodAllocationRequests {
+		if cpuReq := allocRequest.Resources.Requests.Cpu(); cpuReq != nil {
+			allocatedCpu.Add(*cpuReq)
+		}
+		if memReq := allocRequest.Resources.Requests.Memory(); memReq != nil {
+			allocatedMemory.Add(*memReq)
+		}
 	}
-	availableCpu := instaslice.Spec.CpuOnNodeAtBoot - allocatedCpu
-	availableMemory := instaslice.Spec.MemoryOnNodeAtBoot - allocatedMemory
-	return availableCpu, availableMemory
+
+	totalNodeCpu := instaslice.Status.NodeResources.NodeResources.Cpu()
+	totalNodeMem := instaslice.Status.NodeResources.NodeResources.Memory()
+
+	availableCpu := totalNodeCpu.DeepCopy()
+	availableCpu.Sub(allocatedCpu)
+
+	availableMemory := totalNodeMem.DeepCopy()
+	availableMemory.Sub(allocatedMemory)
+
+	return v1.ResourceList{
+		v1.ResourceCPU:    availableCpu,
+		v1.ResourceMemory: availableMemory,
+	}
 }

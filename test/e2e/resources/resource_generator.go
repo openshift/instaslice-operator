@@ -343,7 +343,7 @@ func GetMultiPods() []*corev1.Pod {
 						Name:  "vectoradd",
 						Image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8",
 						Command: []string{
-							"sh", "-c", "sleep 40",
+							"sh", "-c", "sleep 400",
 						},
 						Resources: corev1.ResourceRequirements{
 							Limits: corev1.ResourceList{
