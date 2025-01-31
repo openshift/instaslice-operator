@@ -61,6 +61,9 @@ func UpdateOrDeleteInstasliceAllocations(ctx context.Context, kubeClient client.
 	}
 	if allocation != nil {
 		newInstaslice.Spec.Allocations[allocation.PodUUID] = *allocation
+		if !newInstaslice.Status.Processed {
+			newInstaslice.Status.Processed = true
+		}
 	}
 	err = kubeClient.Patch(ctx, &newInstaslice, client.MergeFrom(original))
 	if err != nil {

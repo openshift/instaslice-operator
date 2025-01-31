@@ -42,6 +42,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logr "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -151,6 +152,23 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		return ctrl.Result{}, nil
 	}
 
+	// get the node object to watch out for any related events
+	var node v1.Node
+	if err = r.Get(ctx, client.ObjectKey{Name: nodeName}, &node); err != nil {
+		log.Error(err, "error getting the node object with ", "name", nodeName)
+		return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
+	}
+	for _, cond := range node.Status.Conditions {
+		if cond.Type == v1.NodeReady && cond.Status == v1.ConditionFalse {
+			log.Error(fmt.Errorf("node not ready"), "node not ready", "nodename", nodeName)
+			// update the instaslice object status
+			instaslice.Status.Processed = false
+			if err = r.Status().Update(ctx, &instaslice); err != nil {
+				log.Error(err, "error updating the instaslice status object", "name", instaslice.Name)
+				return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
+			}
+		}
+	}
 	for _, allocations := range instaslice.Spec.Allocations {
 		// TODO: we make assumption that resources would always exists to delete
 		// if user deletes abruptly, cm, instaslice resource, ci and gi may not exists
@@ -182,7 +200,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			return ctrl.Result{}, nil
 		}
 		// create new slice by obeying controller allocation
-		if allocations.Allocationstatus == inferencev1alpha1.AllocationStatusCreating && allocations.Nodename == nodeName {
+		if (allocations.Allocationstatus == inferencev1alpha1.AllocationStatusCreating && allocations.Nodename == nodeName) || (!instaslice.Status.Processed && allocations.Allocationstatus == inferencev1alpha1.AllocationStatusUngated) {
 			// Assume pod only has one container with one GPU request
 			log.Info("creating allocation for ", "pod", allocations.PodName)
 
@@ -420,6 +438,7 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 func (r *InstaSliceDaemonsetReconciler) setupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&inferencev1alpha1.Instaslice{}).Named("InstaSliceDaemonSet").
+		Watches(&v1.Node{}, &handler.EnqueueRequestForObject{}). // also watch out for node events
 		Complete(r)
 }
 

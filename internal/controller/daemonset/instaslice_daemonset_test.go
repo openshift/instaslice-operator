@@ -156,6 +156,10 @@ func TestInstaSliceDaemonsetReconciler_Reconcile_Creating_Alloc_Status(t *testin
 
 	// Create a background context
 	ctx := context.Background()
+	// Create a node object so that the daemonset would not return a requeued reconcile request
+	node := v1.Node{}
+	node.Name = nodeName
+	assert.NoError(t, client.Create(ctx, &node))
 
 	// Create an instaslice object
 	instaslice := newInstaslice(nodeName, podUUID, inferencev1alpha1.AllocationStatusCreating)
