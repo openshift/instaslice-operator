@@ -353,7 +353,7 @@ spec:
                 - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
                   value: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:b9e9be344a98dcc4aa512b80a21c3b3bcf573aea0ee85c57528a67f445486820
                 - name: EMULATOR_MODE
-                  value: "false"
+                  value: "true"
                 image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:9011485d2980fc825c99bc8edc47ed1873fe2d8041a1b47b1619da951375d2e4
                 imagePullPolicy: Always
                 livenessProbe:

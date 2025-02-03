@@ -224,3 +224,50 @@ spec:
               - --namespace
               - "$(params.namespace)"
               - "$(params.bundleImage)"
+    - name: e2e-tests
+      runAfter:
+        - deploy-operator
+      taskSpec:
+        volumes:
+          - name: credentials
+            emptyDir: {}
+        steps:
+          - name: get-kubeconfig
+            ref:
+              resolver: git
+              params:
+                - name: url
+                  value: https://github.com/konflux-ci/build-definitions.git
+                - name: revision
+                  value: main
+                - name: pathInRepo
+                  value: stepactions/eaas-get-ephemeral-cluster-credentials/0.1/eaas-get-ephemeral-cluster-credentials.yaml
+            params:
+              - name: eaasSpaceSecretRef
+                value: $(tasks.provision-eaas-space.results.secretRef)
+              - name: clusterName
+                value: "$(tasks.provision-cluster.results.clusterName)"
+              - name: credentials
+                value: credentials
+          - name: run-tests
+            env:
+              - name: KUBECONFIG
+                value: "/credentials/$(steps.get-kubeconfig.results.kubeconfig)"
+            volumeMounts:
+              - name: credentials
+                mountPath: /credentials
+            image: registry.redhat.io/rhel9/go-toolset:1.22.5
+            script: |
+              # git clone https://github.com/cpmeadors/instaslice-operator # for testing
+              git clone https://github.com/openshift/instaslice-operator
+              curl -L -o oc.tar.gz https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/latest-4.17/openshift-client-linux-amd64-rhel9.tar.gz \
+                && tar -xvzf oc.tar.gz \
+                && chmod +x kubectl oc \
+                && mkdir ~/bin \
+                && mv oc kubectl ~/bin/
+              export PATH=$PATH:~/bin:~/go/bin
+              cd instaslice-operator
+              # git checkout e2e-test-steps # for testing
+              go install github.com/onsi/ginkgo/v2/ginkgo
+              go get github.com/onsi/gomega/...
+              make test-e2e-konflux
