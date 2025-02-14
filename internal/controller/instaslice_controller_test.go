@@ -414,6 +414,15 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 							ConfigMapResourceIdentifier: "fake-configmap-uid",
 						},
 					},
+					NodeResources: inferencev1alpha1.DiscoveredNodeResources{BootID: "fake-boot-id"},
+				},
+			}
+			node := &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: instaslice.Name,
+				},
+				Status: v1.NodeStatus{
+					NodeInfo: v1.NodeSystemInfo{BootID: instaslice.Status.NodeResources.BootID},
 				},
 			}
 
@@ -442,6 +451,7 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 				},
 			}
 
+			Expect(fakeClient.Create(ctx, node)).To(Succeed())
 			Expect(fakeClient.Create(ctx, daemonSet)).To(Succeed())
 			Expect(fakeClient.Create(ctx, instaslice)).To(Succeed())
 			Expect(fakeClient.Create(ctx, pod)).To(Succeed())
