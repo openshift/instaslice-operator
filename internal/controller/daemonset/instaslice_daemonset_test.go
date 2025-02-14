@@ -110,6 +110,14 @@ func TestInstaSliceDaemonsetReconciler_Reconcile_Deleting_Alloc_Status(t *testin
 		Name:      nodeName,
 		Namespace: controller.InstaSliceOperatorNamespace,
 	}
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: instaslice.Name,
+		},
+		Status: v1.NodeStatus{
+			NodeInfo: v1.NodeSystemInfo{BootID: instaslice.Status.NodeResources.BootID},
+		},
+	}
 	req := ctrl.Request{
 		NamespacedName: typeNamespacedName,
 	}
@@ -121,6 +129,7 @@ func TestInstaSliceDaemonsetReconciler_Reconcile_Deleting_Alloc_Status(t *testin
 	assert.Equal(t, result, ctrl.Result{})
 
 	// Testcase 2: reconcile for an AllocationStatusDeleting
+	assert.NoError(t, reconciler.Client.Create(ctx, node))
 	assert.NoError(t, reconciler.Client.Create(ctx, instaslice))
 	result, err = reconciler.Reconcile(ctx, req)
 	assert.NoError(t, err)
@@ -165,8 +174,17 @@ func TestInstaSliceDaemonsetReconciler_Reconcile_Creating_Alloc_Status(t *testin
 	req := ctrl.Request{
 		NamespacedName: typeNamespacedName,
 	}
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: instaslice.Name,
+		},
+		Status: v1.NodeStatus{
+			NodeInfo: v1.NodeSystemInfo{BootID: instaslice.Status.NodeResources.BootID},
+		},
+	}
 
 	// Testcase 4: reconcile for an AllocationStatusDeleting
+	assert.NoError(t, reconciler.Client.Create(ctx, node))
 	assert.NoError(t, reconciler.Client.Create(ctx, instaslice))
 	result, err := reconciler.Reconcile(ctx, req)
 	assert.NoError(t, err)
@@ -187,6 +205,7 @@ func newInstaslice(name, podUUID string, status inferencev1alpha1.AllocationStat
 					AllocationStatus: status,
 				},
 			},
+			NodeResources: inferencev1alpha1.DiscoveredNodeResources{BootID: "random-boot-id"},
 		},
 	}
 }
@@ -222,6 +241,7 @@ func TestInstaSliceDaemonsetReconciler_addMigCapacityToNode(t *testing.T) {
 	// create a fake node object
 	node := &v1.Node{}
 	node.Name = nodeName
+	node.Status.NodeInfo.BootID = "random-boot-id"
 	assert.NoError(t, client.Create(ctx, node))
 	// Create an instaslice object
 	instaslice := newInstaslice(nodeName, podUUID, inferencev1alpha1.AllocationStatus{AllocationStatusController: inferencev1alpha1.AllocationStatusCreating})
