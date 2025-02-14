@@ -115,6 +115,10 @@ type DiscoveredNodeResources struct {
 	// nodeResources represents the resource list of the node at boot time
 	// +required
 	NodeResources corev1.ResourceList `json:"nodeResources"`
+
+	// bootId represents the current boot id of the node
+	// +kubebuilder:validation:Required
+	BootID string `json:"bootId"`
 }
 
 type Mig struct {
