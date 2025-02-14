@@ -261,20 +261,22 @@ var _ = Describe("controller", Ordered, func() {
 			})
 
 			Eventually(func() error {
-				err := k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
+				err := k8sClient.List(ctx, instasliceObjs, &client.ListOptions{
+					Namespace: namespace,
+				})
 				if err != nil {
 					return err
 				}
 
 				for _, instaslice := range instasliceObjs.Items {
-					for _, allocation := range instaslice.Spec.Allocations {
-						if allocation.PodName == pod.Name {
-							return nil
-						}
+					podAllocationResult := instaslice.Status.PodAllocationResults[pod.UID]
+					if podAllocationResult.GPUUUID != "" {
+						return nil
 					}
 				}
-				return fmt.Errorf("No valid allocation found for the pod %+v ", pod)
-			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid allocations")
+
+				return fmt.Errorf("No valid allocation result found for the pod %q in namespace %q", pod.Name, pod.Namespace)
+			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid PodAllocationResult")
 		})
 		It("should create a pod with small requests and check the allocation in instaslice object", func() {
 			pod := resources.GetVectorAddSmallReqPod()
@@ -294,10 +296,9 @@ var _ = Describe("controller", Ordered, func() {
 					return err
 				}
 				for _, instaslice := range instasliceObjs.Items {
-					for _, allocation := range instaslice.Spec.Allocations {
-						if allocation.PodName == pod.Name {
-							return nil
-						}
+					podAllocationResult := instaslice.Status.PodAllocationResults[pod.UID]
+					if podAllocationResult.GPUUUID != "" {
+						return nil
 					}
 				}
 				return fmt.Errorf("No valid allocation found for the pod %+v ", pod)
@@ -321,12 +322,12 @@ var _ = Describe("controller", Ordered, func() {
 				}
 
 				for _, instaslice := range instasliceObjs.Items {
-					for _, allocation := range instaslice.Spec.Allocations {
-						if allocation.PodName == pod.Name {
-							return fmt.Errorf("PodName %s found in allocations", pod.Name)
-						}
+					podAllocationResult := instaslice.Status.PodAllocationResults[pod.UID]
+					if podAllocationResult.GPUUUID != "" {
+						return fmt.Errorf("GPU allocation found for the pod %+v", pod)
 					}
 				}
+
 				return nil
 			}, 1*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid allocations")
 		})
@@ -349,10 +350,9 @@ var _ = Describe("controller", Ordered, func() {
 				}
 
 				for _, instaslice := range instasliceObjs.Items {
-					for _, allocation := range instaslice.Spec.Allocations {
-						if allocation.PodName == pod.Name {
-							return fmt.Errorf("PodName %s found in allocations", pod.Name)
-						}
+					podAllocationResult := instaslice.Status.PodAllocationResults[pod.UID]
+					if podAllocationResult.GPUUUID != "" {
+						return fmt.Errorf("GPU allocation found for the pod %+v", pod)
 					}
 				}
 				return nil
@@ -382,7 +382,7 @@ var _ = Describe("controller", Ordered, func() {
 					return fmt.Errorf("no pods found for deployment %s", deployment.Name)
 				}
 
-				podName := podList.Items[0].Name
+				pod := podList.Items[0]
 
 				err = k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
 				if err != nil {
@@ -390,13 +390,13 @@ var _ = Describe("controller", Ordered, func() {
 				}
 
 				for _, instaslice := range instasliceObjs.Items {
-					for _, allocation := range instaslice.Spec.Allocations {
-						if allocation.PodName == podName {
-							return nil
-						}
+					podAllocationResult := instaslice.Status.PodAllocationResults[pod.UID]
+					if podAllocationResult.GPUUUID != "" {
+						return nil
 					}
 				}
-				return fmt.Errorf("No valid allocation found for the pod %s", podName)
+
+				return fmt.Errorf("No valid allocation found for the pod %s", pod.Name)
 			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid allocations")
 		})
 		It("should create a statefulset and check the allocation in instaslice object", func() {
@@ -423,7 +423,7 @@ var _ = Describe("controller", Ordered, func() {
 					return fmt.Errorf("no pods found for statefulSet %s", statefulSet.Name)
 				}
 
-				podName := podList.Items[0].Name
+				pod := podList.Items[0]
 
 				err = k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
 				if err != nil {
@@ -431,13 +431,12 @@ var _ = Describe("controller", Ordered, func() {
 				}
 
 				for _, instaslice := range instasliceObjs.Items {
-					for _, allocation := range instaslice.Spec.Allocations {
-						if allocation.PodName == podName {
-							return nil
-						}
+					podAllocationResult := instaslice.Status.PodAllocationResults[pod.UID]
+					if podAllocationResult.GPUUUID != "" {
+						return nil
 					}
 				}
-				return fmt.Errorf("No valid allocation found for the pod %s", podName)
+				return fmt.Errorf("No valid allocation found for the pod %s", pod.Name)
 			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid allocations")
 		})
 		It("should create a job and check the allocation in instaslice object", func() {
@@ -467,20 +466,20 @@ var _ = Describe("controller", Ordered, func() {
 					return fmt.Errorf("no pods found for job %s", job.Name)
 				}
 
-				podName := podList.Items[0].Name
+				pod := podList.Items[0]
 
 				err = k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
 				if err != nil {
 					return err
 				}
+
 				for _, instaslice := range instasliceObjs.Items {
-					for _, allocation := range instaslice.Spec.Allocations {
-						if allocation.PodName == podName {
-							return nil
-						}
+					podAllocationResult := instaslice.Status.PodAllocationResults[pod.UID]
+					if podAllocationResult.GPUUUID != "" {
+						return nil
 					}
 				}
-				return fmt.Errorf("No valid allocation found for the pod %s", podName)
+				return fmt.Errorf("No valid allocation found for the pod %s", pod.Name)
 			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Expected Instaslice object with valid allocations")
 		})
 		It("should verify all MIG slice capacities are as expected before submitting pods", func() {
@@ -488,14 +487,16 @@ var _ = Describe("controller", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve Instaslice object")
 
 			for _, instasliceObj := range instasliceObjs.Items {
+				numGPUs := len(instasliceObj.Status.NodeResources.NodeGPUs)
+
 				expectedCapacities := map[string]int{
-					"instaslice.redhat.com/mig-1g.5gb":    len(instasliceObj.Spec.MigGPUUUID) * 7,
-					"instaslice.redhat.com/mig-1g.10gb":   len(instasliceObj.Spec.MigGPUUUID) * 4,
-					"instaslice.redhat.com/mig-1g.5gb+me": len(instasliceObj.Spec.MigGPUUUID) * 7,
-					"instaslice.redhat.com/mig-2g.10gb":   len(instasliceObj.Spec.MigGPUUUID) * 3,
-					"instaslice.redhat.com/mig-3g.20gb":   len(instasliceObj.Spec.MigGPUUUID) * 2,
-					"instaslice.redhat.com/mig-4g.20gb":   len(instasliceObj.Spec.MigGPUUUID) * 1,
-					"instaslice.redhat.com/mig-7g.40gb":   len(instasliceObj.Spec.MigGPUUUID) * 1,
+					"instaslice.redhat.com/mig-1g.5gb":    numGPUs * 7,
+					"instaslice.redhat.com/mig-1g.10gb":   numGPUs * 4,
+					"instaslice.redhat.com/mig-1g.5gb+me": numGPUs * 7,
+					"instaslice.redhat.com/mig-2g.10gb":   numGPUs * 3,
+					"instaslice.redhat.com/mig-3g.20gb":   numGPUs * 2,
+					"instaslice.redhat.com/mig-4g.20gb":   numGPUs * 1,
+					"instaslice.redhat.com/mig-7g.40gb":   numGPUs * 1,
 				}
 
 				node := &corev1.Node{}
@@ -525,6 +526,21 @@ var _ = Describe("controller", Ordered, func() {
 			}
 		})
 		It("should verify the existence of pod allocations", func() {
+			Eventually(func() bool {
+				err := k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
+				if err != nil {
+					fmt.Printf("Failed to get Instaslice object: %v\n", err)
+					return false
+				}
+
+				for _, instasliceObj := range instasliceObjs.Items {
+					if len(instasliceObj.Status.PodAllocationResults) != 0 {
+						return false
+					}
+				}
+				return true
+			}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Expected Instaslice object Allocations to be empty")
+
 			pods := resources.GetMultiPods()
 			for _, pod := range pods {
 				err := k8sClient.Create(ctx, pod)
@@ -538,27 +554,23 @@ var _ = Describe("controller", Ordered, func() {
 					return false
 				}
 
-				var assignedGPUUUID string
-				allAssignedToOneGPU := true
+				uniqueAllocationResults := make(map[*inferencev1alpha1.AllocationResult]struct{})
+				uniqueAllocatedGUUID := make(map[string]struct{})
 
 				for _, instasliceObj := range instasliceObjs.Items {
-					for _, allocation := range instasliceObj.Spec.Allocations {
-						if allocation.Allocationstatus != inferencev1alpha1.AllocationStatusUngated {
-							return false
-						}
-
-						// Since we are requesting 7 slices of type mig-1g.5gb, all 7 pods must be
-						// assigned to the same GPU
-						if assignedGPUUUID == "" {
-							assignedGPUUUID = allocation.GPUUUID
-						} else if allocation.GPUUUID != assignedGPUUUID {
-							allAssignedToOneGPU = false
-							break
+					for _, allocation := range instasliceObj.Status.PodAllocationResults {
+						if allocation.AllocationStatus.AllocationStatusController == inferencev1alpha1.AllocationStatusUngated {
+							uniqueAllocationResults[&allocation] = struct{}{}
+							uniqueAllocatedGUUID[allocation.GPUUUID] = struct{}{}
 						}
 					}
 				}
 
-				return allAssignedToOneGPU
+				if len(uniqueAllocationResults) == len(pods) && len(uniqueAllocatedGUUID) == 1 {
+					return true
+				}
+
+				return false
 			}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Not all allocations are in the 'ungated' state after the timeout")
 
 			for _, pod := range pods {
@@ -576,7 +588,7 @@ var _ = Describe("controller", Ordered, func() {
 				}
 
 				for _, instasliceObj := range instasliceObjs.Items {
-					if len(instasliceObj.Spec.Allocations) != 0 {
+					if len(instasliceObj.Status.PodAllocationResults) != 0 {
 						return false
 					}
 				}
@@ -593,9 +605,9 @@ var _ = Describe("controller", Ordered, func() {
 				// Here, we compare the accelerator memory with the memory fetched from parsing the GPU name
 				// Ex: Parsing the "NVIDIA A100-SXM4-40GB" GPU results in 40GB
 				// This gets compared with the memory that the daemonset patches the node
-				Expect(len(instasliceObjs.Items[0].Spec.MigGPUUUID)).To(Equal(2))
+				Expect(len(instasliceObjs.Items[0].Status.NodeResources.NodeGPUs)).To(Equal(2))
 				for _, instasliceObj := range instasliceObjs.Items {
-					memoryGB, err := daemonset.CalculateTotalMemoryGB(emulated, instasliceObj.Spec.MigGPUUUID)
+					memoryGB, err := daemonset.CalculateTotalMemoryGB(instasliceObj.Status.NodeResources.NodeGPUs)
 					Expect(err).NotTo(HaveOccurred(), "Failed to get total GPU memory")
 					totalMemoryGB += memoryGB
 				}
@@ -628,10 +640,10 @@ var _ = Describe("controller", Ordered, func() {
 			}
 			err := k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
 			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve Instaslice object")
-			referenceLen := len(instasliceObjs.Items[0].Spec.MigGPUUUID)
+			referenceLen := len(instasliceObjs.Items[0].Status.NodeResources.NodeGPUs)
 			for _, obj := range instasliceObjs.Items {
-				currentLen := len(obj.Spec.MigGPUUUID)
-				Expect(currentLen).To(Equal(referenceLen), "Object %s has a different MigGPUUUID length", obj.Name)
+				currentLen := len(obj.Status.NodeResources.NodeGPUs)
+				Expect(currentLen).To(Equal(referenceLen), "Object %s has a different number of GPUs", obj.Name)
 			}
 			numNewNames := referenceLen * 7
 			podTemplate := resources.GetTestGPURunToCompletionWorkload()
@@ -684,9 +696,9 @@ var _ = Describe("controller", Ordered, func() {
 			podTemplateLongRunning := resources.GetTestGPULongRunningWorkload()
 			err := k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
 			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve Instaslice object")
-			referenceLen := len(instasliceObjs.Items[0].Spec.MigGPUUUID)
+			referenceLen := len(instasliceObjs.Items[0].Status.NodeResources.NodeGPUs)
 			for _, obj := range instasliceObjs.Items {
-				currentLen := len(obj.Spec.MigGPUUUID)
+				currentLen := len(obj.Status.NodeResources.NodeGPUs)
 				Expect(currentLen).To(Equal(referenceLen), "Object %s has a different MigGPUUUID length", obj.Name)
 			}
 			longRunningCount := referenceLen*7 + 1

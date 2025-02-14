@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cuda-vectoradd-1
+spec:
+  serviceName: cuda-vectoradd-1
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cuda-vectoradd-1
+  template:
+    metadata:
+      labels:
+        app: cuda-vectoradd-1
+    spec:
+      restartPolicy: Always
+      containers:
+      - name: cuda-vectoradd-1
+        image: nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8
+        resources:
+          limits:
+            nvidia.com/mig-1g.5gb: 1
+        command:
+          - sh
+          - -c
+          - "nvidia-smi -L; /cuda-samples/vectorAdd && sleep inf"
