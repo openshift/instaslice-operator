@@ -27,7 +27,34 @@ InstaSlice will help if
 
 [InstaSlice demo](samples/demo_script/demo_video/instaslice.mp4)
 
-## Getting Started
+## Getting Started with Openshift (Developer Preview Release)
+
+### Prerequisites
+- [OpenShift Container Platform](https://docs.openshift.com/container-platform/4.17/installing/overview/index.html) 4.17+
+- [oc client binary](https://docs.openshift.com/container-platform/4.17/cli_reference/openshift_cli/getting-started-cli.html) v4.17+
+- [operator-sdk binary](https://sdk.operatorframework.io/docs/installation/) v1.37+
+- [openshift cert manager operator](https://docs.openshift.com/container-platform/4.17/security/cert_manager_operator/cert-manager-operator-install.html)
+- [nvidia gpu operator](https://github.com/openshift/instaslice-operator/blob/main/docs/nvidia-gpu-openshift.md)
+
+Before proceeding with the operator installation, please ensure that all prerequisites are met, as any omissions may lead to unpredictable performance.
+
+### Installation of the Developer Preview
+
+After the installation of prerequisites, please follow these steps to install the operator.
+
+```bash
+$ oc new-project instaslice-system
+```
+```bash
+$ operator-sdk run bundle quay.io/ibm/instaslice-bundle:v0.0.2 -n instaslice-system
+```
+
+### Running a sample workload
+Please note that running a sample workload requires availability of compatible GPUs (nvidia A100, H100, H200) on the worker nodes.
+
+Download and run a [sample pod](https://raw.githubusercontent.com/openshift/instaslice-operator/refs/heads/main/samples/test-pod.yaml) which will trigger a dynamic slice creation. To observe the slice provisioning status, fetch the instaslice object that holds the allocation for the given pod. Please note that the instaslice object shares the name with the node it represents. i.e. if the worker node where the pod is running is called `worker-0-1`, then the corresponding instaslice object can be fetched using `oc get instaslice worker-0-1 -n instaslice-system -o yaml`
+
+## Getting Started with Kind
 
 ### Prerequisites
 - [Go](https://go.dev/doc/install) v1.22.0+
