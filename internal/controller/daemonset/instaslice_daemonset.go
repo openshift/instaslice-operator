@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
@@ -127,6 +129,43 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 	if err := r.Get(ctx, nsName, &instaslice); err != nil {
 		log.Error(err, "Error getting Instaslice", "name", r.NodeName)
 		return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, err
+	}
+	// get the node object to watch out for any related events
+	var node v1.Node
+	if err := r.Get(ctx, client.ObjectKey{Name: r.NodeName}, &node); err != nil {
+		log.Error(err, "error getting the node object", "name", r.NodeName)
+		return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
+	}
+	// update the instaslice object with the Node object's current BootID
+	if instaslice.Status.NodeResources.BootID == "" {
+		originalInstaSliceObj := instaslice.DeepCopy()
+		instaslice.Status.NodeResources.BootID = node.Status.NodeInfo.BootID
+		err := r.Status().Patch(ctx, &instaslice, client.MergeFrom(originalInstaSliceObj)) // TODO - try with update
+		if err != nil {
+			log.Error(err, "error patching instaslice object with Boot ID of the Node ", "nodeName", r.NodeName, "bootId", node.Status.NodeInfo.BootID)
+			return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
+		}
+	} else {
+		if instaslice.Status.NodeResources.BootID != node.Status.NodeInfo.BootID {
+			for podUID, allocResult := range instaslice.Status.PodAllocationResults {
+				if allocResult.Nodename == types.NodeName(r.NodeName) {
+					if (allocResult.AllocationStatus.AllocationStatusController == inferencev1alpha1.AllocationStatusCreating) || (allocResult.AllocationStatus.AllocationStatusController == inferencev1alpha1.AllocationStatusUngated) || (allocResult.AllocationStatus.AllocationStatusDaemonset == inferencev1alpha1.AllocationStatusCreated) {
+						if err := r.createCiAndGiProfiles(ctx, &instaslice, podUID); err != nil {
+							return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, err
+						}
+					}
+				}
+			}
+			// update the instaslice object with the node's boot id
+			originalInstaSliceObj := instaslice.DeepCopy()
+			instaslice.Status.NodeResources.BootID = node.Status.NodeInfo.BootID
+			err := r.Status().Patch(ctx, &instaslice, client.MergeFrom(originalInstaSliceObj))
+			if err != nil {
+				log.Error(err, "error patching instaslice object with Boot ID of the Node ", "nodeName", r.NodeName, "bootId", node.Status.NodeInfo.BootID)
+				return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, err
+			}
+
+		}
 	}
 
 	for podUID, allocResult := range instaslice.Status.PodAllocationResults {
@@ -259,6 +298,65 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *InstaSliceDaemonsetReconciler) createCiAndGiProfiles(ctx context.Context, instaslice *inferencev1alpha1.Instaslice, podUID types.UID) error {
+	log := logr.FromContext(ctx)
+	podRef := instaslice.Spec.PodAllocationRequests[podUID].PodRef
+	allocResult := instaslice.Status.PodAllocationResults[podUID]
+	log.Info("creating allocation for pod", "podRef", podRef.Name)
+	// We can look up the *request* in spec to see the profile or resource demands
+	allocationRequest, haveReq := instaslice.Spec.PodAllocationRequests[podUID]
+	if !haveReq {
+		// There's no allocation request
+		log.Info("No matching PodAllocationRequest for this result; skipping")
+		return nil
+	}
+	device, retCode := nvml.DeviceGetHandleByUUID(allocResult.GPUUUID)
+	if retCode != nvml.SUCCESS {
+		log.Error(retCode, "error getting GPU device handle", "gpuUUID", allocResult.GPUUUID)
+		return goerror.New("error fetching GPU device handle, GPUUUID: " + allocResult.GPUUUID)
+	}
+	selectedMig, ok := instaslice.Status.NodeResources.MigPlacement[allocationRequest.Profile]
+	if !ok {
+		log.Info("No suitable MIG profile in NodeResources; skipping creation")
+		return goerror.New("Requested MIG profile not found on the node, node:  " + instaslice.Name + " profile: " + allocationRequest.Profile)
+	}
+
+	placement := nvml.GpuInstancePlacement{
+		Start: uint32(allocResult.MigPlacement.Start),
+		Size:  uint32(allocResult.MigPlacement.Size),
+	}
+
+	giProfileInfo, retGI := device.GetGpuInstanceProfileInfo(int(selectedMig.GIProfileID))
+	if retGI != nvml.SUCCESS {
+		log.Error(retGI, "error getting GPU instance profile info", "GIProfileID", selectedMig.GIProfileID)
+		return goerror.New("cannot get GI profile info, GIProfileID: " + strconv.Itoa(int(selectedMig.GIProfileID)))
+	}
+
+	ciProfileID := selectedMig.CIProfileID
+
+	createdMigInfos, err := r.createSliceAndPopulateMigInfos(
+		ctx, device, &allocResult, giProfileInfo, placement, ciProfileID, podRef.Name)
+	if err != nil {
+		log.Error(err, "MIG creation not successful")
+		return err
+	}
+
+	for migUuid, migDevice := range createdMigInfos {
+		if migDevice.start == allocResult.MigPlacement.Start && migDevice.uuid == allocResult.GPUUUID && giProfileInfo.Id == migDevice.giInfo.ProfileId {
+			exists, _ := r.checkConfigMapExists(ctx, string(allocResult.ConfigMapResourceIdentifier), podRef.Namespace)
+			if exists {
+				log.Info("Skipping updating pod", "podRef", podRef)
+				continue
+			} else if err := r.createConfigMap(ctx, migUuid, podRef.Namespace, string(allocResult.ConfigMapResourceIdentifier)); err != nil {
+				return err
+			}
+			log.Info("done creating mig slice for ", "pod", podRef.Name, "parentgpu", allocResult.GPUUUID, "miguuid", migUuid)
+			break
+		}
+	}
+	return nil
 }
 
 // cleanUpCiAndGi tears down the MIG compute instance and GPU instance.
@@ -437,6 +535,7 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 func (r *InstaSliceDaemonsetReconciler) setupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&inferencev1alpha1.Instaslice{}).Named("InstaSliceDaemonSet").
+		Watches(&v1.Node{}, &handler.EnqueueRequestForObject{}). // also watch out for node events
 		Complete(r)
 }
 
