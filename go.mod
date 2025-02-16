@@ -2,7 +2,7 @@ module github.com/openshift/instaslice-operator
 
 go 1.22.0
 
-toolchain go1.22.2
+toolchain go1.24.0
 
 require (
 	github.com/evanphx/json-patch v4.12.0+incompatible
