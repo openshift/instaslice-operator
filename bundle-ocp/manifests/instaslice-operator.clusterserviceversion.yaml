@@ -22,11 +22,22 @@ metadata:
       ]
     capabilities: Basic Install
     categories: Drivers and plugins
-    containerImage: quay.io/harpatil/instaslice2-controller:7.0
-    createdAt: "2025-02-13T19:46:42Z"
+    containerImage: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:7eae1f3f74a2f0a012d13772360d5638542827e6a20526b8b9da7116d0f8745e
+    createdAt: "2025-02-18T21:54:31Z"
     description: InstaSlice works with GPU operator to create mig slices on demand
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
+    features.operators.openshift.io/cnf: "false"				
+    features.operators.openshift.io/cni: "false"				
+    features.operators.openshift.io/csi: "false"				
+    features.operators.openshift.io/disconnected: "true"				
+    features.operators.openshift.io/fips-compliant: "false"				
+    features.operators.openshift.io/proxy-aware: "false"				
+    features.operators.openshift.io/tls-profiles: "false"				
+    features.operators.openshift.io/token-auth-aws: "false"				
+    features.operators.openshift.io/token-auth-azure: "false"				
+    features.operators.openshift.io/token-auth-gcp: "false"				
+    operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift Platform Plus"]'
     repository: https://github.com/openshift/instaslice-operator
     support: https://github.com/openshift/instaslice-operator/issues
   name: instaslice-operator.v0.0.2
@@ -326,10 +337,10 @@ spec:
                 - /manager
                 env:
                 - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
-                  value: quay.io/harpatil/instaslice2-daemonset:7.0
+                  value: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset@sha256:dc6286cbeaa2ada8cbb45299823c8ab582fcb43f10b1f19cfb2fd1f83dac9479
                 - name: EMULATOR_MODE
                   value: "false"
-                image: quay.io/harpatil/instaslice2-controller:7.0
+                image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:7eae1f3f74a2f0a012d13772360d5638542827e6a20526b8b9da7116d0f8745e
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -451,7 +462,7 @@ spec:
     name: Codeflare
     url: https://github.com/openshift/instaslice-operator
   relatedImages:
-  - image: quay.io/harpatil/instaslice2-daemonset:7.0
+  - image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset@sha256:dc6286cbeaa2ada8cbb45299823c8ab582fcb43f10b1f19cfb2fd1f83dac9479
     name: instaslice-daemonset
   version: 0.0.2
   webhookdefinitions:
