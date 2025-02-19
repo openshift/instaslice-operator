@@ -166,7 +166,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			newAlloc.AllocationStatus.AllocationStatusDaemonset = inferencev1alpha1.AllocationStatusDeleted
 			instaslice.Status.PodAllocationResults[podUID] = newAlloc
 			if err := r.Status().Update(ctx, &instaslice); err != nil {
-				log.Error(err, "error updating Instaslice status for pod cleanup", podRef)
+				log.Error(err, "error updating Instaslice status for pod cleanup", "podRef", podRef)
 				return ctrl.Result{Requeue: true}, err
 			}
 			return ctrl.Result{}, nil
