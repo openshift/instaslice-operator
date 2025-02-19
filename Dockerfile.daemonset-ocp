@@ -12,7 +12,7 @@ COPY . .
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN go build -o bin/daemonset cmd/daemonset/main.go
 
-FROM nvcr.io/nvidia/cuda:12.6.3-base-ubi9
+FROM nvcr.io/nvidia/cuda:12.8.0-base-ubi9
 
 ENV NVIDIA_DISABLE_REQUIRE="true"
 ENV NVIDIA_VISIBLE_DEVICES=all
