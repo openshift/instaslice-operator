@@ -25,7 +25,7 @@ import (
 
 // Cache avoids non determinism in the system which occurs when we play
 // catch game by being upto date with .status.podallocationresults. status
-// takes time to propogate and often causes controller to assign same slice
+// takes time to propagate and often causes controller to assign same slice
 // to multiple pods.
 
 func (r *InstasliceReconciler) rebuildAllocationCache(ctx context.Context) error {
@@ -59,7 +59,7 @@ func (r *InstasliceReconciler) rebuildAllocationCache(ctx context.Context) error
 	return nil
 }
 
-func (r *InstasliceReconciler) updateCacheWithNewAllocation(ctx context.Context, podUid types.UID, allocResult inferencev1alpha1.AllocationResult) {
+func (r *InstasliceReconciler) updateCacheWithNewAllocation(podUid types.UID, allocResult inferencev1alpha1.AllocationResult) {
 
 	r.allocationCache[podUid] = allocResult
 }

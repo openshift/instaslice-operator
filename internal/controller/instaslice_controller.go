@@ -432,7 +432,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						return ctrl.Result{Requeue: true}, nil
 					}
 					// allocation was successful
-					r.updateCacheWithNewAllocation(ctx, allocRequest.PodRef.UID, *allocResult)
+					r.updateCacheWithNewAllocation(allocRequest.PodRef.UID, *allocResult)
 					return ctrl.Result{}, nil
 				}
 			}

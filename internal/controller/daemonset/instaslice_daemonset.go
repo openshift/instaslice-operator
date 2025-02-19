@@ -229,7 +229,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					ciProfileID := selectedMig.CIProfileID
 
 					createdMigInfos, err := r.createSliceAndPopulateMigInfos(
-						ctx, device, &allocResult, giProfileInfo, placement, ciProfileID, podRef.Name)
+						ctx, device, giProfileInfo, placement, ciProfileID, podRef.Name)
 					if err != nil {
 						log.Error(err, "MIG creation not successful", "podRef", podRef)
 						return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, err
@@ -887,7 +887,7 @@ func populateMigDeviceInfos(device nvml.Device) (map[string]*MigDeviceInfo, erro
 	return migInfos, nil
 }
 
-func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx context.Context, device nvml.Device, allocationResult *inferencev1alpha1.AllocationResult, giProfileInfo nvml.GpuInstanceProfileInfo, placement nvml.GpuInstancePlacement, ciProfileId int32, podName string) (map[string]*MigDeviceInfo, error) {
+func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx context.Context, device nvml.Device, giProfileInfo nvml.GpuInstanceProfileInfo, placement nvml.GpuInstancePlacement, ciProfileId int32, podName string) (map[string]*MigDeviceInfo, error) {
 	log := logr.FromContext(ctx)
 	log.Info("creating slice for", "pod", podName)
 	var gi nvml.GpuInstance

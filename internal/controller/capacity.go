@@ -63,7 +63,7 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 				updatedInstaSliceObject.Spec.PodAllocationRequests = make(map[types.UID]inferencev1alpha1.AllocationRequest)
 			}
 
-			newStart := r.getStartIndexFromAllocationResults(ctx, updatedInstaSliceObject, gpuuuid, profileName, pod.UID)
+			newStart := r.getStartIndexFromAllocationResults(updatedInstaSliceObject, gpuuuid, profileName, pod.UID)
 			// For example, a newStart of 9 is considered invalid.
 			notValidIndex := int32(9)
 			if newStart == notValidIndex {
@@ -110,7 +110,7 @@ func sortGPUs(updatedInstaSliceObject *inferencev1alpha1.Instaslice) []string {
 }
 
 // accounting logic that finds the correct GPU and index where a slice could be placed.
-func (r *InstasliceReconciler) getStartIndexFromAllocationResults(ctx context.Context, instaslice *inferencev1alpha1.Instaslice, gpuUUID string, profileName string, podUid types.UID) int32 {
+func (r *InstasliceReconciler) getStartIndexFromAllocationResults(instaslice *inferencev1alpha1.Instaslice, gpuUUID string, profileName string, podUid types.UID) int32 {
 	//TODO: generalize, A100 and H100 have 8 indexes for 3g and 7g and 7 for rest, so go with 8 and we are bounded by
 	//only valid placement indexes for a profile.
 	// clean allocations that do not exists in spec
