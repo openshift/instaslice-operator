@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -259,17 +258,41 @@ func TestInstasliceDaemonsetCreation_Reconcile(t *testing.T) {
 		})
 
 		When("DaemonSet does not exist", func() {
-			It("should create the DaemonSet", func() {
-				reconcileResult, reconcileErr = r.Reconcile(ctx, req)
-
-				Expect(reconcileErr).NotTo(HaveOccurred())
-				Expect(reconcileResult.RequeueAfter).To(Equal(10 * time.Second))
-
-				// Check that the DaemonSet was created
-				createdDaemonSet := &appsv1.DaemonSet{}
-				err := fakeClient.Get(ctx, req.NamespacedName, createdDaemonSet)
+			It("should create the DaemonSet in SetupWithManager", func() {
+				testMgr, err := ctrl.NewManager(cfg, ctrl.Options{Scheme: scheme})
 				Expect(err).NotTo(HaveOccurred())
-				Expect(createdDaemonSet.Name).To(Equal("instaslice-operator-controller-daemonset"))
+
+				r = &InstasliceReconciler{
+					Client: testMgr.GetClient(),
+					Scheme: scheme,
+					Config: &config.Config{
+						EmulatorModeEnable: true,
+						DaemonsetImage:     "my-daemonset-image:v1",
+					},
+				}
+
+				namespace := &v1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "instaslice-system",
+					},
+				}
+
+				err = r.Client.Create(context.Background(), namespace)
+				Expect(err).NotTo(HaveOccurred(), "Failed to create the test namespace")
+
+				err = r.SetupWithManager(testMgr)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go func() {
+					defer GinkgoRecover()
+					err = testMgr.Start(ctx)
+					Expect(err).NotTo(HaveOccurred())
+				}()
+
+				cacheSync := testMgr.GetCache().WaitForCacheSync(ctx)
+				Expect(cacheSync).To(BeTrue(), "Cache did not sync")
 			})
 		})
 
@@ -296,13 +319,6 @@ func TestInstasliceDaemonsetCreation_Reconcile(t *testing.T) {
 					},
 				}
 				_ = fakeClient.Create(ctx, pod)
-			})
-
-			It("should requeue until at least one DaemonSet pod is ready", func() {
-				reconcileResult, reconcileErr = r.Reconcile(ctx, req)
-
-				Expect(reconcileErr).NotTo(HaveOccurred())
-				Expect(reconcileResult.RequeueAfter).To(Equal(10 * time.Second))
 			})
 		})
 

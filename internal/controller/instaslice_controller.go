@@ -41,12 +41,14 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logr "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -99,61 +101,61 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}
 
-	// 1. Ensure DaemonSet is deployed
-	daemonSet := &appsv1.DaemonSet{}
-	err := r.Get(ctx, types.NamespacedName{Name: InstasliceDaemonsetName, Namespace: InstaSliceOperatorNamespace}, daemonSet)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// DaemonSet doesn't exist, so create it
-			daemonSet = r.createInstaSliceDaemonSet(InstaSliceOperatorNamespace)
-			err = r.Create(ctx, daemonSet)
-			if err != nil {
-				log.Error(err, "Failed to create DaemonSet")
-				return ctrl.Result{RequeueAfter: time.Minute}, err
-			}
-			log.Info("DaemonSet created successfully, waiting for pods to be ready")
-			return ctrl.Result{RequeueAfter: requeue10sDelay}, nil
-		}
-		log.Error(err, "Failed to get DaemonSet")
-		return ctrl.Result{RequeueAfter: time.Minute}, err
-	}
+	// // 1. Ensure DaemonSet is deployed
+	// daemonSet := &appsv1.DaemonSet{}
+	// err := r.Get(ctx, types.NamespacedName{Name: InstasliceDaemonsetName, Namespace: InstaSliceOperatorNamespace}, daemonSet)
+	// if err != nil {
+	// 	if errors.IsNotFound(err) {
+	// 		// DaemonSet doesn't exist, so create it
+	// 		daemonSet = r.createInstaSliceDaemonSet(InstaSliceOperatorNamespace)
+	// 		err = r.Create(ctx, daemonSet)
+	// 		if err != nil {
+	// 			log.Error(err, "Failed to create DaemonSet")
+	// 			return ctrl.Result{RequeueAfter: time.Minute}, err
+	// 		}
+	// 		log.Info("DaemonSet created successfully, waiting for pods to be ready")
+	// 		return ctrl.Result{RequeueAfter: requeue10sDelay}, nil
+	// 	}
+	// 	log.Error(err, "Failed to get DaemonSet")
+	// 	return ctrl.Result{RequeueAfter: time.Minute}, err
+	// }
 
-	// 2. Check if at least one DaemonSet pod is ready
-	var podList v1.PodList
-	labelSelector := labels.SelectorFromSet(daemonSet.Spec.Selector.MatchLabels)
+	// // 2. Check if at least one DaemonSet pod is ready
+	// var podList v1.PodList
+	// labelSelector := labels.SelectorFromSet(daemonSet.Spec.Selector.MatchLabels)
 
-	listOptions := &client.ListOptions{
-		LabelSelector: labelSelector,
-		Namespace:     InstaSliceOperatorNamespace,
-	}
+	// listOptions := &client.ListOptions{
+	// 	LabelSelector: labelSelector,
+	// 	Namespace:     InstaSliceOperatorNamespace,
+	// }
 
-	if err := r.List(ctx, &podList, listOptions); err != nil {
-		log.Error(err, "Failed to list DaemonSet pods")
-		return ctrl.Result{RequeueAfter: time.Minute}, err
-	}
+	// if err := r.List(ctx, &podList, listOptions); err != nil {
+	// 	log.Error(err, "Failed to list DaemonSet pods")
+	// 	return ctrl.Result{RequeueAfter: time.Minute}, err
+	// }
 
-	// Check if at least one daemonset pod is ready
-	isAnyPodReady := false
-	for _, pod := range podList.Items {
-		if pod.Status.Phase == v1.PodRunning && len(pod.Status.ContainerStatuses) > 0 && pod.Status.ContainerStatuses[0].Ready {
-			isAnyPodReady = true
-			break
-		}
-	}
-	if daemonSet.Status.NumberReady == 0 && !isAnyPodReady {
-		log.Info("No DaemonSet pods are ready yet, waiting...")
-		return ctrl.Result{RequeueAfter: requeue10sDelay}, nil
-	}
+	// // Check if at least one daemonset pod is ready
+	// isAnyPodReady := false
+	// for _, pod := range podList.Items {
+	// 	if pod.Status.Phase == v1.PodRunning && len(pod.Status.ContainerStatuses) > 0 && pod.Status.ContainerStatuses[0].Ready {
+	// 		isAnyPodReady = true
+	// 		break
+	// 	}
+	// }
+	// if daemonSet.Status.NumberReady == 0 && !isAnyPodReady {
+	// 	log.Info("No DaemonSet pods are ready yet, waiting...")
+	// 	return ctrl.Result{RequeueAfter: requeue10sDelay}, nil
+	// }
 
 	// Continue with the rest of the reconciliation logic
 	policy := &FirstFitPolicy{}
 	pod := &v1.Pod{}
 	var instasliceList inferencev1alpha1.InstasliceList
-	if err = r.List(ctx, &instasliceList, &client.ListOptions{}); err != nil {
+	if err := r.List(ctx, &instasliceList, &client.ListOptions{}); err != nil {
 		log.Error(err, "Error getting Instaslice object")
 		return ctrl.Result{}, err
 	}
-	err = r.Get(ctx, req.NamespacedName, pod)
+	err := r.Get(ctx, req.NamespacedName, pod)
 	if err != nil {
 		// Error fetching the Pod
 		if errors.IsNotFound(err) {
@@ -596,10 +598,24 @@ func (r *InstasliceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1.Pod{}).Named("InstaSlice-controller").
-		Watches(&inferencev1alpha1.Instaslice{}, handler.EnqueueRequestsFromMapFunc(r.podMapFunc)).
-		Complete(r)
+	if err := r.setupWithManager(mgr); err != nil {
+		return err
+	}
+
+	mgrAddErr := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		<-mgr.Elected()
+		// Ensure DaemonSet is deployed at startup
+		if err := r.ensureDaemonSet(ctx); err != nil {
+			return fmt.Errorf("failed to ensure DaemonSet: %w", err)
+		}
+		return nil
+	}))
+
+	if mgrAddErr != nil {
+		return mgrAddErr
+	}
+	return nil
+
 }
 
 func (r *InstasliceReconciler) unGatePod(podUpdate *v1.Pod) *v1.Pod {
@@ -742,4 +758,79 @@ func (r *InstasliceReconciler) ReconcileSCC(ctx context.Context) error {
 	sccs := manifests.Filter(manifestival.ByKind("SecurityContextConstraints"))
 	sccs.Client = mfc.NewClient(r.Client)
 	return sccs.Apply()
+}
+
+func (r *InstasliceReconciler) ensureDaemonSet(ctx context.Context) error {
+	log := logr.FromContext(ctx)
+	daemonSet := &appsv1.DaemonSet{}
+	err := r.Get(ctx, types.NamespacedName{Name: InstasliceDaemonsetName, Namespace: InstaSliceOperatorNamespace}, daemonSet)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			daemonSet = r.createInstaSliceDaemonSet(InstaSliceOperatorNamespace)
+			if err := r.Create(ctx, daemonSet); err != nil {
+				log.Error(err, "Failed to create DaemonSet")
+				return err
+			}
+			log.Info("DaemonSet created successfully")
+		} else {
+			log.Error(err, "Failed to get DaemonSet")
+			return err
+		}
+	}
+
+	pollInterval := 5 * time.Second
+	timeout := 2 * time.Minute
+
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	log.Info("Waiting for at least one DaemonSet pod to be ready...")
+
+	err = wait.PollUntilContextTimeout(ctxWithTimeout, pollInterval, timeout, true, func(ctx context.Context) (bool, error) {
+		isReady, err := r.isDaemonSetPodReady(ctx, daemonSet)
+		if err != nil {
+			log.Error(err, "Failed to check DaemonSet pod readiness")
+			return false, err
+		}
+		return isReady, nil
+	})
+
+	if err != nil {
+		log.Error(err, "Timeout waiting for DaemonSet pod readiness")
+		return err
+	}
+
+	log.Info("At least one DaemonSet pod is ready")
+	return nil
+}
+
+func (r *InstasliceReconciler) isDaemonSetPodReady(ctx context.Context, daemonSet *appsv1.DaemonSet) (bool, error) {
+	var podList v1.PodList
+	labelSelector := labels.SelectorFromSet(daemonSet.Spec.Selector.MatchLabels)
+
+	listOptions := &client.ListOptions{
+		LabelSelector: labelSelector,
+		Namespace:     daemonSet.Namespace,
+	}
+
+	if err := r.List(ctx, &podList, listOptions); err != nil {
+		return false, err
+	}
+
+	for _, pod := range podList.Items {
+		if pod.Status.Phase == v1.PodRunning && len(pod.Status.ContainerStatuses) > 0 && pod.Status.ContainerStatuses[0].Ready {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// Enable creation of controller caches to talk to the API server in order to perform
+// object discovery in SetupWithManager
+func (r *InstasliceReconciler) setupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&v1.Pod{}).Named("InstaSlice-controller").
+		Watches(&inferencev1alpha1.Instaslice{}, handler.EnqueueRequestsFromMapFunc(r.podMapFunc)).
+		Complete(r)
 }
