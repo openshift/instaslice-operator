@@ -166,7 +166,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			newAlloc.AllocationStatus.AllocationStatusDaemonset = inferencev1alpha1.AllocationStatusDeleted
 			instaslice.Status.PodAllocationResults[podUID] = newAlloc
 			if err := r.Status().Update(ctx, &instaslice); err != nil {
-				log.Error(err, "error updating Instaslice status for pod cleanup", podRef)
+				log.Error(err, "error updating Instaslice status for pod cleanup", "podRef", podRef)
 				return ctrl.Result{Requeue: true}, err
 			}
 			return ctrl.Result{}, nil
@@ -229,7 +229,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 					ciProfileID := selectedMig.CIProfileID
 
 					createdMigInfos, err := r.createSliceAndPopulateMigInfos(
-						ctx, device, &allocResult, giProfileInfo, placement, ciProfileID, podRef.Name)
+						ctx, device, giProfileInfo, placement, ciProfileID, podRef.Name)
 					if err != nil {
 						log.Error(err, "MIG creation not successful", "podRef", podRef)
 						return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, err
@@ -887,13 +887,52 @@ func populateMigDeviceInfos(device nvml.Device) (map[string]*MigDeviceInfo, erro
 	return migInfos, nil
 }
 
-func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx context.Context, device nvml.Device, allocationResult *inferencev1alpha1.AllocationResult, giProfileInfo nvml.GpuInstanceProfileInfo, placement nvml.GpuInstancePlacement, ciProfileId int32, podName string) (map[string]*MigDeviceInfo, error) {
+func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx context.Context, device nvml.Device, giProfileInfo nvml.GpuInstanceProfileInfo, placement nvml.GpuInstancePlacement, ciProfileId int32, podName string) (map[string]*MigDeviceInfo, error) {
 	log := logr.FromContext(ctx)
 	log.Info("creating slice for", "pod", podName)
 	var gi nvml.GpuInstance
 	var ret nvml.Return
 	gi, ret = device.CreateGpuInstanceWithPlacement(&giProfileInfo, &placement)
 	if ret != nvml.SUCCESS {
+		switch ret {
+		case nvml.ERROR_INSUFFICIENT_RESOURCES:
+			// Handle insufficient resources case
+			gpuInstances, ret := device.GetGpuInstances(&giProfileInfo)
+			if ret != nvml.SUCCESS {
+				log.Error(ret, "gpu instances cannot be listed")
+				return nil, fmt.Errorf("gpu instances cannot be listed: %v", ret)
+			}
+
+			for _, gpuInstance := range gpuInstances {
+				gpuInstanceInfo, ret := gpuInstance.GetInfo()
+				if ret != nvml.SUCCESS {
+					log.Error(ret, "unable to obtain gpu instance info")
+					return nil, fmt.Errorf("unable to obtain gpu instance info: %v", ret)
+				}
+
+				parentUuid, ret := gpuInstanceInfo.Device.GetUUID()
+				if ret != nvml.SUCCESS {
+					log.Error(ret, "unable to obtain parent gpu uuuid")
+					return nil, fmt.Errorf("unable to obtain parent gpu uuuid: %v", ret)
+				}
+
+				gpuUUid, ret := device.GetUUID()
+				if ret != nvml.SUCCESS {
+					log.Error(ret, "unable to obtain parent gpu uuuid")
+				}
+				if gpuInstanceInfo.Placement.Start == placement.Start && parentUuid == gpuUUid {
+					gi, ret = device.GetGpuInstanceById(int(gpuInstanceInfo.Id))
+					if ret != nvml.SUCCESS {
+						log.Error(ret, "unable to obtain gi post iteration")
+						return nil, fmt.Errorf("unable to obtain gi post iteration, got value: %v", gi)
+					}
+				}
+			}
+		default:
+			// this case is typically for scenario where ret is not equal to nvml.ERROR_INSUFFICIENT_RESOURCES
+			log.Error(ret, "gpu instance creation errored out with unknown error")
+			return nil, fmt.Errorf("gpu instance creation failed: %v", ret)
+		}
 		return nil, fmt.Errorf("error creating gpu instance profile with: %v", ret)
 	}
 
@@ -906,8 +945,7 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 	ci, ret := gi.CreateComputeInstance(&ciProfileInfo)
 	if ret != nvml.SUCCESS {
 		if ret != nvml.ERROR_INSUFFICIENT_RESOURCES {
-			log.Error(ret, "error creating Compute instance", "ci", ci)
-			return nil, fmt.Errorf("error creating compute instance: %v", ret)
+			log.Error(ret, "error creating new compute instance, reusing", "ci", ci)
 		}
 	}
 

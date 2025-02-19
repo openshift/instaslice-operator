@@ -343,6 +343,11 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/$(KUSTOMIZATION) | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(KUBECTL) apply -f -
 
+.PHONY: deploy-dry-run
+deploy-dry-run: manifests kustomize ## Perform a dry-run deployment and save output to deploy-dry-run.yaml.
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/$(KUSTOMIZATION) | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(KUBECTL) apply --dry-run=client -f - > deploy-dry-run.yaml
+
 .PHONY: ocp-deploy
 ocp-deploy: container-build-ocp docker-push bundle-ocp bundle-build-ocp bundle-push deploy-instaslice-on-ocp
 

@@ -146,22 +146,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.Info("No DaemonSet pods are ready yet, waiting...")
 		return ctrl.Result{RequeueAfter: requeue10sDelay}, nil
 	}
-	// rebuild cache on node failure
-	node := &v1.Node{}
-	err = r.Get(ctx, req.NamespacedName, node)
-	if err == nil {
-		for _, condition := range node.Status.Conditions {
-			if condition.Type == v1.NodeReady && condition.Status != v1.ConditionTrue {
-				log.Info("Detected a node going down", "node:", node.Name)
-				err := r.rebuildAllocationCache(ctx)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-				break
-			}
-		}
-		return ctrl.Result{}, nil
-	}
+	// TODO: should we rebuild cache on node failure?
 
 	// Continue with the rest of the reconciliation logic
 	policy := &FirstFitPolicy{}
@@ -419,20 +404,22 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			if err != nil {
 				return ctrl.Result{}, err
 			}
+
+			r.CleanupOrphanedAllocations(&instasliceList)
 			for _, instaslice := range instasliceList.Items {
 				// find the GPU on the node and the GPU index where the slice can be created
 				allocRequest, allocResult, err := r.findNodeAndDeviceForASlice(ctx, &instaslice, profileName, policy, pod)
 				if err != nil {
 					continue
 				}
+				// allocation was successful
+				r.updateCacheWithNewAllocation(allocRequest.PodRef.UID, *allocResult)
 				podHasNodeAllocation = true
 				if podHasNodeAllocation {
 					err := utils.UpdateOrDeleteInstasliceAllocations(ctx, r.Client, instaslice.Name, allocResult, allocRequest)
 					if err != nil {
 						return ctrl.Result{Requeue: true}, nil
 					}
-					// allocation was successful
-					r.updateCacheWithNewAllocation(ctx, allocRequest.PodRef.UID, *allocResult)
 					return ctrl.Result{}, nil
 				}
 			}
