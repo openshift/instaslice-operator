@@ -63,7 +63,7 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 				updatedInstaSliceObject.Spec.PodAllocationRequests = make(map[types.UID]inferencev1alpha1.AllocationRequest)
 			}
 
-			newStart := r.getStartIndexFromPreparedState(updatedInstaSliceObject, gpuuuid, profileName)
+			newStart := r.getStartIndexFromAllocationResults(ctx, updatedInstaSliceObject, gpuuuid, profileName, pod.UID)
 			// For example, a newStart of 9 is considered invalid.
 			notValidIndex := int32(9)
 			if newStart == notValidIndex {
@@ -110,9 +110,24 @@ func sortGPUs(updatedInstaSliceObject *inferencev1alpha1.Instaslice) []string {
 }
 
 // accounting logic that finds the correct GPU and index where a slice could be placed.
-func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferencev1alpha1.Instaslice, gpuUUID string, profileName string) int32 {
+func (r *InstasliceReconciler) getStartIndexFromAllocationResults(ctx context.Context, instaslice *inferencev1alpha1.Instaslice, gpuUUID string, profileName string, podUid types.UID) int32 {
 	//TODO: generalize, A100 and H100 have 8 indexes for 3g and 7g and 7 for rest, so go with 8 and we are bounded by
 	//only valid placement indexes for a profile.
+	// clean allocations that do not exists in spec
+	var keysToDelete []types.UID
+	for uuid := range r.allocationCache {
+		if _, exists := instaslice.Spec.PodAllocationRequests[uuid]; !exists {
+			keysToDelete = append(keysToDelete, uuid)
+		}
+	}
+	for _, uuid := range keysToDelete {
+		delete(r.allocationCache, uuid)
+	}
+	allocResult, exists := r.allocationCache[podUid]
+	// allocation already exists in cache
+	if exists {
+		return allocResult.MigPlacement.Start
+	}
 	var gpuAllocatedIndex [8]int32
 	// clean slate init
 	for i := range gpuAllocatedIndex {
@@ -120,7 +135,8 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 	}
 	// deleted allocations can be reused
 	// ungated allocations are already counted in prepared
-	for _, allocResult := range instaslice.Status.PodAllocationResults {
+
+	for _, allocResult := range r.allocationCache {
 		if allocResult.GPUUUID == gpuUUID && allocResult.AllocationStatus.AllocationStatusDaemonset != inferencev1alpha1.AllocationStatusDeleted {
 			for i := 0; i < int(allocResult.MigPlacement.Size); i++ {
 				gpuAllocatedIndex[int(allocResult.MigPlacement.Start)+i] = 1

@@ -57,6 +57,8 @@ type InstasliceReconciler struct {
 	kubeClient         *kubernetes.Clientset
 	Config             *config.Config
 	RunningOnOpenShift bool
+	allocationCache    map[types.UID]inferencev1alpha1.AllocationResult
+	isCacheInitialized bool
 }
 
 // AllocationPolicy interface with a single method
@@ -143,6 +145,22 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if daemonSet.Status.NumberReady == 0 && !isAnyPodReady {
 		log.Info("No DaemonSet pods are ready yet, waiting...")
 		return ctrl.Result{RequeueAfter: requeue10sDelay}, nil
+	}
+	// rebuild cache on node failure
+	node := &v1.Node{}
+	err = r.Get(ctx, req.NamespacedName, node)
+	if err == nil {
+		for _, condition := range node.Status.Conditions {
+			if condition.Type == v1.NodeReady && condition.Status != v1.ConditionTrue {
+				log.Info("Detected a node going down", "node:", node.Name)
+				err := r.rebuildAllocationCache(ctx)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+				break
+			}
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// Continue with the rest of the reconciliation logic
@@ -397,6 +415,10 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				// Sort by Name in ascending order
 				return instasliceList.Items[i].Name < instasliceList.Items[j].Name
 			})
+			err := r.rebuildAllocationCache(ctx)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 			for _, instaslice := range instasliceList.Items {
 				// find the GPU on the node and the GPU index where the slice can be created
 				allocRequest, allocResult, err := r.findNodeAndDeviceForASlice(ctx, &instaslice, profileName, policy, pod)
@@ -410,6 +432,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						return ctrl.Result{Requeue: true}, nil
 					}
 					// allocation was successful
+					r.updateCacheWithNewAllocation(ctx, allocRequest.PodRef.UID, *allocResult)
 					return ctrl.Result{}, nil
 				}
 			}
@@ -599,6 +622,8 @@ func (r *InstasliceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1.Pod{}).Named("InstaSlice-controller").
 		Watches(&inferencev1alpha1.Instaslice{}, handler.EnqueueRequestsFromMapFunc(r.podMapFunc)).
+		Watches(&v1.Node{},
+			&handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
