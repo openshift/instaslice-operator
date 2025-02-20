@@ -441,14 +441,14 @@ bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metada
 
 .PHONY: bundle-ocp
 bundle-ocp: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
-	$(OPERATOR_SDK) generate kustomize manifests --output-dir config/manifests-ocp -q
+	# $(OPERATOR_SDK) generate kustomize manifests --output-dir config/manifests-ocp -q ## stomps on custom csv
 	cd config/manager-ocp && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp | sed -e "s|<IMG>|$(IMG)|g" | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS) --output-dir bundle-ocp --overwrite=false
 	$(OPERATOR_SDK) bundle validate ./bundle-ocp
 
 .PHONY: bundle-ocp-emulated
 bundle-ocp-emulated: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
-	$(OPERATOR_SDK) generate kustomize manifests --output-dir config/manifests-ocp-emulated -q
+	# $(OPERATOR_SDK) generate kustomize manifests --output-dir config/manifests-ocp-emulated -q  ## stomps on custom csv
 	cd config/manager-ocp && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp-emulated | sed -e "s|<IMG>|$(IMG)|g" | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS) --output-dir bundle-ocp --overwrite=false
 	$(OPERATOR_SDK) bundle validate ./bundle-ocp
