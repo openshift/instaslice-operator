@@ -45,8 +45,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logr "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -168,10 +170,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	isPodGated := checkIfPodGatedByInstaSlice(pod)
-
-	if !isPodGated && !controllerutil.ContainsFinalizer(pod, FinalizerName) {
-		return ctrl.Result{}, nil
-	}
 
 	// Add finalizer to the pod gated by InstaSlice
 	if isPodGated && !controllerutil.ContainsFinalizer(pod, FinalizerName) {
@@ -422,7 +420,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			randomDuration := time.Duration(rand.Intn(10)+1) * time.Second
 			return ctrl.Result{RequeueAfter: randomDuration}, nil
 		}
-
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	return ctrl.Result{}, nil
@@ -596,10 +594,36 @@ func (r *InstasliceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
+	instaslicePredicate := predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool {
+			return hasInstasliceMutation(e.Object)
+		},
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return hasInstasliceMutation(e.ObjectNew)
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return hasInstasliceMutation(e.Object)
+		},
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1.Pod{}).Named("InstaSlice-controller").
 		Watches(&inferencev1alpha1.Instaslice{}, handler.EnqueueRequestsFromMapFunc(r.podMapFunc)).
+		WithEventFilter(instaslicePredicate).
 		Complete(r)
+}
+
+func hasInstasliceMutation(obj client.Object) bool {
+	pod, ok := obj.(*v1.Pod)
+	if !ok {
+		return false
+	}
+
+	if value, exists := pod.Annotations["instaslice.redhat.com/mutated"]; exists && value == "true" {
+		return true
+	}
+
+	return false
 }
 
 func (r *InstasliceReconciler) unGatePod(podUpdate *v1.Pod) *v1.Pod {
