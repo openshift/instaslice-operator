@@ -58,13 +58,6 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 }
 
-func getEnv(key, defval string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return defval
-}
-
 func main() {
 	// Log info before initializing metrics exporter
 	ctrl.Log.Info("Initializing Metrics Exporter.")
