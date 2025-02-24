@@ -20,7 +20,8 @@ import (
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
-	logr "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // Cache avoids non determinism in the system which occurs when we play
@@ -38,15 +39,17 @@ func (r *InstasliceReconciler) rebuildAllocationCache(ctx context.Context) error
 	// TODO: cache is rebuilt on node failure we should
 	// avoid instaslice objects that are related to failed
 	// nodes in the cluster.
-	var instasliceList inferencev1alpha1.InstasliceList
-	if err := r.List(ctx, &instasliceList); err != nil {
-		logr.FromContext(ctx).Error(err, "Error listing Instaslice objects")
+	// Fetch all Instaslice objects using the lister
+	instaslices := &inferencev1alpha1.InstasliceList{}
+	// Use cached informer to list Instaslice objects
+	if err := r.Client.List(ctx, instaslices, client.InNamespace(InstaSliceOperatorNamespace)); err != nil {
+		log.FromContext(ctx).Error(err, "Error listing Instaslice objects from cache")
 		return err
 	}
 
 	r.allocationCache = make(map[types.UID]inferencev1alpha1.AllocationResult)
 
-	for _, instaslice := range instasliceList.Items {
+	for _, instaslice := range instaslices.Items {
 		for podUid, allocResult := range instaslice.Status.PodAllocationResults {
 			if allocResult.AllocationStatus.AllocationStatusDaemonset == inferencev1alpha1.AllocationStatusDeleted {
 				continue
