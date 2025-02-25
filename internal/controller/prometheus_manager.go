@@ -25,18 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
-var baseProfileSliceMap = map[string]uint32{ // slice profiles and respective size
-	"1g.5gb":    1,
-	"1g.5gb+me": 1,
-	"1g.10gb":   2,
-	"2g.10gb":   2,
-	"3g.20gb":   4,
-	"4g.20gb":   4,
-	"7g.40gb":   8,
-}
-
-var profileSliceMap = generateProfileSliceMap() // including instaslice.redhat.com/mig-" & "nvidia.com/mig-
-
 type InstasliceMetrics struct {
 	GpuSliceTotal      *prometheus.GaugeVec
 	compatibleProfiles *prometheus.GaugeVec
@@ -81,7 +69,7 @@ func RegisterMetrics() {
 
 // UpdateGpuSliceMetrics updates GPU slice allocation metrics
 func (r *InstasliceReconciler) IncrementTotalProcessedGpuSliceMetrics(nodeName, gpuID string, processedSlices int32, startPos int32, profile string) error {
-	if processedSlices == 8 { // handle for 7g.40gb profile
+	if processedSlices == 8 { // special handle for 7g.40gb profile
 		processedSlices = maxSlices7g40gb
 	} else if profile == profile3g20gb && startPos == EndStartPos3g20gb { // fills gpu and it doesnt need an extra slice
 		processedSlices = EndPosSlices3g20gb
@@ -114,86 +102,50 @@ func (r *InstasliceReconciler) UpdateDeployedPodTotalMetrics(nodeName, gpuID, na
 
 // UpdateCompatibleProfilesMetrics updates metrics based on remaining GPU slices and calculates compatible profiles dynamically
 func (r *InstasliceReconciler) UpdateCompatibleProfilesMetrics(instasliceObj inferencev1alpha1.Instaslice, nodeName string, remainingSlices map[string]int32) error {
-	// profile map with fixed indexes for prometheus
-	// example for A100
-	// {
-	// 	"1g.5gb":    1,
-	// 	"2g.10gb":   2,
-	// 	"3g.20gb":   3,
-	// 	"4g.20gb":   4,
-	// 	"7g.40gb":   5,
-	// 	"1g.10gb":   6,
-	// 	"1g.5gb+me": 7,
-	// }
-
-	// Maintain a map to track currently compatible profiles
+	// Track currently compatible profiles
 	currentProfiles := make(map[string]int32)
-
+	// Get sorted list of GPUs for this node
+	sortedGPUs := sortGPUs(&instasliceObj)
 	// Parse the MIG placements for profiles and their sizes
 	for profileName, migPlacement := range instasliceObj.Status.NodeResources.MigPlacement {
-
 		// Skip if profile is already recommended
 		if _, exists := currentProfiles[profileName]; exists {
 			continue
 		}
-
 		// Check the first size value from the placements for this profile
 		if len(migPlacement.Placements) > 0 {
 			size := migPlacement.Placements[0].Size
-
 			// Check if the profile is compatible with any remaining slices
-			// **Track total fit across all GPUs correctly**
+			// Track total fit across all GPUs
 			totalFit := int32(0)
-
-			for _, remaining := range remainingSlices {
+			for _, gpuID := range sortedGPUs {
+				remaining := remainingSlices[gpuID]
 				gpuFit := int32(0)
 				usedSlices := int32(0)
-
-				// **Ensure correct profile placement per GPU**
-				for usedSlices+size <= remaining || (usedSlices+size-1 == remaining && (profileName == "3g.20gb" || profileName == "1g.10gb")) {
+				// Ensure correct profile placement per GPU
+				for usedSlices+size <= remaining || (usedSlices+size-1 == remaining && (profileName == profile3g20gb || profileName == profile1g10gb)) {
 					gpuFit++
 					usedSlices += size
 				}
-
-				// **Fix `7g.40gb` handling:** Ensure it fits when exactly 7 slices are available.
+				// Special handling for `7g.40gb` profile (edge case)
 				if profileName == "7g.40gb" && remaining == 7 {
 					gpuFit = 1
 				} else if profileName == "7g.40gb" && remaining > 7 {
 					gpuFit = 0
 				}
-
-				// **Accumulate per-GPU fit counts**
 				totalFit += gpuFit
 			}
-
 			// Only record the profile **once** with final totalFit
 			if totalFit > 0 {
 				currentProfiles[profileName] = totalFit
 			}
 		}
 	}
-
-	// **Update metrics only once per profile**
+	// Update metrics only once per profile
 	for profileName, totalFit := range currentProfiles {
 		instasliceMetrics.compatibleProfiles.WithLabelValues(profileName, nodeName).
 			Set(float64(totalFit))
-
 		ctrl.Log.Info("[UpdateCompatibleProfilesMetrics] Added compatible profile", "profile", profileName, "count", totalFit)
 	}
-
 	return nil
-}
-
-// generateProfileSliceMap generates the full map for both instaslice.redhat.com and nvidia.com
-func generateProfileSliceMap() map[string]uint32 {
-	prefixes := []string{"instaslice.redhat.com/mig-", "nvidia.com/mig-"}
-	fullMap := make(map[string]uint32)
-
-	for profile, slices := range baseProfileSliceMap {
-		for _, prefix := range prefixes {
-			fullMap[prefix+profile] = slices
-		}
-	}
-
-	return fullMap
 }
