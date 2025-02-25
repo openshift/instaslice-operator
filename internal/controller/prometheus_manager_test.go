@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"context"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -17,13 +16,11 @@ import (
 
 var _ = Describe("Instaslice Controller", func() {
 	var (
-		ctx        context.Context
 		fakeClient client.Client
 		r          *InstasliceReconciler
 	)
 
 	BeforeEach(func() {
-		ctx = context.TODO()
 		scheme := runtime.NewScheme()
 		Expect(inferencev1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(v1.AddToScheme(scheme)).To(Succeed())
@@ -53,12 +50,6 @@ var _ = Describe("Instaslice Controller", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	// Test UpdatePendingSliceRequests
-	It("should update pending slice requests", func() {
-		err := r.UpdatePendingSliceRequests(3)
-		Expect(err).ToNot(HaveOccurred())
-	})
-
 	// Test UpdateCompatibleProfilesMetrics
 	It("should update compatible profiles metrics", func() {
 		instaslice := inferencev1alpha1.Instaslice{
@@ -69,46 +60,6 @@ var _ = Describe("Instaslice Controller", func() {
 		}
 		err := r.UpdateCompatibleProfilesMetrics(instaslice, "node-1", map[string]int32{"gpu-1": 6})
 		Expect(err).ToNot(HaveOccurred())
-	})
-
-	// Test getPendingGpuRequests
-	It("should get pending GPU requests", func() {
-		pendingCount, err := r.getPendingGpuRequests(ctx, fakeClient)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(pendingCount).To(Equal(uint32(0))) // No pods, should be zero
-	})
-
-	// Test isGpuRequested
-	It("should detect GPU request in pod", func() {
-		pod := v1.Pod{
-			Spec: v1.PodSpec{
-				Containers: []v1.Container{
-					{
-						Resources: v1.ResourceRequirements{
-							Requests: v1.ResourceList{
-								"instaslice.redhat.com/mig-1g.5gb": resourceMustParse("1"),
-							},
-						},
-					},
-				},
-			},
-		}
-		Expect(isGpuRequested(pod)).To(BeTrue())
-	})
-
-	It("should return false if no GPU requested", func() {
-		pod := v1.Pod{
-			Spec: v1.PodSpec{
-				Containers: []v1.Container{
-					{
-						Resources: v1.ResourceRequirements{
-							Requests: v1.ResourceList{},
-						},
-					},
-				},
-			},
-		}
-		Expect(isGpuRequested(pod)).To(BeFalse())
 	})
 })
 

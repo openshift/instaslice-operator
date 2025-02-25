@@ -456,17 +456,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// updates UpdateGpuSliceMetrics and UpdateCompatibleProfilesMetrics
 	r.updateMetrics(ctx, instasliceList)
 
-	// Update current pending GPU slice requests metrics
-	pendingCount, err := r.getPendingGpuRequests(ctx, r.Client)
-	if err != nil {
-		log.Error(err, "Failed to count pending GPU slice requests")
-		return ctrl.Result{}, err
-	}
-	if err := r.UpdatePendingSliceRequests(pendingCount); err != nil {
-		log.Error(err, "Failed to update pending GPU slice requests metric")
-		return ctrl.Result{}, err
-	}
-
 	return ctrl.Result{}, nil
 }
 
@@ -584,6 +573,7 @@ func (*InstasliceReconciler) extractGpuProfile(instaslice *inferencev1alpha1.Ins
 	return size, discoveredGiprofile, Ciprofileid, Ciengprofileid
 }
 
+// isPodSchedulingGated checks if a pod has a scheduling gate and is actively blocked
 func checkIfPodGatedByInstaSlice(pod *v1.Pod) bool {
 	for _, gate := range pod.Spec.SchedulingGates {
 		if gate.Name == GateName {
