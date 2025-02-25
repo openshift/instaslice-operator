@@ -104,48 +104,28 @@ func (r *InstasliceReconciler) UpdateDeployedPodTotalMetrics(nodeName, gpuID, na
 func (r *InstasliceReconciler) UpdateCompatibleProfilesMetrics(instasliceObj inferencev1alpha1.Instaslice, nodeName string, remainingSlices map[string]int32) error {
 	// Track currently compatible profiles
 	currentProfiles := make(map[string]int32)
-	// Get sorted list of GPUs for this node
 	sortedGPUs := sortGPUs(&instasliceObj)
-	// Parse the MIG placements for profiles and their sizes
+	// Iterate over each profile
 	for profileName, migPlacement := range instasliceObj.Status.NodeResources.MigPlacement {
-		// Skip if profile is already recommended
-		if _, exists := currentProfiles[profileName]; exists {
-			continue
-		}
-		// Check the first size value from the placements for this profile
 		if len(migPlacement.Placements) > 0 {
-			size := migPlacement.Placements[0].Size
-			// Check if the profile is compatible with any remaining slices
-			// Track total fit across all GPUs
 			totalFit := int32(0)
+			// Iterate over all GPUs
 			for _, gpuID := range sortedGPUs {
-				remaining := remainingSlices[gpuID]
-				gpuFit := int32(0)
-				usedSlices := int32(0)
-				// Ensure correct profile placement per GPU
-				for usedSlices+size <= remaining || (usedSlices+size-1 == remaining && (profileName == profile3g20gb || profileName == profile1g10gb)) {
-					gpuFit++
-					usedSlices += size
-				}
-				// Special handling for `7g.40gb` profile (edge case)
-				if profileName == "7g.40gb" && remaining == 7 {
-					gpuFit = 1
-				} else if profileName == "7g.40gb" && remaining > 7 {
-					gpuFit = 0
-				}
-				totalFit += gpuFit
+				totalFit += r.getTotalFitForProfileOnGPU(&instasliceObj, gpuID, profileName, remainingSlices[gpuID])
 			}
-			// Only record the profile **once** with final totalFit
+			// Store total fit count
 			if totalFit > 0 {
 				currentProfiles[profileName] = totalFit
 			}
 		}
 	}
-	// Update metrics only once per profile
+	// Update Prometheus metrics
 	for profileName, totalFit := range currentProfiles {
 		instasliceMetrics.compatibleProfiles.WithLabelValues(profileName, nodeName).
 			Set(float64(totalFit))
-		ctrl.Log.Info("[UpdateCompatibleProfilesMetrics] Added compatible profile", "profile", profileName, "count", totalFit)
+
+		ctrl.Log.Info("[UpdateCompatibleProfilesMetrics] Updated compatible profile", "profile", profileName, "count", totalFit)
 	}
+
 	return nil
 }

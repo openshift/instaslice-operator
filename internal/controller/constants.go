@@ -37,6 +37,7 @@ const (
 	daemonSetImageName               = "quay.io/amalvank/instaslicev2-daemonset:latest"
 	daemonSetName                    = "daemonset"
 	serviceAccountName               = "instaslice-operator-controller-manager"
+	profile7g40gb                    = "7g.40gb"
 	profile3g20gb                    = "3g.20gb"
 	profile1g10gb                    = "1g.10gb"
 
