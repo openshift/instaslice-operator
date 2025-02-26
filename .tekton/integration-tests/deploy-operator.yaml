@@ -256,7 +256,7 @@ spec:
             volumeMounts:
               - name: credentials
                 mountPath: /credentials
-            image: registry.redhat.io/rhel9/go-toolset:1.22.9
+            image: registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.23-openshift-4.19
             script: |
               # git clone https://github.com/cpmeadors/instaslice-operator # for testing
               git clone https://github.com/openshift/instaslice-operator
