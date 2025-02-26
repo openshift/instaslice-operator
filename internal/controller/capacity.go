@@ -195,6 +195,28 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 	return newStart
 }
 
+// getTotalFitForProfileOnGPU checks how many times a profile can fit on a given GPU.
+func (r *InstasliceReconciler) getTotalFitForProfileOnGPU(instasliceObj *inferencev1alpha1.Instaslice, gpuID string, profileName string, remaining int32) int32 {
+	gpuFit := int32(0)
+	usedSlices := int32(0)
+	profileSize := instasliceObj.Status.NodeResources.MigPlacement[profileName].Placements[0].Size
+	// Check if we can fit the profile multiple times
+	for usedSlices+profileSize <= remaining ||
+		(usedSlices+profileSize-1 == remaining && (profileName == profile3g20gb || profileName == profile1g10gb)) {
+		gpuFit++
+		usedSlices += profileSize
+	}
+
+	// Special handling for `7g.40gb`
+	if profileName == profile7g40gb && remaining == 7 {
+		gpuFit = 1
+	} else if profileName == profile7g40gb && remaining > 7 {
+		gpuFit = 0
+	}
+
+	return gpuFit
+}
+
 func (r *InstasliceReconciler) availableClassicalResourcesOnNode(instaslice *inferencev1alpha1.Instaslice) v1.ResourceList {
 	allocatedCpu := resource.MustParse("0")
 	allocatedMemory := resource.MustParse("0")

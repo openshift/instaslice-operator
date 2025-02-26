@@ -182,6 +182,9 @@ type InstasliceStatus struct {
 	// nodeResources specifies the discovered resources of the node
 	// +optional
 	NodeResources DiscoveredNodeResources `json:"nodeResources"`
+	// ObservedGeneration tracks the latest generation of the resource that has been observed and acted upon by the controller
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 //+kubebuilder:object:root=true
