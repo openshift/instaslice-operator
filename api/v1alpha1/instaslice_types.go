@@ -53,11 +53,11 @@ type AllocationRequest struct {
 type AllocationStatus struct {
 	// allocationStatusDaemonset represents the current status of the allocation from the DaemonSet's perspective
 	// +optional
-	AllocationStatusDaemonset `json:"allocationStatusDaemonset"`
+	AllocationStatusDaemonset AllocationStatusDaemonset `json:"allocationStatusDaemonset"`
 
 	// allocationStatusDaemonset represents the current status of the allocation from the Controller's perspective
 	// +optional
-	AllocationStatusController `json:"allocationStatusController"`
+	AllocationStatusController AllocationStatusController `json:"allocationStatusController"`
 }
 type AllocationResult struct {
 	// conditions provide additional information about the allocation
