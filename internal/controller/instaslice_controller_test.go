@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -1064,3 +1065,260 @@ func TestGPUSort(t *testing.T) {
 		})
 	})
 }
+
+func TestGetTotalFitForProfileOnGPU(t *testing.T) {
+	var _ = Describe("GetTotalFitForProfileOnGPU", func() {
+		tests := []struct {
+			name          string
+			instasliceObj *inferencev1alpha1.Instaslice
+			profileName   string
+			size          int32
+			remaining     int32
+			expectedFit   int32
+		}{
+			{
+				name: "Zero remaining capacity",
+				instasliceObj: &inferencev1alpha1.Instaslice{
+					Status: inferencev1alpha1.InstasliceStatus{
+						NodeResources: inferencev1alpha1.DiscoveredNodeResources{
+							MigPlacement: map[string]inferencev1alpha1.Mig{},
+						},
+					},
+				},
+				profileName: "1g.10gb",
+				remaining:   0,
+				expectedFit: 0,
+			},
+			{
+				name: "Profile not found",
+				instasliceObj: &inferencev1alpha1.Instaslice{
+					Status: inferencev1alpha1.InstasliceStatus{
+						NodeResources: inferencev1alpha1.DiscoveredNodeResources{
+							MigPlacement: map[string]inferencev1alpha1.Mig{},
+						},
+					},
+				},
+				profileName: "non-existent-profile",
+				remaining:   10,
+				expectedFit: 0,
+			},
+			{
+				name: "Special case: 7g.40gb with exact fit",
+				instasliceObj: &inferencev1alpha1.Instaslice{
+					Status: inferencev1alpha1.InstasliceStatus{
+						NodeResources: inferencev1alpha1.DiscoveredNodeResources{
+							MigPlacement: map[string]inferencev1alpha1.Mig{
+								"7g.40gb": {
+									Placements: []inferencev1alpha1.Placement{{Size: 7}},
+								},
+							},
+						},
+					},
+				},
+				profileName: "7g.40gb",
+				remaining:   7,
+				expectedFit: 1,
+			},
+			{
+				name: "Regular profile fitting multiple times",
+				instasliceObj: &inferencev1alpha1.Instaslice{
+					Status: inferencev1alpha1.InstasliceStatus{
+						NodeResources: inferencev1alpha1.DiscoveredNodeResources{
+							MigPlacement: map[string]inferencev1alpha1.Mig{
+								"3g.20gb": {
+									Placements: []inferencev1alpha1.Placement{{Size: 4}},
+								},
+							},
+						},
+					},
+				},
+				profileName: "3g.20gb",
+				remaining:   9,
+				expectedFit: 2,
+			},
+			{
+				name: "Exact fit scenario",
+				instasliceObj: &inferencev1alpha1.Instaslice{
+					Status: inferencev1alpha1.InstasliceStatus{
+						NodeResources: inferencev1alpha1.DiscoveredNodeResources{
+							MigPlacement: map[string]inferencev1alpha1.Mig{
+								"2g.10gb": {
+									Placements: []inferencev1alpha1.Placement{{Size: 2}},
+								},
+							},
+						},
+					},
+				},
+				profileName: "2g.10gb",
+				remaining:   4,
+				expectedFit: 2,
+			},
+		}
+
+		for _, tt := range tests {
+			It(tt.name, func() {
+				r := &InstasliceReconciler{}
+				fit := r.getTotalFitForProfileOnGPU(tt.instasliceObj, tt.profileName, tt.size, tt.remaining)
+				Expect(fit).To(Equal(tt.expectedFit))
+			})
+		}
+	})
+}
+
+// Mock client that forces an update error
+type FakeFailingClient struct {
+	client.Client
+	FailOnUpdate bool
+}
+
+func (f *FakeFailingClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	if f.FailOnUpdate {
+		return fmt.Errorf("simulated update failure")
+	}
+	return f.Client.Update(ctx, obj, opts...)
+}
+
+var _ = Describe("Metrics Incrementation", func() {
+	var (
+		ctx        context.Context
+		r          *InstasliceReconciler
+		fakeClient client.Client
+		instaslice *inferencev1alpha1.Instaslice
+		pod        *v1.Pod
+		podUUID    string
+	)
+
+	BeforeEach(func() {
+		ctx = context.TODO()
+
+		scheme := runtime.NewScheme()
+		Expect(inferencev1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(v1.AddToScheme(scheme)).To(Succeed())
+
+		fakeClient = fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithStatusSubresource(&inferencev1alpha1.Instaslice{}).
+			Build()
+		config := config.ConfigFromEnvironment()
+
+		r = &InstasliceReconciler{
+			Client: fakeClient,
+			Config: config,
+		}
+
+		podUUID = "test-pod-uuid-2"
+
+		pod = &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: InstaSliceOperatorNamespace,
+				UID:       types.UID(podUUID),
+				Finalizers: []string{
+					FinalizerName,
+				},
+			},
+		}
+
+		Expect(fakeClient.Create(ctx, pod)).To(Succeed())
+
+		instaslice = &inferencev1alpha1.Instaslice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-instaslice",
+				Namespace: InstaSliceOperatorNamespace,
+			},
+			Spec: inferencev1alpha1.InstasliceSpec{
+				PodAllocationRequests: map[types.UID]inferencev1alpha1.AllocationRequest{
+					types.UID(podUUID): {
+						Profile: "test-profile",
+						PodRef: v1.ObjectReference{
+							Name:      pod.Name,
+							Namespace: InstaSliceOperatorNamespace,
+							UID:       pod.UID,
+						},
+						Resources: v1.ResourceRequirements{},
+					},
+				},
+			},
+			Status: inferencev1alpha1.InstasliceStatus{
+				PodAllocationResults: map[types.UID]inferencev1alpha1.AllocationResult{
+					types.UID(podUUID): {
+						AllocationStatus:            inferencev1alpha1.AllocationStatus{AllocationStatusController: inferencev1alpha1.AllocationStatusCreating},
+						GPUUUID:                     "GPU-12345",
+						Nodename:                    "fake-node",
+						ConfigMapResourceIdentifier: "fake-configmap-uid",
+					},
+				},
+			},
+		}
+
+		Expect(fakeClient.Create(ctx, instaslice)).To(Succeed())
+	})
+
+	// Test for updateMetricsAllSlotsFree
+	It("should update metrics with all slots free when no allocations exist", func() {
+		instaslice.Spec.PodAllocationRequests = nil
+		err := r.updateMetricsAllSlotsFree(ctx, inferencev1alpha1.InstasliceList{Items: []inferencev1alpha1.Instaslice{*instaslice}})
+		Expect(err).ToNot(HaveOccurred(), "updateMetrics should not return an error")
+		Expect(len(instaslice.Spec.PodAllocationRequests)).To(Equal(0))
+	})
+
+	// Test to prevent double metric incrementation
+	It("should not increment metrics more than once for the same generation", func() {
+		instaslice.Status.ObservedGeneration = instaslice.Generation // Metrics already processed
+
+		err := r.IncrementTotalProcessedGpuSliceMetrics("node-1", "gpu-1", 4, 0, "1g.5gb")
+		Expect(err).ToNot(HaveOccurred()) // Should skip incrementation
+	})
+
+	// Test for allocation change triggering metric reprocessing
+	It("should trigger metric reprocessing when generation changes", func() {
+		instaslice.Generation = 2 // Simulate spec change
+
+		err := r.IncrementTotalProcessedGpuSliceMetrics("node-1", "gpu-1", 4, 0, "1g.5gb")
+		Expect(err).ToNot(HaveOccurred())
+
+		instaslice.Status.ObservedGeneration = instaslice.Generation
+		Expect(instaslice.Status.ObservedGeneration).To(Equal(int64(2)))
+	})
+
+	// Validate allocation changes
+	It("should correctly reflect allocation changes in metrics", func() {
+		instaslice.Status.PodAllocationResults["alloc-1"] = inferencev1alpha1.AllocationResult{
+			Nodename: "node-1",
+			GPUUUID:  "gpu-1",
+			MigPlacement: inferencev1alpha1.Placement{
+				Size:  3,
+				Start: 0,
+			},
+		}
+
+		// Simulate initial metrics processing
+		instaslice.Generation = 1 // Explicitly set generation
+		err := r.updateMetrics(ctx, inferencev1alpha1.InstasliceList{Items: []inferencev1alpha1.Instaslice{*instaslice}})
+		Expect(err).ToNot(HaveOccurred(), "updateMetrics should not return an error")
+
+		// Ensure status is updated after processing
+		instaslice.Status.ObservedGeneration = instaslice.Generation
+		_ = r.Status().Update(ctx, instaslice)
+
+		Expect(instaslice.Status.ObservedGeneration).To(Equal(int64(1)))
+
+		// Check cleanup of incompatible profiles
+		err = r.UpdateCompatibleProfilesMetrics(*instaslice, "node-1", map[string]int32{"gpu-1": 0})
+		Expect(err).ToNot(HaveOccurred()) // Ensure the function runs without errors
+
+		Expect(instasliceMetrics.compatibleProfiles.WithLabelValues("1g.5gb", "node-1")).NotTo(BeNil())
+		Expect(instasliceMetrics.compatibleProfiles.WithLabelValues("2g.10gb", "node-1")).NotTo(BeNil())
+
+		// Simulate spec update
+		instaslice.Generation = 3
+		err = r.updateMetrics(ctx, inferencev1alpha1.InstasliceList{Items: []inferencev1alpha1.Instaslice{*instaslice}})
+		Expect(err).ToNot(HaveOccurred(), "updateMetrics should not return an error")
+
+		// Update status again
+		instaslice.Status.ObservedGeneration = instaslice.Generation
+		_ = r.Status().Update(ctx, instaslice)
+
+		Expect(instaslice.Status.ObservedGeneration).To(Equal(int64(3)))
+	})
+})
