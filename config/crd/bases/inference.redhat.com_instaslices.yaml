@@ -324,11 +324,6 @@ spec:
                 - nodeGpus
                 - nodeResources
                 type: object
-              observedGeneration:
-                description: ObservedGeneration tracks the latest generation of the
-                  resource that has been observed and acted upon by the controller
-                format: int64
-                type: integer
               podAllocationResults:
                 additionalProperties:
                   properties:
