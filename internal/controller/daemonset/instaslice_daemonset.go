@@ -343,15 +343,6 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 				log.Error(err, "could not create fake capacity", "node_name", r.NodeName)
 				return err
 			}
-			//get metadata.resourceVersion
-			// for i := 1; i < 5; i++ {
-			// 	err := r.Get(ctx, typeNamespacedName, &instaslice)
-			// 	if err == nil {
-			// 		break
-			// 	}
-			// 	log.Error(err, "Retrying fetch fake capacity", "attempt", i+1, "node_name", r.NodeName)
-			// 	time.Sleep(2 * time.Second)
-			// }
 			err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 10*time.Second, true, func(ctx context.Context) (done bool, err error) {
 				err = r.Get(ctx, typeNamespacedName, &instaslice)
 				if err == nil {
@@ -894,6 +885,44 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 	var ret nvml.Return
 	gi, ret = device.CreateGpuInstanceWithPlacement(&giProfileInfo, &placement)
 	if ret != nvml.SUCCESS {
+		switch ret {
+		case nvml.ERROR_INSUFFICIENT_RESOURCES:
+			// Handle insufficient resources case
+			gpuInstances, ret := device.GetGpuInstances(&giProfileInfo)
+			if ret != nvml.SUCCESS {
+				log.Error(ret, "gpu instances cannot be listed")
+				return nil, fmt.Errorf("gpu instances cannot be listed: %v", ret)
+			}
+
+			for _, gpuInstance := range gpuInstances {
+				gpuInstanceInfo, ret := gpuInstance.GetInfo()
+				if ret != nvml.SUCCESS {
+					log.Error(ret, "unable to obtain gpu instance info")
+					return nil, fmt.Errorf("unable to obtain gpu instance info: %v", ret)
+				}
+
+				parentUuid, ret := gpuInstanceInfo.Device.GetUUID()
+				if ret != nvml.SUCCESS {
+					log.Error(ret, "unable to obtain parent gpu uuuid")
+					return nil, fmt.Errorf("unable to obtain parent gpu uuuid: %v", ret)
+				}
+				gpuUUid, ret := device.GetUUID()
+				if ret != nvml.SUCCESS {
+					log.Error(ret, "unable to obtain parent gpu uuuid")
+				}
+				if gpuInstanceInfo.Placement.Start == uint32(placement.Start) && parentUuid == gpuUUid {
+					gi, ret = device.GetGpuInstanceById(int(gpuInstanceInfo.Id))
+					if ret != nvml.SUCCESS {
+						log.Error(ret, "unable to obtain gi post iteration")
+						return nil, fmt.Errorf("unable to obtain gi post iteration: %v", ret)
+					}
+				}
+			}
+		default:
+			// this case is typically for scenario where ret is not equal to nvml.ERROR_INSUFFICIENT_RESOURCES
+			log.Error(ret, "gpu instance creation errored out with unknown error")
+			return nil, fmt.Errorf("gpu instance creation failed: %v", ret)
+		}
 		return nil, fmt.Errorf("error creating gpu instance profile with: %v", ret)
 	}
 
@@ -907,7 +936,6 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 	if ret != nvml.SUCCESS {
 		if ret != nvml.ERROR_INSUFFICIENT_RESOURCES {
 			log.Error(ret, "error creating Compute instance", "ci", ci)
-			return nil, fmt.Errorf("error creating compute instance: %v", ret)
 		}
 	}
 

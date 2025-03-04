@@ -18,8 +18,10 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -41,12 +43,17 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	logr "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -79,6 +86,10 @@ type FirstFitPolicy struct{}
 
 var daemonSetlabel = map[string]string{"app": "controller-daemonset"}
 
+type NodeReconciler struct {
+	client.Client
+}
+
 //+kubebuilder:rbac:groups=inference.redhat.com,resources=instaslices,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=inference.redhat.com,resources=instaslices/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=inference.redhat.com,resources=instaslices/finalizers,verbs=update
@@ -90,6 +101,58 @@ var daemonSetlabel = map[string]string{"app": "controller-daemonset"}
 //+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=create;update;get;watch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
+func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	var node v1.Node
+	err := r.Get(ctx, req.NamespacedName, &node)
+	log.FromContext(ctx).Info("entering node reconcile")
+	instasliceKey := types.NamespacedName{
+		Namespace: InstaSliceOperatorNamespace,
+		Name:      node.Name,
+	}
+	if err != nil {
+		if errors.IsNotFound(err) {
+			instaslice := &inferencev1alpha1.Instaslice{}
+			instasliceKey := types.NamespacedName{Name: req.Name} // Assuming CR name matches node name
+
+			if err := r.Get(ctx, instasliceKey, instaslice); err != nil {
+				if errors.IsNotFound(err) {
+					return ctrl.Result{}, nil
+				}
+				return ctrl.Result{}, err
+			}
+
+			// Delete the InstaSlice CR
+			if err := r.Delete(ctx, instaslice); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to delete InstaSlice CR for deleted node %s: %w", req.Name, err)
+			}
+			log.FromContext(ctx).Info("Done deleting instaslice CR", "name", instaslice.Name)
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+	if val, exists := node.Labels["nvidia.com/mig.strategy"]; exists && val != "mixed" {
+		instaslice := &inferencev1alpha1.Instaslice{}
+		err := r.Get(ctx, instasliceKey, instaslice)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return ctrl.Result{}, nil
+			}
+			return ctrl.Result{}, err
+		}
+
+		if err := r.Delete(ctx, instaslice); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to delete InstaSlice CR for node %s: %w", node.Name, err)
+		}
+		log.FromContext(ctx).Info("Done deleting instaslice CR", "name", instaslice.Name)
+		if err := r.cleanUpNodeResources(ctx, &node); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to clean up node resources for node %s: %w", node.Name, err)
+		}
+		log.FromContext(ctx).Info("Done deleting instaslice extended resources")
+	}
+
+	return ctrl.Result{}, nil
+}
+
 func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logr.FromContext(ctx)
 
@@ -100,55 +163,9 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return ctrl.Result{}, err
 		}
 	}
-
-	// 1. Ensure DaemonSet is deployed
-	daemonSet := &appsv1.DaemonSet{}
-	err := r.Get(ctx, types.NamespacedName{Name: InstasliceDaemonsetName, Namespace: InstaSliceOperatorNamespace}, daemonSet)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// DaemonSet doesn't exist, so create it
-			daemonSet = r.createInstaSliceDaemonSet(InstaSliceOperatorNamespace)
-			err = r.Create(ctx, daemonSet)
-			if err != nil {
-				log.Error(err, "Failed to create DaemonSet")
-				return ctrl.Result{RequeueAfter: time.Minute}, err
-			}
-			log.Info("DaemonSet created successfully, waiting for pods to be ready")
-			return ctrl.Result{RequeueAfter: requeue10sDelay}, nil
-		}
-		log.Error(err, "Failed to get DaemonSet")
-		return ctrl.Result{RequeueAfter: time.Minute}, err
-	}
-
-	// 2. Check if at least one DaemonSet pod is ready
-	var podList v1.PodList
-	labelSelector := labels.SelectorFromSet(daemonSet.Spec.Selector.MatchLabels)
-
-	listOptions := &client.ListOptions{
-		LabelSelector: labelSelector,
-		Namespace:     InstaSliceOperatorNamespace,
-	}
-
-	if err := r.List(ctx, &podList, listOptions); err != nil {
-		log.Error(err, "Failed to list DaemonSet pods")
-		return ctrl.Result{RequeueAfter: time.Minute}, err
-	}
-
-	// Check if at least one daemonset pod is ready
-	isAnyPodReady := false
-	for _, pod := range podList.Items {
-		if pod.Status.Phase == v1.PodRunning && len(pod.Status.ContainerStatuses) > 0 && pod.Status.ContainerStatuses[0].Ready {
-			isAnyPodReady = true
-			break
-		}
-	}
-	if daemonSet.Status.NumberReady == 0 && !isAnyPodReady {
-		log.Info("No DaemonSet pods are ready yet, waiting...")
-		return ctrl.Result{RequeueAfter: requeue10sDelay}, nil
-	}
 	// rebuild cache on node failure
 	node := &v1.Node{}
-	err = r.Get(ctx, req.NamespacedName, node)
+	err := r.Get(ctx, req.NamespacedName, node)
 	if err == nil {
 		for _, condition := range node.Status.Conditions {
 			if condition.Type == v1.NodeReady && condition.Status != v1.ConditionTrue {
@@ -445,7 +462,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			randomDuration := time.Duration(rand.Intn(10)+1) * time.Second
 			return ctrl.Result{RequeueAfter: randomDuration}, nil
 		}
-
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	return ctrl.Result{}, nil
@@ -481,7 +498,7 @@ func (r *InstasliceReconciler) createInstaSliceDaemonSet(namespace string) *apps
 						RunAsNonRoot: func(b bool) *bool { return &b }(false),
 					},
 					NodeSelector: map[string]string{
-						"nvidia.com/mig.capable": "true",
+						"nvidia.com/mig.strategy": "mixed",
 					},
 					Containers: []v1.Container{
 						{
@@ -618,13 +635,36 @@ func (r *InstasliceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
+	if err := r.setupWithManager(mgr); err != nil {
+		return err
+	}
 
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1.Pod{}).Named("InstaSlice-controller").
-		Watches(&inferencev1alpha1.Instaslice{}, handler.EnqueueRequestsFromMapFunc(r.podMapFunc)).
-		Watches(&v1.Node{},
-			&handler.EnqueueRequestForObject{}).
-		Complete(r)
+	mgrAddErr := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		<-mgr.Elected()
+		// Ensure DaemonSet is deployed at startup
+		if err := r.ensureDaemonSet(ctx); err != nil {
+			return fmt.Errorf("failed to ensure DaemonSet: %w", err)
+		}
+		return nil
+	}))
+
+	if mgrAddErr != nil {
+		return mgrAddErr
+	}
+	return nil
+}
+
+func hasInstasliceMutation(obj client.Object) bool {
+	pod, ok := obj.(*v1.Pod)
+	if !ok {
+		return false
+	}
+
+	if value, exists := pod.Annotations["instaslice.redhat.com/mutated"]; exists && value == "true" {
+		return true
+	}
+
+	return false
 }
 
 func (r *InstasliceReconciler) unGatePod(podUpdate *v1.Pod) *v1.Pod {
@@ -767,4 +807,161 @@ func (r *InstasliceReconciler) ReconcileSCC(ctx context.Context) error {
 	sccs := manifests.Filter(manifestival.ByKind("SecurityContextConstraints"))
 	sccs.Client = mfc.NewClient(r.Client)
 	return sccs.Apply()
+}
+
+func (r *InstasliceReconciler) ensureDaemonSet(ctx context.Context) error {
+	log := logr.FromContext(ctx)
+	daemonSet := &appsv1.DaemonSet{}
+	err := r.Get(ctx, types.NamespacedName{Name: InstasliceDaemonsetName, Namespace: InstaSliceOperatorNamespace}, daemonSet)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			daemonSet = r.createInstaSliceDaemonSet(InstaSliceOperatorNamespace)
+			if err := r.Create(ctx, daemonSet); err != nil {
+				log.Error(err, "Failed to create DaemonSet")
+				return err
+			}
+			log.Info("DaemonSet created successfully")
+		} else {
+			log.Error(err, "Failed to get DaemonSet")
+			return err
+		}
+	}
+
+	pollInterval := 5 * time.Second
+	timeout := 2 * time.Minute
+
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	log.Info("Waiting for at least one DaemonSet pod to be ready...")
+
+	err = wait.PollUntilContextTimeout(ctxWithTimeout, pollInterval, timeout, true, func(ctx context.Context) (bool, error) {
+		isReady, err := r.isDaemonSetPodReady(ctx, daemonSet)
+		if err != nil {
+			log.Error(err, "Failed to check DaemonSet pod readiness")
+			return false, err
+		}
+		return isReady, nil
+	})
+
+	if err != nil {
+		log.Error(err, "Timeout waiting for DaemonSet pod readiness")
+		return err
+	}
+
+	log.Info("At least one DaemonSet pod is ready")
+	return nil
+}
+
+func (r *InstasliceReconciler) isDaemonSetPodReady(ctx context.Context, daemonSet *appsv1.DaemonSet) (bool, error) {
+	var podList v1.PodList
+	labelSelector := labels.SelectorFromSet(daemonSet.Spec.Selector.MatchLabels)
+
+	listOptions := &client.ListOptions{
+		LabelSelector: labelSelector,
+		Namespace:     daemonSet.Namespace,
+	}
+
+	if err := r.List(ctx, &podList, listOptions); err != nil {
+		return false, err
+	}
+
+	for _, pod := range podList.Items {
+		if pod.Status.Phase == v1.PodRunning && len(pod.Status.ContainerStatuses) > 0 && pod.Status.ContainerStatuses[0].Ready {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// Enable creation of controller caches to talk to the API server in order to perform
+// object discovery in SetupWithManager
+func (r *InstasliceReconciler) setupWithManager(mgr ctrl.Manager) error {
+	instaslicePredicate := predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool {
+			return hasInstasliceMutation(e.Object)
+		},
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return hasInstasliceMutation(e.ObjectNew) || !isEqual(e.ObjectOld, e.ObjectNew)
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return hasInstasliceMutation(e.Object)
+		},
+	}
+	if err := ctrl.NewControllerManagedBy(mgr).
+		For(&v1.Pod{}).Named("InstaSlice-controller").
+		Watches(&inferencev1alpha1.Instaslice{}, handler.EnqueueRequestsFromMapFunc(r.podMapFunc)).
+		WithEventFilter(instaslicePredicate).
+		Complete(r); err != nil {
+		return err
+	}
+	nodePredicate := predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldNode := e.ObjectOld.(*v1.Node)
+			newNode := e.ObjectNew.(*v1.Node)
+			oldMig, oldExists := oldNode.Labels["nvidia.com/mig.strategy"]
+			newMig, newExists := newNode.Labels["nvidia.com/mig.strategy"]
+
+			return (oldExists != newExists) || (oldMig != newMig)
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return true
+		},
+	}
+	nodeReconciler := &NodeReconciler{Client: mgr.GetClient()}
+	if err := ctrl.NewControllerManagedBy(mgr).
+		For(&v1.Node{}).Named("Node-controller").
+		WithEventFilter(nodePredicate).
+		Complete(nodeReconciler); err != nil {
+		return err
+	}
+	return nil
+}
+
+func isEqual(oldObj, newObj client.Object) bool {
+	oldInstaslice, ok1 := oldObj.(*inferencev1alpha1.Instaslice)
+	newInstaslice, ok2 := newObj.(*inferencev1alpha1.Instaslice)
+
+	if !ok1 || !ok2 {
+		return false // Type mismatch, consider this an update
+	}
+
+	// Compare the relevant fields that matter for reconciliation
+	return reflect.DeepEqual(oldInstaslice.Spec, newInstaslice.Spec) &&
+		reflect.DeepEqual(oldInstaslice.Status, newInstaslice.Status)
+}
+
+// cleanUpNodeResources removes custom resources from the node
+func (r *NodeReconciler) cleanUpNodeResources(ctx context.Context, node *v1.Node) error {
+	resourceRegex := regexp.MustCompile(`^instaslice\.redhat\.com/(.*)`)
+	patchData := map[string]interface{}{
+		"status": map[string]interface{}{
+			"capacity":    map[string]interface{}{},
+			"allocatable": map[string]interface{}{},
+		},
+	}
+
+	for resource := range node.Status.Capacity {
+		if resourceRegex.MatchString(string(resource)) {
+			patchData["status"].(map[string]interface{})["capacity"].(map[string]interface{})[string(resource)] = nil
+		}
+	}
+	for resource := range node.Status.Allocatable {
+		if resourceRegex.MatchString(string(resource)) {
+			patchData["status"].(map[string]interface{})["allocatable"].(map[string]interface{})[string(resource)] = nil
+		}
+	}
+
+	if len(patchData["status"].(map[string]interface{})["capacity"].(map[string]interface{})) == 0 &&
+		len(patchData["status"].(map[string]interface{})["allocatable"].(map[string]interface{})) == 0 {
+		return nil
+	}
+
+	patchBytes, err := json.Marshal(patchData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal patch data: %w", err)
+	}
+
+	return r.Status().Patch(ctx, node, client.RawPatch(types.MergePatchType, patchBytes))
 }
