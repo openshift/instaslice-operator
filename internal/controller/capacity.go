@@ -63,7 +63,8 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 				updatedInstaSliceObject.Spec.PodAllocationRequests = make(map[types.UID]inferencev1alpha1.AllocationRequest)
 			}
 
-			newStart := r.getStartIndexFromPreparedState(updatedInstaSliceObject, gpuuuid, profileName)
+			gpuAllocatedIndex := gpuAllocatedSlices(updatedInstaSliceObject, gpuuuid)
+			newStart := r.getStartIndexFromPreparedState(updatedInstaSliceObject, profileName, gpuAllocatedIndex)
 			// For example, a newStart of 9 is considered invalid.
 			notValidIndex := int32(9)
 			if newStart == notValidIndex {
@@ -109,8 +110,8 @@ func sortGPUs(updatedInstaSliceObject *inferencev1alpha1.Instaslice) []string {
 	return gpuUUIDs
 }
 
-// accounting logic that finds the correct GPU and index where a slice could be placed.
-func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferencev1alpha1.Instaslice, gpuUUID string, profileName string) int32 {
+// gpuAllocatedSlices stores already allocated slices in indexes
+func gpuAllocatedSlices(instaslice *inferencev1alpha1.Instaslice, gpuUUID string) []int32 {
 	//TODO: generalize, A100 and H100 have 8 indexes for 3g and 7g and 7 for rest, so go with 8 and we are bounded by
 	//only valid placement indexes for a profile.
 	var gpuAllocatedIndex [8]int32
@@ -127,6 +128,30 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 			}
 		}
 	}
+	return gpuAllocatedIndex[:]
+}
+
+// getFreeAndUsedSlicesCount calculates the number of free and used slices on a GPU
+func getFreeAndUsedSlicesCount(instaslice *inferencev1alpha1.Instaslice, gpuUUID string) (int32, int32) {
+	gpuAllocatedIndex := gpuAllocatedSlices(instaslice, gpuUUID)
+	freeSlices := int32(0)
+	usedSlices := int32(0)
+	for i, allocated := range gpuAllocatedIndex {
+		if i == 7 { // index 7 is not a slice, just an extra index
+			continue
+		}
+		// Count free and used slices
+		if allocated == 0 {
+			freeSlices++
+		} else {
+			usedSlices++
+		}
+	}
+	return freeSlices, usedSlices
+}
+
+// getStartIndexFromPreparedState finds the correct GPU and index where a slice could be placed.
+func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferencev1alpha1.Instaslice, profileName string, gpuAllocatedIndex []int32) int32 {
 	// Check if all indices are allocated
 	allAllocated := true
 	for _, allocated := range gpuAllocatedIndex {
@@ -191,8 +216,62 @@ func (*InstasliceReconciler) getStartIndexFromPreparedState(instaslice *inferenc
 		}
 
 	}
-
 	return newStart
+}
+
+func (r *InstasliceReconciler) actualProfileSliceSize(instaslice *inferencev1alpha1.Instaslice, profileName, gpuUUID string) int32 {
+	gpuAllocatedIndex := gpuAllocatedSlices(instaslice, gpuUUID)
+	actualSliceSize := int32(0)
+	startIdx := r.getStartIndexFromPreparedState(instaslice, profileName, gpuAllocatedIndex)
+	// Get required slice size
+	var neededContinousSlot int32
+	for profile, placement := range instaslice.Status.NodeResources.MigPlacement {
+		if profile == profileName {
+			neededContinousSlot = placement.Placements[0].Size
+			break
+		}
+	}
+	// Mark the allocated slots (simulate the placement)
+	for i := int32(0); i < neededContinousSlot; i++ {
+		if startIdx+i < int32(len(gpuAllocatedIndex)-1) {
+			actualSliceSize++
+		}
+	}
+	return actualSliceSize
+}
+
+// getTotalFitForProfileOnGPU checks how many times a profile can fit on a given GPU.
+func (r *InstasliceReconciler) getTotalFitForProfileOnGPU(instaslice *inferencev1alpha1.Instaslice, profileName, gpuUUID string) int32 {
+	// Create a copy of the allocated GPU slots to simulate placements
+	originalAllocatedIndex := gpuAllocatedSlices(instaslice, gpuUUID)
+	gpuAllocatedIndex := make([]int32, len(originalAllocatedIndex))
+	copy(gpuAllocatedIndex, originalAllocatedIndex) // Ensure we're not modifying the original state
+	fitCount := int32(0)
+	for i := 0; i < len(originalAllocatedIndex); i++ {
+		// Find the next available start index
+		startIdx := r.getStartIndexFromPreparedState(instaslice, profileName, gpuAllocatedIndex)
+		// If no valid placement, break the loop
+		if startIdx == 9 {
+			break
+		}
+		// Get required slice size
+		var neededContinousSlot int32
+		for profile, placement := range instaslice.Status.NodeResources.MigPlacement {
+			if profile == profileName {
+				neededContinousSlot = placement.Placements[0].Size
+				break
+			}
+		}
+		// Mark the allocated slots (simulate the placement)
+		for i := int32(0); i < neededContinousSlot; i++ {
+			if startIdx+i < int32(len(gpuAllocatedIndex)) {
+				gpuAllocatedIndex[startIdx+i] = 1
+			}
+		}
+		// Increment fit count
+		fitCount++
+	}
+	return fitCount
 }
 
 func (r *InstasliceReconciler) availableClassicalResourcesOnNode(instaslice *inferencev1alpha1.Instaslice) v1.ResourceList {
