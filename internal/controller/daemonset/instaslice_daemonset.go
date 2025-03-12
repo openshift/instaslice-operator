@@ -82,6 +82,26 @@ type MigDeviceInfo struct {
 	size   int32
 }
 
+func (info *MigDeviceInfo) UUID() string {
+	return info.uuid
+}
+
+func (info *MigDeviceInfo) GiInfo() *nvml.GpuInstanceInfo {
+	return info.giInfo
+}
+
+func (info *MigDeviceInfo) CiInfo() *nvml.ComputeInstanceInfo {
+	return info.ciInfo
+}
+
+func (info *MigDeviceInfo) Start() int32 {
+	return info.start
+}
+
+func (info *MigDeviceInfo) Size() int32 {
+	return info.size
+}
+
 func NewInstasliceDaemonsetReconciler(
 	client client.Client,
 	scheme *runtime.Scheme,
@@ -366,7 +386,7 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 		return fmt.Errorf("unable to get device handle: %v", ret)
 	}
 
-	migInfos, err := populateMigDeviceInfos(parent)
+	migInfos, err := PopulateMigDeviceInfos(parent)
 	if err != nil {
 		return fmt.Errorf("unable to walk MIGs: %v", err)
 	}
@@ -921,7 +941,8 @@ func walkMigDevices(d nvml.Device, f func(i int, d nvml.Device) error) error {
 	return nil
 }
 
-func populateMigDeviceInfos(device nvml.Device) (map[string]*MigDeviceInfo, error) {
+// PopulateMigDeviceInfos fetches and populates the mig device infos from the GPU device
+func PopulateMigDeviceInfos(device nvml.Device) (map[string]*MigDeviceInfo, error) {
 	migInfos := make(map[string]*MigDeviceInfo)
 
 	err := walkMigDevices(device, func(i int, migDevice nvml.Device) error {
@@ -1041,7 +1062,7 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 		}
 	}
 
-	migInfos, err := populateMigDeviceInfos(device)
+	migInfos, err := PopulateMigDeviceInfos(device)
 	if err != nil {
 		log.Error(err, "unable to iterate over newly created MIG devices")
 		return nil, fmt.Errorf("failed to populate MIG device infos: %v", err)
