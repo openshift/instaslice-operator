@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/NVIDIA/go-nvml/pkg/nvml"
+	"github.com/openshift/instaslice-operator/internal/controller/daemonset"
 	"io"
 	"log"
 	"os"
@@ -32,7 +34,6 @@ import (
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
 
-	"github.com/openshift/instaslice-operator/internal/controller/daemonset"
 	"github.com/openshift/instaslice-operator/test/e2e/resources"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -746,8 +747,160 @@ var _ = Describe("controller", Ordered, func() {
 				return longRunningCount-countRunning == 1
 			}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "1 workload should be pending")
 		})
+
+		It("should be able to create the MIG slices of same UUID on the GPU before and after a node reboot", func() {
+			if emulated {
+				Skip("Skipping because EmulatorMode is true")
+			}
+			// Get the instaslice objects
+			err := k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
+			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve Instaslice object")
+			referenceLen := len(instasliceObjs.Items[0].Status.NodeResources.NodeGPUs)
+			// make sure all the instaslice objects have the same GPU data
+			for _, obj := range instasliceObjs.Items {
+				currentLen := len(obj.Status.NodeResources.NodeGPUs)
+				Expect(currentLen).To(Equal(referenceLen), "Instaslice Object %s has a different number of GPUs", obj.Name)
+			}
+			// numNewNames := referenceLen * 7
+			numNewNames := 1
+			podTemplate := resources.GetTestGPULongRunningWorkload()
+			DeferCleanup(func() {
+				podList := &corev1.PodList{}
+				err := k8sClient.List(ctx, podList, client.InNamespace(podTemplate.Namespace))
+				if err != nil {
+					log.Printf("Failed to list pods: %v\n", err)
+					return
+				}
+				// Delete the pods after the test
+				for _, pod := range podList.Items {
+					err := k8sClient.Delete(ctx, &pod)
+					if err != nil {
+						log.Printf("Failed to delete pod %s: %v\n", pod.Name, err)
+					} else {
+						log.Printf("Deleted pod: %s\n", pod.Name)
+					}
+				}
+			})
+			// create the long-running pods
+			for i := 1; i <= numNewNames; i++ {
+				newName := fmt.Sprintf("cuda-vectoradd-%d", i+1)
+				pod := podTemplate.DeepCopy()
+				pod.Name = newName
+				pod.Spec.Containers[0].Name = newName
+
+				err := k8sClient.Create(ctx, pod)
+				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Failed to create pod %s", newName))
+			}
+			// fetch the created pods
+			podList := &corev1.PodList{}
+			err = k8sClient.List(ctx, podList, client.InNamespace(podTemplate.Namespace))
+			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve pods")
+			err = k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
+			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve instaslice objects")
+			for _, pod := range podList.Items {
+				Expect(len(pod.Spec.Containers)).To(Not(Equal(0)), fmt.Sprintf("No containers in the pod %s", pod.Name))
+				Expect(len(pod.Spec.Containers[0].EnvFrom)).To(Not(Equal(0)), fmt.Sprintf("No configMap reference in the pod %s", pod.Name))
+				cmRefName := pod.Spec.Containers[0].EnvFrom[0].ConfigMapRef.Name
+				cm, err := clientSet.CoreV1().ConfigMaps(pod.Namespace).Get(ctx, cmRefName, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Could not get the config map for the pod %s", pod.Name))
+				migUUID, present := cm.Data["CUDA_VISIBLE_DEVICES"]
+				Expect(present).To(BeTrue(), fmt.Sprintf("Could not get the MIGUUID from the config map %s", cm.Name))
+				Eventually(func() error {
+					for _, obj := range instasliceObjs.Items {
+						if _, present := obj.Status.PodAllocationResults[pod.UID]; present {
+							// delete the MIG slice from the GPU
+							err = deleteMIGDevice(obj.Status.PodAllocationResults[pod.UID].MigPlacement.Start, obj.Status.PodAllocationResults[pod.UID].GPUUUID)
+							Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Error deleting the MIG slice, UUID: %s, GPUUID: %s", migUUID, obj.Status.PodAllocationResults[pod.UID].GPUUUID))
+							// update the BootId of the Instaslice now
+							obj.Status.NodeResources.BootID = "random-boot-id-e2e-test"
+							err = k8sClient.Status().Update(ctx, &obj)
+							Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Error updating the instaslice status, instaslice: %s", obj.Name))
+							// Observe the MIG slice has been created
+							Eventually(func() bool {
+								var found bool
+								err = getMIGDevice(obj.Status.PodAllocationResults[pod.UID].MigPlacement.Start, obj.Status.PodAllocationResults[pod.UID].GPUUUID)
+								if err == nil {
+									found = true
+								}
+								return found
+							}, 2*time.Minute, 5*time.Second).Should(BeTrue(), fmt.Sprintf("Error getting the MIG slice after Reboot, UUID: %s, GPUUID: %s", migUUID, obj.Status.PodAllocationResults[pod.UID].GPUUUID))
+							return nil
+						}
+					}
+					return fmt.Errorf("no allocation found")
+				}, 2*time.Minute, 5*time.Second).Should(BeNil(), fmt.Sprintf("pod allocations not found in any of the instaslice objects, pod : %s, uid: %s", pod.Name, pod.UID))
+			}
+		})
 	})
 })
+
+func deleteMIGDevice(migStart int32, gpuUID string) error {
+	// Initialize NVML
+	if ret := nvml.Init(); ret != nvml.SUCCESS {
+		log.Fatalf("Failed to initialize NVML: %v\n", nvml.ErrorString(ret))
+	}
+	defer nvml.Shutdown()
+
+	device, ret := nvml.DeviceGetHandleByUUID(gpuUID)
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("unable to get device handle for the GPU: %s", gpuUID)
+	}
+
+	// populate the MIGInfos from the GPUUID
+	migInfos, err := daemonset.PopulateMigDeviceInfos(device)
+	if err != nil {
+		return err
+	}
+	for _, migdevice := range migInfos {
+		if migdevice.UUID() == gpuUID && migdevice.Start() == migStart {
+			gi, ret := device.GetGpuInstanceById(int(migdevice.GiInfo().Id))
+			if ret != nvml.SUCCESS {
+				return fmt.Errorf("unable to find GI: %v", ret)
+			}
+			ci, ret := gi.GetComputeInstanceById(int(migdevice.CiInfo().Id))
+			if ret != nvml.SUCCESS {
+				return fmt.Errorf("unable to find CI: %v", ret)
+			}
+			// Destroy CI
+			ret = ci.Destroy()
+			if ret != nvml.SUCCESS {
+				return fmt.Errorf("unable to destroy CI: %v", ret)
+			}
+			// Destroy GI
+			ret = gi.Destroy()
+			if ret != nvml.SUCCESS {
+				return fmt.Errorf("unable to destroy GI: %v", ret)
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+func getMIGDevice(migStart int32, gpuUID string) error {
+	// Initialize NVML
+	if ret := nvml.Init(); ret != nvml.SUCCESS {
+		log.Fatalf("Failed to initialize NVML: %v\n", nvml.ErrorString(ret))
+	}
+	defer nvml.Shutdown()
+
+	device, ret := nvml.DeviceGetHandleByUUID(gpuUID)
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("unable to get device handle for the GPU: %s", gpuUID)
+	}
+
+	// populate the MIGInfos from the GPUUID
+	migInfos, err := daemonset.PopulateMigDeviceInfos(device)
+	if err != nil {
+		return err
+	}
+	for _, migdevice := range migInfos {
+		if migdevice.UUID() == gpuUID && migdevice.Start() == migStart {
+			return nil
+		}
+	}
+	return fmt.Errorf("unable to find mig device, GPU : %s", gpuUID)
+}
 
 func getNodeNames(label map[string]string) ([]string, error) {
 	nodeNames := make([]string, 0)
