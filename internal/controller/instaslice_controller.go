@@ -41,12 +41,14 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logr "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -188,12 +190,12 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if pod.Status.Phase == v1.PodFailed && controllerutil.ContainsFinalizer(pod, FinalizerName) {
 		for _, instaslice := range instasliceList.Items {
 			for uuid, allocation := range instaslice.Status.PodAllocationResults {
+				allocRequest := instaslice.Spec.PodAllocationRequests[uuid]
 				if pod.UID == uuid {
 					if allocation.AllocationStatus.AllocationStatusController == inferencev1alpha1.AllocationStatusCreating && allocation.AllocationStatus.AllocationStatusDaemonset == "" {
 						return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
 					}
 					if allocation.AllocationStatus.AllocationStatusDaemonset == inferencev1alpha1.AllocationStatusCreated || allocation.AllocationStatus.AllocationStatusController == inferencev1alpha1.AllocationStatusUngated {
-						allocRequest := instaslice.Spec.PodAllocationRequests[uuid]
 						resultDeleting, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, &allocation, &allocRequest)
 						if err != nil {
 							return resultDeleting, nil
@@ -206,6 +208,14 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						err := r.removeInstasliceAllocation(ctx, instaslice.Name, &allocation)
 						if err != nil {
 							return ctrl.Result{}, err
+						}
+						// update DeployedPodTotal Metrics by setting value to 0 as pod allocation is deleted and pod is no loger consuming slices
+						if err = r.UpdateDeployedPodTotalMetrics(string(allocation.Nodename), allocation.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, 0); err != nil {
+							log.Error(err, "Failed to update deployed pod metrics", "nodeName", allocation.Nodename)
+						}
+						//update compatible profiles metrics
+						if err := r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name); err != nil {
+							log.Error(err, "Failed to update Compatible Profiles Metrics", "nodeName", instaslice.Name)
 						}
 						// requeue for the finalizer to be removed
 						return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
@@ -231,8 +241,8 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		for _, instaslice := range instasliceList.Items {
 			for uuid, allocation := range instaslice.Status.PodAllocationResults {
 				if uuid == pod.UID {
+					allocRequest := instaslice.Spec.PodAllocationRequests[uuid]
 					if allocation.AllocationStatus.AllocationStatusDaemonset != inferencev1alpha1.AllocationStatusDeleted {
-						allocRequest := instaslice.Spec.PodAllocationRequests[uuid]
 						log.Info("setting status to deleting", "pod", pod.Name)
 						result, err := r.setInstasliceAllocationToDeleting(ctx, instaslice.Name, &allocation, &allocRequest)
 						if err != nil {
@@ -247,6 +257,14 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						err := r.removeInstasliceAllocation(ctx, instaslice.Name, &allocation)
 						if err != nil {
 							return ctrl.Result{}, err
+						}
+						// update DeployedPodTotal Metrics by setting value to 0 as pod allocation is deleted and pod is no loger consuming slices
+						if err = r.UpdateDeployedPodTotalMetrics(string(allocation.Nodename), allocation.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, 0); err != nil {
+							log.Error(err, "Failed to update deployed pod metrics", "nodeName", allocation.Nodename)
+						}
+						//update compatible profiles metrics
+						if err := r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name); err != nil {
+							log.Error(err, "Failed to update Compatible Profiles Metrics", "nodeName", instaslice.Name)
 						}
 						// requeue for the finalizer to be removed
 						return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
@@ -273,9 +291,9 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		// allocation can be in creating or created while the user deletes the pod.
 		for _, instaslice := range instasliceList.Items {
 			for podUuid, allocation := range instaslice.Status.PodAllocationResults {
+				allocRequest := instaslice.Spec.PodAllocationRequests[podUuid]
 				if podUuid == pod.UID && (allocation.AllocationStatus.AllocationStatusDaemonset == inferencev1alpha1.AllocationStatusCreated) {
 					allocation.AllocationStatus.AllocationStatusController = inferencev1alpha1.AllocationStatusDeleting
-					allocRequest := instaslice.Spec.PodAllocationRequests[podUuid]
 					if err := utils.UpdateOrDeleteInstasliceAllocations(ctx, r.Client, instaslice.Name, &allocation, &allocRequest); err != nil {
 						log.Info("unable to set instaslice to state deleted for ungated", "pod", pod.Name)
 						return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
@@ -286,6 +304,14 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					err := r.removeInstasliceAllocation(ctx, instaslice.Name, &allocation)
 					if err != nil {
 						return ctrl.Result{}, err
+					}
+					// update DeployedPodTotal Metrics by setting value to 0 as pod allocation is deleted and pod is no loger consuming slices
+					if err = r.UpdateDeployedPodTotalMetrics(string(allocation.Nodename), allocation.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, 0); err != nil {
+						log.Error(err, "Failed to update deployed pod metrics", "nodeName", allocation.Nodename)
+					}
+					//update compatible profiles metrics
+					if err := r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name); err != nil {
+						log.Error(err, "Failed to update Compatible Profiles Metrics", "nodeName", instaslice.Name)
 					}
 					if controllerutil.RemoveFinalizer(pod, FinalizerName) {
 						if err := r.Update(ctx, pod); err != nil {
@@ -298,7 +324,6 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				}
 			}
 		}
-
 		return ctrl.Result{}, nil
 	}
 	// handle graceful termination of pods, wait for about 30 seconds from the time deletiontimestamp is set on the pod
@@ -425,10 +450,15 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	}
 
+	err = r.updateMetrics(ctx, instasliceList)
+	if err != nil {
+		log.Error(err, "Failed to update instaslice metrics")
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }
 
-// create the DaemonSet object
+// createInstaSliceDaemonSet - create the DaemonSet object
 func (r *InstasliceReconciler) createInstaSliceDaemonSet(namespace string) *appsv1.DaemonSet {
 	emulatorMode := r.Config.EmulatorModeEnable
 	instasliceDaemonsetImage := r.Config.DaemonsetImage
@@ -542,6 +572,7 @@ func (*InstasliceReconciler) extractGpuProfile(instaslice *inferencev1alpha1.Ins
 	return size, discoveredGiprofile, Ciprofileid, Ciengprofileid
 }
 
+// isPodSchedulingGated checks if a pod has a scheduling gate and is actively blocked
 func checkIfPodGatedByInstaSlice(pod *v1.Pod) bool {
 	for _, gate := range pod.Spec.SchedulingGates {
 		if gate.Name == GateName {
@@ -586,20 +617,73 @@ func (r *InstasliceReconciler) podMapFunc(ctx context.Context, obj client.Object
 	return requests
 }
 
-// SetupWithManager sets up the controller with the Manager.
+// Initialize Prometheus-compatible profiles metrics when the controller starts
+// Adds a background goroutine that waits for Instaslice objects.
+// Proceeds to setupWithManager(mgr) to start the reconciler
+// Does not block the controller from reconciling
+// UpdateCompatibleProfilesMetrics only updates Prometheus metrics,in-memory and do not persist in etcd
 func (r *InstasliceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	restConfig := mgr.GetConfig()
-
 	var err error
 	r.kubeClient, err = kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		return err
 	}
+	mgrAddErr := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		log := logr.FromContext(ctx)
+		<-mgr.Elected() // Wait for leader election before executing
+		// Retry mechanism to wait for Instaslice objects
+		var instasliceList inferencev1alpha1.InstasliceList
+		retryErr := wait.PollUntilContextTimeout(ctx, 2*time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
+			if err := r.List(ctx, &instasliceList); err != nil {
+				log.Error(err, "Failed to list Instaslice objects, retrying...")
+				return false, nil
+			}
+			if len(instasliceList.Items) > 0 {
+				log.Info("Instaslice objects found", "count", len(instasliceList.Items))
+				return true, nil
+			}
+			log.Info("No Instaslice objects found, waiting...")
+			return false, nil
+		})
+		if retryErr != nil {
+			log.Error(retryErr, "Failed to fetch Instaslice objects after retries")
+			return nil // Do not block the controller from running, meaning reconciler starts in parallel
+		}
+		// Iterate over Instaslices and update Prometheus metrics
+		for _, instaslice := range instasliceList.Items {
+			if err := r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name); err != nil {
+				log.Error(err, "Failed to update compatible profiles metrics", "instaslice", instaslice.Name)
+			}
+		}
+		log.Info("Successfully initialized compatible profiles metrics for all Instaslice objects")
+		return nil
+	}))
 
-	return ctrl.NewControllerManagedBy(mgr).
+	if mgrAddErr != nil {
+		return mgrAddErr
+	}
+
+	// Continue with setting up the controller
+	return r.setupWithManager(mgr) // Return error directly for readability
+}
+
+// Enable creation of controller
+func (r *InstasliceReconciler) setupWithManager(mgr ctrl.Manager) error {
+	err := ctrl.NewControllerManagedBy(mgr).
 		For(&v1.Pod{}).Named("InstaSlice-controller").
 		Watches(&inferencev1alpha1.Instaslice{}, handler.EnqueueRequestsFromMapFunc(r.podMapFunc)).
 		Complete(r)
+
+	if err != nil {
+		log := mgr.GetLogger() // Get logger from the manager
+		log.Error(err, "Failed to set up Instaslice controller")
+		return err
+	}
+
+	log := mgr.GetLogger()
+	log.Info("Successfully set up Instaslice controller")
+	return nil
 }
 
 func (r *InstasliceReconciler) unGatePod(podUpdate *v1.Pod) *v1.Pod {
@@ -687,6 +771,7 @@ func (r *InstasliceReconciler) removeInstasliceAllocation(ctx context.Context, i
 	}
 	return nil
 }
+
 func (r *InstasliceReconciler) setInstasliceAllocationToDeleting(ctx context.Context, instasliceName string, allocResult *inferencev1alpha1.AllocationResult, allocRequest *inferencev1alpha1.AllocationRequest) (ctrl.Result, error) {
 	log := logr.FromContext(ctx)
 	allocResult.AllocationStatus.AllocationStatusController = inferencev1alpha1.AllocationStatusDeleting
