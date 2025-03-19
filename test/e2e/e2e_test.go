@@ -190,6 +190,16 @@ var _ = Describe("controller", Ordered, func() {
 				if err != nil {
 					log.Printf("Error deleting the pod %+v: %+v", pod, err)
 				}
+
+				Eventually(func() bool {
+					podList := &corev1.PodList{}
+					err := k8sClient.List(ctx, podList, client.InNamespace(pod.Namespace))
+					if err != nil {
+						return false
+					}
+					return len(podList.Items) == 0
+				}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Expected all pods to be deleted")
+
 			})
 
 			Eventually(func() error {
@@ -258,6 +268,15 @@ var _ = Describe("controller", Ordered, func() {
 				if err != nil {
 					log.Printf("Error deleting the pod %+v: %+v", pod, err)
 				}
+
+				Eventually(func() bool {
+					podList := &corev1.PodList{}
+					err := k8sClient.List(ctx, podList, client.InNamespace(pod.Namespace))
+					if err != nil {
+						return false
+					}
+					return len(podList.Items) == 0
+				}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Expected all pods to be deleted")
 			})
 
 			Eventually(func() error {
@@ -452,6 +471,16 @@ var _ = Describe("controller", Ordered, func() {
 				if err != nil {
 					log.Printf("Error deleting the job %+v: %+v", job, err)
 				}
+				// Wait for all pods related to the job to be deleted
+				Eventually(func() bool {
+					podList := &corev1.PodList{}
+					labelSelector := client.MatchingLabels{"app": "sleep-job"}
+					err := k8sClient.List(ctx, podList, client.InNamespace(job.Namespace), labelSelector)
+					if err != nil {
+						return false
+					}
+					return len(podList.Items) == 0
+				}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Expected all pods related to the job to be deleted")
 			})
 
 			Eventually(func() error {
@@ -701,7 +730,7 @@ var _ = Describe("controller", Ordered, func() {
 				currentLen := len(obj.Status.NodeResources.NodeGPUs)
 				Expect(currentLen).To(Equal(referenceLen), "Object %s has a different MigGPUUUID length", obj.Name)
 			}
-			longRunningCount := referenceLen*7 + 1
+			longRunningCount := referenceLen*7*len(instasliceObjs.Items) + 1
 			for i := 1; i <= longRunningCount; i++ {
 				newName := fmt.Sprintf("cuda-vectoradd-longrunning%d", i+1)
 				pod := podTemplateLongRunning.DeepCopy()

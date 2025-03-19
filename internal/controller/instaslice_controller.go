@@ -57,6 +57,8 @@ type InstasliceReconciler struct {
 	kubeClient         *kubernetes.Clientset
 	Config             *config.Config
 	RunningOnOpenShift bool
+	allocationCache    map[types.UID]inferencev1alpha1.AllocationResult
+	isCacheInitialized bool
 }
 
 // AllocationPolicy interface with a single method
@@ -144,6 +146,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.Info("No DaemonSet pods are ready yet, waiting...")
 		return ctrl.Result{RequeueAfter: requeue10sDelay}, nil
 	}
+	// TODO: should we rebuild cache on node failure?
 
 	// Continue with the rest of the reconciliation logic
 	policy := &FirstFitPolicy{}
@@ -397,19 +400,26 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				// Sort by Name in ascending order
 				return instasliceList.Items[i].Name < instasliceList.Items[j].Name
 			})
+			err := r.rebuildAllocationCache(ctx)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+
+			r.CleanupOrphanedAllocations(&instasliceList)
 			for _, instaslice := range instasliceList.Items {
 				// find the GPU on the node and the GPU index where the slice can be created
 				allocRequest, allocResult, err := r.findNodeAndDeviceForASlice(ctx, &instaslice, profileName, policy, pod)
 				if err != nil {
 					continue
 				}
+				// allocation was successful
+				r.updateCacheWithNewAllocation(allocRequest.PodRef.UID, *allocResult)
 				podHasNodeAllocation = true
 				if podHasNodeAllocation {
 					err := utils.UpdateOrDeleteInstasliceAllocations(ctx, r.Client, instaslice.Name, allocResult, allocRequest)
 					if err != nil {
 						return ctrl.Result{Requeue: true}, nil
 					}
-					// allocation was successful
 					return ctrl.Result{}, nil
 				}
 			}
@@ -599,6 +609,8 @@ func (r *InstasliceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1.Pod{}).Named("InstaSlice-controller").
 		Watches(&inferencev1alpha1.Instaslice{}, handler.EnqueueRequestsFromMapFunc(r.podMapFunc)).
+		Watches(&v1.Node{},
+			&handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 

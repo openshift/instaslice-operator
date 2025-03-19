@@ -140,12 +140,18 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 			log.Info("Performing cleanup for pod", "podRef", podRef)
 			if !r.Config.EmulatorModeEnable {
-
-				err := r.cleanUpCiAndGi(ctx, &allocResult, podRef)
+				exists, err := r.checkConfigMapExists(ctx, string(allocResult.ConfigMapResourceIdentifier), podRef.Namespace)
 				if err != nil {
-					// NVML shutdowm took time or NVML init may have failed.
-					log.Error(err, "error cleaning up ci and gi retrying", podRef)
+					log.Error(err, "error checking configmap existence", "podRef", podRef)
 					return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, err
+				}
+				if exists {
+					err := r.cleanUpCiAndGi(ctx, &allocResult, podRef)
+					if err != nil {
+						// NVML shutdowm took time or NVML init may have failed.
+						log.Error(err, "error cleaning up ci and gi retrying", podRef)
+						return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, err
+					}
 				}
 			}
 			err := r.deleteConfigMap(ctx,
@@ -160,7 +166,7 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 			newAlloc.AllocationStatus.AllocationStatusDaemonset = inferencev1alpha1.AllocationStatusDeleted
 			instaslice.Status.PodAllocationResults[podUID] = newAlloc
 			if err := r.Status().Update(ctx, &instaslice); err != nil {
-				log.Error(err, "error updating Instaslice status for pod cleanup", podRef)
+				log.Error(err, "error updating Instaslice status for pod cleanup", "podRef", podRef)
 				return ctrl.Result{Requeue: true}, err
 			}
 			return ctrl.Result{}, nil
@@ -175,10 +181,6 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				log.Error(err, "error obtianing configmap", string(allocResult.ConfigMapResourceIdentifier))
 				return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, err
 			}
-			if exists {
-				log.Info("Skipping updating pod", "podRef", podRef)
-				continue
-			}
 			log.Info("creating allocation for pod", "podRef", podRef)
 			// We can look up the *request* in spec to see the profile or resource demands
 			allocationRequest, haveReq := instaslice.Spec.PodAllocationRequests[podUID]
@@ -187,59 +189,60 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 				log.Info("No matching PodAllocationRequest for this result; skipping", podRef)
 				continue
 			}
+			if !exists {
+				if r.Config.EmulatorModeEnable {
+					// configmap with fake MIG uuid
+					err := r.createConfigMap(ctx,
+						string(allocResult.ConfigMapResourceIdentifier),
+						podRef.Namespace,
+						string(allocResult.ConfigMapResourceIdentifier))
+					if err != nil {
+						log.Error(err, "failed to create config map (emulator mode)")
+						return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, err
+					}
+					// Emulating cost to create CI and GI on a GPU
+					time.Sleep(controller.Requeue1sDelay)
+				} else {
+					device, retCode := nvml.DeviceGetHandleByUUID(allocResult.GPUUUID)
+					if retCode != nvml.SUCCESS {
+						log.Error(retCode, "error getting GPU device handle", "gpuUUID", allocResult.GPUUUID)
+						return ctrl.Result{}, goerror.New("error fetching GPU device handle")
+					}
 
-			if r.Config.EmulatorModeEnable {
-				// configmap with fake MIG uuid
-				err := r.createConfigMap(ctx,
-					string(allocResult.ConfigMapResourceIdentifier),
-					podRef.Namespace,
-					string(allocResult.ConfigMapResourceIdentifier))
-				if err != nil {
-					log.Error(err, "failed to create config map (emulator mode)")
-					return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, err
-				}
-				// Emulating cost to create CI and GI on a GPU
-				time.Sleep(controller.Requeue1sDelay)
-			} else {
-				device, retCode := nvml.DeviceGetHandleByUUID(allocResult.GPUUUID)
-				if retCode != nvml.SUCCESS {
-					log.Error(retCode, "error getting GPU device handle", "gpuUUID", allocResult.GPUUUID)
-					return ctrl.Result{}, goerror.New("error fetching GPU device handle")
-				}
+					selectedMig, ok := instaslice.Status.NodeResources.MigPlacement[allocationRequest.Profile]
+					if !ok {
+						log.Info("No suitable MIG profile in NodeResources; skipping creation", podRef, allocResult)
+						continue
+					}
 
-				selectedMig, ok := instaslice.Status.NodeResources.MigPlacement[allocationRequest.Profile]
-				if !ok {
-					log.Info("No suitable MIG profile in NodeResources; skipping creation", podRef, allocResult)
-					continue
-				}
+					placement := nvml.GpuInstancePlacement{
+						Start: uint32(allocResult.MigPlacement.Start),
+						Size:  uint32(allocResult.MigPlacement.Size),
+					}
 
-				placement := nvml.GpuInstancePlacement{
-					Start: uint32(allocResult.MigPlacement.Start),
-					Size:  uint32(allocResult.MigPlacement.Size),
-				}
+					giProfileInfo, retGI := device.GetGpuInstanceProfileInfo(int(selectedMig.GIProfileID))
+					if retGI != nvml.SUCCESS {
+						log.Error(retGI, "error getting GPU instance profile info", "GIProfileID", selectedMig.GIProfileID)
+						return ctrl.Result{}, goerror.New("cannot get GI profile info")
+					}
 
-				giProfileInfo, retGI := device.GetGpuInstanceProfileInfo(int(selectedMig.GIProfileID))
-				if retGI != nvml.SUCCESS {
-					log.Error(retGI, "error getting GPU instance profile info", "GIProfileID", selectedMig.GIProfileID)
-					return ctrl.Result{}, goerror.New("cannot get GI profile info")
-				}
+					ciProfileID := selectedMig.CIProfileID
 
-				ciProfileID := selectedMig.CIProfileID
+					createdMigInfos, err := r.createSliceAndPopulateMigInfos(
+						ctx, device, giProfileInfo, placement, ciProfileID, podRef.Name)
+					if err != nil {
+						log.Error(err, "MIG creation not successful", "podRef", podRef)
+						return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, err
+					}
 
-				createdMigInfos, err := r.createSliceAndPopulateMigInfos(
-					ctx, device, &allocResult, giProfileInfo, placement, ciProfileID, podRef.Name)
-				if err != nil {
-					log.Error(err, "MIG creation not successful", podRef)
-					return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, err
-				}
-
-				for migUuid, migDevice := range createdMigInfos {
-					if migDevice.start == allocResult.MigPlacement.Start && migDevice.uuid == allocResult.GPUUUID && giProfileInfo.Id == migDevice.giInfo.ProfileId {
-						if err := r.createConfigMap(ctx, migUuid, podRef.Namespace, string(allocResult.ConfigMapResourceIdentifier)); err != nil {
-							return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, err
+					for migUuid, migDevice := range createdMigInfos {
+						if migDevice.start == allocResult.MigPlacement.Start && migDevice.uuid == allocResult.GPUUUID && giProfileInfo.Id == migDevice.giInfo.ProfileId {
+							if err := r.createConfigMap(ctx, migUuid, podRef.Namespace, string(allocResult.ConfigMapResourceIdentifier)); err != nil {
+								return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, err
+							}
+							log.Info("done creating mig slice for ", "pod", podRef.Name, "parentgpu", allocResult.GPUUUID, "miguuid", migUuid)
+							break
 						}
-						log.Info("done creating mig slice for ", "pod", podRef.Name, "parentgpu", allocResult.GPUUUID, "miguuid", migUuid)
-						break
 					}
 				}
 			}
@@ -273,8 +276,9 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 		return fmt.Errorf("unable to walk MIGs: %v", err)
 	}
 
-	for _, migdevice := range migInfos {
-		if migdevice.uuid == allocationResult.GPUUUID && migdevice.start == allocationResult.MigPlacement.Start {
+	for miguuid, migdevice := range migInfos {
+		if migdevice.uuid == allocationResult.GPUUUID && migdevice.start == allocationResult.MigPlacement.Start &&
+			migdevice.size == allocationResult.MigPlacement.Size {
 			gi, ret := parent.GetGpuInstanceById(int(migdevice.giInfo.Id))
 			if ret != nvml.SUCCESS {
 				log.Error(ret, "error obtaining gpu instance")
@@ -296,7 +300,7 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 				return fmt.Errorf("unable to destroy GI: %v", ret)
 			}
 
-			log.Info("Successfully destroyed MIG resources", "allocationResult", allocationResult, "podRef", podRef)
+			log.Info("Successfully destroyed MIG resources", "allocationResult", allocationResult, "podRef", podRef, "MIGuuid", miguuid)
 			return nil
 		}
 	}
@@ -883,9 +887,8 @@ func populateMigDeviceInfos(device nvml.Device) (map[string]*MigDeviceInfo, erro
 	return migInfos, nil
 }
 
-func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx context.Context, device nvml.Device, allocationResult *inferencev1alpha1.AllocationResult, giProfileInfo nvml.GpuInstanceProfileInfo, placement nvml.GpuInstancePlacement, ciProfileId int32, podName string) (map[string]*MigDeviceInfo, error) {
+func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx context.Context, device nvml.Device, giProfileInfo nvml.GpuInstanceProfileInfo, placement nvml.GpuInstancePlacement, ciProfileId int32, podName string) (map[string]*MigDeviceInfo, error) {
 	log := logr.FromContext(ctx)
-
 	log.Info("creating slice for", "pod", podName)
 	var gi nvml.GpuInstance
 	var ret nvml.Return
@@ -913,11 +916,15 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 					return nil, fmt.Errorf("unable to obtain parent gpu uuuid: %v", ret)
 				}
 
-				if gpuInstanceInfo.Placement.Start == uint32(allocationResult.MigPlacement.Start) && parentUuid == allocationResult.GPUUUID {
+				gpuUUid, ret := device.GetUUID()
+				if ret != nvml.SUCCESS {
+					log.Error(ret, "unable to obtain parent gpu uuuid")
+				}
+				if gpuInstanceInfo.Placement.Start == placement.Start && parentUuid == gpuUUid {
 					gi, ret = device.GetGpuInstanceById(int(gpuInstanceInfo.Id))
 					if ret != nvml.SUCCESS {
 						log.Error(ret, "unable to obtain gi post iteration")
-						return nil, fmt.Errorf("unable to obtain gi post iteration: %v", ret)
+						return nil, fmt.Errorf("unable to obtain gi post iteration, got value: %v", gi)
 					}
 				}
 			}
@@ -926,6 +933,7 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 			log.Error(ret, "gpu instance creation errored out with unknown error")
 			return nil, fmt.Errorf("gpu instance creation failed: %v", ret)
 		}
+		return nil, fmt.Errorf("error creating gpu instance profile with: %v", ret)
 	}
 
 	ciProfileInfo, ret := gi.GetComputeInstanceProfileInfo(int(ciProfileId), 0)
@@ -937,8 +945,7 @@ func (r *InstaSliceDaemonsetReconciler) createSliceAndPopulateMigInfos(ctx conte
 	ci, ret := gi.CreateComputeInstance(&ciProfileInfo)
 	if ret != nvml.SUCCESS {
 		if ret != nvml.ERROR_INSUFFICIENT_RESOURCES {
-			log.Error(ret, "error creating Compute instance", "ci", ci)
-			return nil, fmt.Errorf("error creating compute instance: %v", ret)
+			log.Error(ret, "error creating new compute instance, reusing", "ci", ci)
 		}
 	}
 
