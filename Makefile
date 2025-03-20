@@ -240,6 +240,33 @@ deploy-cert-manager:
 deploy-cert-manager-ocp:
 	oc apply -f hack/manifests/cert-manager-rh.yaml
 
+.PHONY: undeploy-cert-manager-ocp
+undeploy-cert-manager-ocp:
+	oc delete -f hack/manifests/cert-manager-rh.yaml
+
+.PHONY: deploy-nfd-ocp
+deploy-nfd-ocp:
+	oc apply -f hack/manifests/nfd.yaml
+	oc apply -f hack/manifests/nfd-instance.yaml
+	oc describe node | egrep 'Roles|pci' # check for at least on enabled node
+
+.PHONY: undeploy-nfd-ocp
+undeploy-nfd-ocp:
+	oc delete -f hack/manifests/nfd-instance.yaml
+	oc delete -f hack/manifests/nfd.yaml
+
+.PHONY: deploy-nvidia-ocp
+deploy-nvidia-ocp:
+	oc apply -f hack/manifests/nvidia-cpu-operator.yaml
+	oc apply -f hack/manifests/gpu-cluster-policy.yaml
+	oc label $(shell oc get node -o name) nvidia.com/mig.config=all-enabled --overwrite
+	oc wait --for=condition=Ready pod -l app=nvidia-operator-validator  -n nvidia-gpu-operator --timeout=300s
+
+.PHONY: undeploy-nvidia-ocp
+undeploy-nvidia-ocp:
+	oc delete -f hack/manifests/gpu-cluster-policy.yaml
+	oc delete -f hack/manifests/nvidia-cpu-operator.yaml
+
 .PHONY: deploy-instaslice-emulated-on-kind
 deploy-instaslice-emulated-on-kind:
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
@@ -249,6 +276,10 @@ deploy-instaslice-emulated-on-kind:
 deploy-instaslice-on-ocp:
 	oc new-project instaslice-system
 	operator-sdk run bundle ${BUNDLE_IMG} -n instaslice-system
+
+.PHONY: undeploy-instaslice-on-ocp
+undeploy-instaslice-on-ocp:
+	oc delete ns/instaslice-system
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.61.0
