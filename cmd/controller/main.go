@@ -59,6 +59,12 @@ func init() {
 }
 
 func main() {
+	// Log info before initializing metrics exporter
+	ctrl.Log.Info("Initializing Metrics Exporter.")
+	controller.RegisterMetrics()
+	// Log info after the metrics exporter is initialized
+	ctrl.Log.Info("Metrics Exporter Initialized.")
+
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string

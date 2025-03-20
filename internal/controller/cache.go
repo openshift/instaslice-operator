@@ -69,13 +69,19 @@ func (r *InstasliceReconciler) updateCacheWithNewAllocation(podUid types.UID, al
 
 // clean allocations that do not exists in spec
 // TODO fix scalability issue, loops over all instaslice objects in the cluster
-func (r *InstasliceReconciler) CleanupOrphanedAllocations(instasliceList *inferencev1alpha1.InstasliceList) {
+func (r *InstasliceReconciler) CleanupOrphanedAllocations(ctx context.Context, instasliceList *inferencev1alpha1.InstasliceList) {
 	var keysToDelete []types.UID
 
 	for uuid := range r.allocationCache {
 		found := false
 		for _, instaslice := range instasliceList.Items {
-			if _, exists := instaslice.Spec.PodAllocationRequests[uuid]; exists {
+			// Fetch latest Instaslice state before updating metrics
+			updatedInstaslice, err := r.getInstasliceObject(ctx, instaslice.Name, instaslice.Namespace)
+			if err != nil {
+				log.FromContext(ctx).Error(err, "Failed to get latest Instaslice object", "instaslice", instaslice.Name)
+				return
+			}
+			if _, exists := updatedInstaslice.Spec.PodAllocationRequests[uuid]; exists {
 				found = true
 				break
 			}

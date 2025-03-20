@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: instaslice-monitor
+  namespace: instaslice-monitoring
+  labels:
+    release: prometheus  # Label to match Prometheus serviceMonitorSelector
+spec:
+  selector:
+    matchLabels:
+      control-plane: controller-manager # Match labels of the Service exposing metrics
+  namespaceSelector:
+    matchNames:
+      - instaslice-system  # Namespace where the Service resides
+  endpoints:
+    - port: metrics  # Port name exposed in the Service for kube-rbac-proxy
+      interval: 15s
+      path: /metrics
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token  # Prometheus authentication
+      honorLabels: true
+      tlsConfig:
+        insecureSkipVerify: true  # Set to false if using a valid CA
