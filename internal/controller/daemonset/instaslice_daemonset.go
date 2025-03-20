@@ -12,8 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
@@ -30,6 +28,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logr "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -337,7 +336,7 @@ func (r *InstaSliceDaemonsetReconciler) createCiAndGiProfiles(ctx context.Contex
 	ciProfileID := selectedMig.CIProfileID
 
 	createdMigInfos, err := r.createSliceAndPopulateMigInfos(
-		ctx, device, &allocResult, giProfileInfo, placement, ciProfileID, podRef.Name)
+		ctx, device, giProfileInfo, placement, ciProfileID, podRef.Name)
 	if err != nil {
 		log.Error(err, "MIG creation not successful")
 		return err
