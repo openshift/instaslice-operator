@@ -1374,8 +1374,8 @@ var _ = Describe("Metrics Incrementation", func() {
 	// Test to prevent double metric incrementation
 	It("should not increment metrics more than once", func() {
 
-		err := r.IncrementTotalProcessedGpuSliceMetrics(*instaslice, "node-1", "gpu-1", "1g.5gb", pod)
-		Expect(err).ToNot(HaveOccurred()) // Should skip incrementation
+		r.IncrementTotalProcessedGpuSliceMetrics("node-1", "gpu-1", "1g.5gb", 1)
+		Expect(instasliceMetrics.processedSlices.WithLabelValues("node-1", "gpu-1")).NotTo(BeNil())
 	})
 
 	// Validate allocation changes
@@ -1390,8 +1390,7 @@ var _ = Describe("Metrics Incrementation", func() {
 		}
 
 		// Check cleanup of incompatible profiles
-		err := r.UpdateCompatibleProfilesMetrics(*instaslice, "node-1")
-		Expect(err).ToNot(HaveOccurred()) // Ensure the function runs without errors
+		r.UpdateCompatibleProfilesMetrics(*instaslice, "node-1")
 
 		Expect(instasliceMetrics.compatibleProfiles.WithLabelValues("1g.5gb", "node-1")).NotTo(BeNil())
 		Expect(instasliceMetrics.compatibleProfiles.WithLabelValues("2g.10gb", "node-1")).NotTo(BeNil())
