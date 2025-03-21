@@ -1375,6 +1375,7 @@ var _ = Describe("Metrics Incrementation", func() {
 	It("should not increment metrics more than once", func() {
 
 		r.IncrementTotalProcessedGpuSliceMetrics("node-1", "gpu-1", "1g.5gb", 1)
+		Expect(instasliceMetrics.processedSlices.WithLabelValues("node-1", "gpu-1")).NotTo(BeNil())
 	})
 
 	// Validate allocation changes
