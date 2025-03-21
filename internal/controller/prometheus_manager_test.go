@@ -2,26 +2,25 @@ package controller
 
 import (
 	"context"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-var _ = Describe("Instaslice Controller", func() {
+var _ = Describe("Instaslice Controller Metrics", func() {
 	var (
 		ctx        context.Context
 		fakeClient client.Client
 		r          *InstasliceReconciler
 		instaslice *inferencev1alpha1.Instaslice
-		pod        *v1.Pod
-		podUUID    string
 	)
 
 	BeforeEach(func() {
@@ -29,68 +28,25 @@ var _ = Describe("Instaslice Controller", func() {
 		scheme := runtime.NewScheme()
 		Expect(inferencev1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(v1.AddToScheme(scheme)).To(Succeed())
-
 		fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+		r = &InstasliceReconciler{Client: fakeClient}
 
-		r = &InstasliceReconciler{
-			Client: fakeClient,
-		}
-
-		podUUID = "test-pod-uuid"
-
-		pod = &v1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-pod",
-				Namespace: InstaSliceOperatorNamespace,
-				UID:       types.UID(podUUID),
-				Finalizers: []string{
-					FinalizerName,
-				},
-			},
-		}
-
-		Expect(fakeClient.Create(ctx, pod)).To(Succeed())
+		// Reset metrics before each test to ensure clean state
+		instasliceMetrics.processedSlices.Reset()
+		instasliceMetrics.deployedPodTotal.Reset()
+		instasliceMetrics.compatibleProfiles.Reset()
 
 		instaslice = &inferencev1alpha1.Instaslice{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-instaslice",
 				Namespace: InstaSliceOperatorNamespace,
 			},
-			Spec: inferencev1alpha1.InstasliceSpec{
-				PodAllocationRequests: map[types.UID]inferencev1alpha1.AllocationRequest{
-					types.UID(podUUID): {
-						Profile: "1g.5gb",
-						PodRef: v1.ObjectReference{
-							Name:      pod.Name,
-							Namespace: InstaSliceOperatorNamespace,
-							UID:       pod.UID,
-						},
-						Resources: v1.ResourceRequirements{},
-					},
-				},
-			},
 			Status: inferencev1alpha1.InstasliceStatus{
-				PodAllocationResults: map[types.UID]inferencev1alpha1.AllocationResult{
-					types.UID(podUUID): {
-						AllocationStatus:            inferencev1alpha1.AllocationStatus{AllocationStatusController: inferencev1alpha1.AllocationStatusCreating},
-						GPUUUID:                     "GPU-12345",
-						Nodename:                    "fake-node",
-						ConfigMapResourceIdentifier: "fake-configmap-uid",
-					},
-				},
-				// ✅ Ensure MigPlacement has the correct profile
 				NodeResources: inferencev1alpha1.DiscoveredNodeResources{
 					MigPlacement: map[string]inferencev1alpha1.Mig{
-						"1g.5gb": {
-							Placements: []inferencev1alpha1.Placement{
-								{Size: 1, Start: 0}, // Example placement
-							},
-						},
-						"1g.10gb": { // Also add the missing profile from the failing test
-							Placements: []inferencev1alpha1.Placement{
-								{Size: 2, Start: 0},
-							},
-						},
+						"3g.20gb": {Placements: []inferencev1alpha1.Placement{{Size: 3, Start: 0}}},
+						"4g.20gb": {Placements: []inferencev1alpha1.Placement{{Size: 4, Start: 0}}},
+						"7g.40gb": {Placements: []inferencev1alpha1.Placement{{Size: 7, Start: 0}}},
 					},
 				},
 			},
@@ -98,27 +54,41 @@ var _ = Describe("Instaslice Controller", func() {
 		Expect(fakeClient.Create(ctx, instaslice)).To(Succeed())
 	})
 
-	// Test IncrementTotalProcessedGpuSliceMetrics
-	It("should increment total processed GPU slice metrics", func() {
-		err := r.IncrementTotalProcessedGpuSliceMetrics(*instaslice, "node-1", "gpu-1", "1g.5gb", pod)
-		Expect(err).ToNot(HaveOccurred())
+	It("should record processed slices for larger profiles", func() {
+		r.IncrementTotalProcessedGpuSliceMetrics("node-1", "GPU-123", "3g.20gb", 3)
+		r.IncrementTotalProcessedGpuSliceMetrics("node-1", "GPU-123", "4g.20gb", 4)
+		r.IncrementTotalProcessedGpuSliceMetrics("node-1", "GPU-123", "7g.40gb", 7)
+
+		expect := `
+# HELP instaslice_total_processed_gpu_slices Number of total processed GPU slices since instaslice controller start time.
+# TYPE instaslice_total_processed_gpu_slices gauge
+instaslice_total_processed_gpu_slices{gpu_id="GPU-123",node="node-1"} 14
+`
+		actual := testutil.CollectAndCompare(instasliceMetrics.processedSlices, strings.NewReader(expect), "instaslice_total_processed_gpu_slices")
+		Expect(actual).To(Succeed())
 	})
 
-	// Test UpdateDeployedPodTotalMetrics
-	It("should update deployed pod total metrics", func() {
-		err := r.UpdateDeployedPodTotalMetrics("node-1", "gpu-1", "namespace-1", "pod-1", "profile-1", 2)
-		Expect(err).ToNot(HaveOccurred())
+	It("should record deployed pod slice count per profile", func() {
+		r.UpdateDeployedPodTotalMetrics("node-1", "GPU-123", "default", "test-pod", "4g.20gb", 4)
+		expect := `
+# HELP instaslice_pod_processed_slices Pods that are processed with their slice/s allocation.
+# TYPE instaslice_pod_processed_slices gauge
+instaslice_pod_processed_slices{gpu_id="GPU-123",namespace="default",node="node-1",podname="test-pod",profile="4g.20gb"} 4
+`
+		actual := testutil.CollectAndCompare(instasliceMetrics.deployedPodTotal, strings.NewReader(expect), "instaslice_pod_processed_slices")
+		Expect(actual).To(Succeed())
 	})
 
-	// Test UpdateCompatibleProfilesMetrics
-	It("should update compatible profiles metrics", func() {
-		instaslice := inferencev1alpha1.Instaslice{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "instaslice-1",
-				Namespace: "default",
-			},
-		}
-		err := r.UpdateCompatibleProfilesMetrics(instaslice, "node-1")
-		Expect(err).ToNot(HaveOccurred())
+	It("should update compatible profiles metric", func() {
+		r.UpdateCompatibleProfilesMetrics(*instaslice, "node-1")
+		expect := `
+# HELP instaslice_compatible_profiles Profiles compatible with remaining GPU slices in a node and their counts.
+# TYPE instaslice_compatible_profiles gauge
+instaslice_compatible_profiles{node="node-1",profile="3g.20gb"} 0
+instaslice_compatible_profiles{node="node-1",profile="4g.20gb"} 0
+instaslice_compatible_profiles{node="node-1",profile="7g.40gb"} 0
+`
+		actual := testutil.CollectAndCompare(instasliceMetrics.compatibleProfiles, strings.NewReader(expect), "instaslice_compatible_profiles")
+		Expect(actual).To(Succeed())
 	})
 })
