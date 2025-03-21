@@ -832,7 +832,7 @@ func (m MigProfile) String() string {
 func (m MigProfile) Attributes() []string {
 	var attr []string
 	switch m.GIProfileID {
-	case nvml.GPU_INSTANCE_PROFILE_1_SLICE_REV1:
+	case nvml.GPU_INSTANCE_PROFILE_1_SLICE_REV1, nvml.GPU_INSTANCE_PROFILE_2_SLICE_REV1: //for both 1g.* and 2g.* profiles
 		attr = append(attr, controller.AttributeMediaExtensions)
 	}
 	return attr
