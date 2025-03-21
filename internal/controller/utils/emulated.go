@@ -121,6 +121,7 @@ func GenerateFakeCapacity(nodeName string) *v1alpha1.Instaslice {
 					v1.ResourceCPU:    resource.MustParse("72"),
 					v1.ResourceMemory: resource.MustParse("1000000000"),
 				},
+				BootID: "fake-boot-id",
 			},
 		},
 	}

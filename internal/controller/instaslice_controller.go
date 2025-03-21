@@ -158,6 +158,20 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.Error(err, "Error getting Instaslice object")
 		return ctrl.Result{}, err
 	}
+	for _, instaslice := range instasliceList.Items {
+		// Get the node object on which the instaslice object is present
+		node := &v1.Node{}
+		if err = r.Get(ctx, client.ObjectKey{Name: instaslice.Name}, node); err != nil {
+			log.Error(err, "error getting the node object", "name", instaslice.Name)
+			return ctrl.Result{RequeueAfter: 1 * time.Second}, err
+		}
+		if instaslice.Status.NodeResources.BootID != node.Status.NodeInfo.BootID {
+			err := fmt.Errorf("instaslice not in sync with the node as the boot id doesn't match")
+			log.Error(err, "instaslice's boot id not matching node's boot id", "node's boot id", node.Status.NodeInfo.BootID, "instaslice's boot id", instaslice.Status.NodeResources.BootID)
+			return ctrl.Result{RequeueAfter: 1 * time.Second}, err
+		}
+	}
+
 	err = r.Get(ctx, req.NamespacedName, pod)
 	if err != nil {
 		// Error fetching the Pod
