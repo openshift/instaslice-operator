@@ -23,6 +23,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -31,7 +32,6 @@ import (
 	. "github.com/onsi/gomega"
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
-
 	"github.com/openshift/instaslice-operator/internal/controller/daemonset"
 	"github.com/openshift/instaslice-operator/test/e2e/resources"
 
@@ -69,8 +69,12 @@ var (
 )
 
 const (
-	instasliceMetricSvc      = "instaslice-operator-controller-manager-metrics-service"
-	instasliceServiceAccount = "instaslice-operator-controller-manager"
+	instasliceMetricSvc       = "instaslice-operator-controller-manager-metrics-service"
+	instasliceServiceAccount  = "instaslice-operator-controller-manager"
+	driverlabelSelector       = "app.kubernetes.io/component=nvidia-driver"
+	nvidiaOptrNamespace       = "nvidia-gpu-operator"
+	devicePluginlabelSelector = "app=nvidia-device-plugin-daemonset"
+	gpuOptrNamespace          = "gpu-operator"
 )
 
 type TemplateVars struct {
@@ -242,6 +246,13 @@ var _ = Describe("controller", Ordered, func() {
 			metricsPod := resources.GetMetricPod(token)
 			err = k8sClient.Create(ctx, metricsPod)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create curl-metrics pod")
+			// Cleanup the metrics-pod after the test case is run
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, metricsPod)
+				if err != nil {
+					log.Printf("Error deleting the pod %+v: %+v", metricsPod, err)
+				}
+			})
 
 			By("waiting for the curl-metrics pod to complete.")
 			verifyCurlUp := func(g Gomega) {
@@ -775,8 +786,180 @@ var _ = Describe("controller", Ordered, func() {
 				return longRunningCount-countRunning == 1
 			}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "1 workload should be pending")
 		})
+		It("should be able to create the MIG slices of same UUID on the GPU before and after a node reboot", func() {
+			if emulated {
+				Skip("Skipping because EmulatorMode is true")
+			}
+			// Get the instaslice objects
+			err := k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
+			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve Instaslice object")
+			referenceLen := len(instasliceObjs.Items[0].Status.NodeResources.NodeGPUs)
+			// make sure all the instaslice objects have the same GPU data
+			for _, obj := range instasliceObjs.Items {
+				currentLen := len(obj.Status.NodeResources.NodeGPUs)
+				Expect(currentLen).To(Equal(referenceLen), "Instaslice Object %s has a different number of GPUs", obj.Name)
+			}
+			// This can be increased to test the multiple pod scenario
+			numNewNames := 1
+			podTemplate := resources.GetTestGPULongRunningWorkload()
+			DeferCleanup(func() {
+				podList := &corev1.PodList{}
+				err := k8sClient.List(ctx, podList, client.InNamespace(podTemplate.Namespace))
+				if err != nil {
+					log.Printf("Failed to list pods: %v\n", err)
+					return
+				}
+				// Delete the pods after the test
+				for _, pod := range podList.Items {
+					err := k8sClient.Delete(ctx, &pod)
+					if err != nil {
+						log.Printf("Failed to delete pod %s: %v\n", pod.Name, err)
+					} else {
+						log.Printf("Deleted pod: %s\n", pod.Name)
+					}
+				}
+			})
+			// Make sure there are no previous/stale pods from the previous test case
+			podList := &corev1.PodList{}
+			Eventually(func() bool {
+				err = k8sClient.List(ctx, podList, client.InNamespace(podTemplate.Namespace))
+				if err == nil {
+					return len(podList.Items) == 0
+				}
+				return false
+			}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "some stale pods not yet deleted")
+			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve pods")
+			// create the long-running pods
+			for i := 1; i <= numNewNames; i++ {
+				newName := fmt.Sprintf("cuda-vectoradd-%d", i)
+				pod := podTemplate.DeepCopy()
+				pod.Name = newName
+				pod.Spec.Containers[0].Name = newName
+
+				err := k8sClient.Create(ctx, pod)
+				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Failed to create pod %s", newName))
+			}
+			// fetch the created pods
+			err = k8sClient.List(ctx, podList, client.InNamespace(podTemplate.Namespace))
+			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve pods")
+			err = k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
+			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve instaslice objects")
+			for _, podItem := range podList.Items {
+				// Wait for the pod status to be "Running"
+				var pod = &corev1.Pod{}
+				Eventually(func() bool {
+					pod, err = clientSet.CoreV1().Pods(podItem.Namespace).Get(ctx, podItem.Name, metav1.GetOptions{})
+					return pod.Status.Phase == corev1.PodRunning
+				}, 2*time.Minute, 5*time.Second).Should(BeTrue(), fmt.Sprintf("pod not yet in \"Running\" state, pod : %s", podItem.Name))
+				Expect(len(pod.Spec.Containers)).To(Not(Equal(0)), fmt.Sprintf("No containers in the pod %s", pod.Name))
+				Expect(len(pod.Spec.Containers[0].EnvFrom)).To(Not(Equal(0)), fmt.Sprintf("No configMap reference in the pod %s", pod.Name))
+				// get the config map name from the pod reference
+				cmRefName := pod.Spec.Containers[0].EnvFrom[0].ConfigMapRef.Name
+				var cm = &corev1.ConfigMap{}
+				Eventually(func() error {
+					cm, err = clientSet.CoreV1().ConfigMaps(pod.Namespace).Get(ctx, cmRefName, metav1.GetOptions{})
+					return err
+				}, 1*time.Minute, 5*time.Second).Should(BeNil(), fmt.Sprintf("could not get the configmap : %s, pod: %s", cmRefName, pod.Name))
+				migUUID, present := cm.Data["CUDA_VISIBLE_DEVICES"]
+				Expect(present).To(BeTrue(), fmt.Sprintf("Could not get the MIGUUID from the config map %s", cm.Name))
+				Eventually(func() error {
+					for _, obj := range instasliceObjs.Items {
+						// fetch the latest instaslice object
+						instaslice := inferencev1alpha1.Instaslice{}
+						err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: obj.Name}, &instaslice)
+						Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Error getting the latest instaslice object, instaslice: %s", obj.Name))
+						if _, present := instaslice.Status.PodAllocationResults[pod.UID]; present {
+							Eventually(func() error {
+								return deleteMIGDevice(pod.Spec.NodeName)
+							}, 2*time.Minute, 5*time.Second).Should(BeNil(), fmt.Sprintf("Error deleting the MIG slice, MigUUID: %s, GPUUID: %s", migUUID, obj.Status.PodAllocationResults[pod.UID].GPUUUID))
+							// fetch and update the BootId of the Instaslice now
+							instaslice := inferencev1alpha1.Instaslice{}
+							err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: obj.Name}, &instaslice)
+							Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Error getting the latest instaslice object, instaslice: %s", obj.Name))
+							instaslice.Status.NodeResources.BootID = "random-boot-id-e2e-test"
+							err = k8sClient.Status().Update(ctx, &instaslice)
+							Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Error updating the instaslice status, instaslice: %s", obj.Name))
+							// Observe the MIG slice has been created
+							Eventually(func() bool {
+								return isMigUUIDPresent(pod.Spec.NodeName, migUUID)
+							}, 2*time.Minute, 5*time.Second).Should(BeTrue(), fmt.Sprintf("Error getting the MIG slice after Reboot, UUID: %s, GPUUID: %s", migUUID, instaslice.Status.PodAllocationResults[pod.UID].GPUUUID))
+							return nil
+						}
+					}
+					return fmt.Errorf("no allocation found")
+				}, 2*time.Minute, 5*time.Second).Should(BeNil(), fmt.Sprintf("pod allocations not found in any of the instaslice objects, pod : %s, uid: %s, nodename: %s", pod.Name, pod.UID, pod.Spec.NodeName))
+			}
+		})
 	})
 })
+
+func getDriverPod(targetNode string) (*corev1.Pod, error) {
+	pods, err := clientSet.CoreV1().Pods(nvidiaOptrNamespace).List(ctx, metav1.ListOptions{
+		LabelSelector: driverlabelSelector,
+	})
+	if err != nil {
+		return nil, err
+	}
+	// search for the daemonset device plugin pod if not the daemonset driver pod
+	// This code is required when run on kinD
+	if len(pods.Items) == 0 {
+		pods, err = clientSet.CoreV1().Pods(gpuOptrNamespace).List(ctx, metav1.ListOptions{
+			LabelSelector: devicePluginlabelSelector,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	// Filter by node name
+	var driverPod *corev1.Pod
+	for _, pod := range pods.Items {
+		if pod.Spec.NodeName == targetNode {
+			driverPod = &pod
+			break
+		}
+	}
+	if driverPod == nil || (driverPod == &corev1.Pod{}) {
+		return nil, fmt.Errorf("Could not get the nvidia-driver-daemonset pod on the node %s", targetNode)
+	}
+	return driverPod, nil
+}
+
+func deleteMIGDevice(targetNode string) error {
+	// get the nvidia-driver-daemonset pod
+	driverPod, err := getDriverPod(targetNode)
+	if err != nil {
+		return err
+	}
+	// delete the compute instance of the MIG slice from the GPU
+	execCmd := fmt.Sprintf("%s exec -n %s %s -- nvidia-smi mig -dci", kubectlBin, driverPod.Namespace, driverPod.Name)
+	// Execute the command
+	cmd := exec.Command("sh", "-c", execCmd)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Err: %w, Output: %s\n", err, string(output))
+	}
+	// delete the GPU instance of the MIG slice from the GPU
+	execCmd = fmt.Sprintf("%s exec -n %s %s -- nvidia-smi mig -dgi", kubectlBin, driverPod.Namespace, driverPod.Name)
+	// Execute the command
+	cmd = exec.Command("sh", "-c", execCmd)
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Err: %w, Output: %s\n", err, string(output))
+	}
+	return nil
+}
+
+func isMigUUIDPresent(targetNode, migUUID string) bool {
+	// get the nvidia-driver-daemonset pod
+	driverPod, err := getDriverPod(targetNode)
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Could not get the nvidia-driver-daemonset pod on the node %s", targetNode))
+	// fetch the MIG slice from the GPU
+	execCmd := fmt.Sprintf("%s exec -n %s %s -- nvidia-smi -L", kubectlBin, driverPod.Namespace, driverPod.Name)
+	// Execute the command
+	cmd := exec.Command("sh", "-c", execCmd)
+	output, _ := cmd.CombinedOutput()
+	return strings.Contains(string(output), migUUID)
+}
 
 func getNodeNames(label map[string]string) ([]string, error) {
 	nodeNames := make([]string, 0)
