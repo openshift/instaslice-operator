@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	operatorv1 "github.com/openshift/api/operator/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,6 +36,48 @@ const (
 	AllocationStatusCreating AllocationStatusController = "creating"
 	AllocationStatusCreated  AllocationStatusDaemonset  = "created"
 )
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// InstasliceOperator is the Schema for the InstasliceOperator API
+// +k8s:openapi-gen=true
+// +genclient
+// +kubebuilder:storageversion
+// +kubebuilder:subresource:status
+type InstasliceOperator struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+
+	// spec holds user settable values for configuration
+	// +required
+	Spec InstasliceOperatorSpec `json:"spec"`
+	// status holds observed values from the cluster. They may not be overridden.
+	// +optional
+	Status InstasliceOperatorStatus `json:"status"`
+}
+
+// InstasliceOperatorSpec defines the desired state of InstasliceOperator
+type InstasliceOperatorSpec struct {
+	operatorv1.OperatorSpec `json:",inline"`
+
+	// EmulatedMode true configures the operator to not use the GPU backend
+	// +required
+	EmulatedMode bool `json:"emulatedMode"`
+}
+
+// InstasliceOperatorStatus defines the observed state of InstasliceOperator
+type InstasliceOperatorStatus struct {
+	operatorv1.OperatorStatus `json:",inline"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// InstasliceOperatorList contains a list of InstasliceOperator
+type InstasliceOperatorList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []InstasliceOperator `json:"items"`
+}
 
 type AllocationRequest struct {
 	// profile specifies the MIG slice profile for allocation
