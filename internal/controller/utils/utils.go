@@ -27,7 +27,6 @@ import (
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	logr "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -84,12 +83,12 @@ func UpdateOrDeleteInstasliceAllocations(ctx context.Context, kubeClient client.
 		delete(newInstaslice.Status.PodAllocationResults, uuid)
 	}
 	if allocRequest != nil && allocResult != nil {
-		log.FromContext(ctx).Info("setting status ", "controller", allocResult.AllocationStatus.AllocationStatusController, "podid", allocRequest.PodRef.UID)
-		log.FromContext(ctx).Info("setting status ", "daemonset", allocResult.AllocationStatus.AllocationStatusDaemonset, "podid", allocRequest.PodRef.UID)
+		logr.FromContext(ctx).Info("setting status ", "controller", allocResult.AllocationStatus.AllocationStatusController, "podid", allocRequest.PodRef.UID)
+		logr.FromContext(ctx).Info("setting status ", "daemonset", allocResult.AllocationStatus.AllocationStatusDaemonset, "podid", allocRequest.PodRef.UID)
 	}
 	err = kubeClient.Status().Patch(ctx, &newInstaslice, client.MergeFrom(originalInstaSliceObj)) // TODO - try with update
 	if err != nil {
-		log.FromContext(ctx).Info("error patching allocation result ", err, "pod uuid", allocRequest.PodRef.UID)
+		logr.FromContext(ctx).Info("error patching allocation result ", err, "pod uuid", allocRequest.PodRef.UID)
 		return fmt.Errorf("error updating the instaslie object status, %s, err: %v", name, err)
 	}
 	return nil

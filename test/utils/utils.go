@@ -22,7 +22,7 @@ import (
 	"os/exec"
 	"strings"
 
-	. "github.com/onsi/ginkgo/v2" //nolint:golint,revive
+	ginkgo "github.com/onsi/ginkgo/v2" //nolint:golint,revive
 )
 
 const (
@@ -35,7 +35,7 @@ const (
 )
 
 func warnError(err error) error {
-	_, fprintFerr := fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
+	_, fprintFerr := fmt.Fprintf(ginkgo.GinkgoWriter, "warning: %v\n", err)
 	return fprintFerr
 }
 
@@ -53,7 +53,7 @@ func Run(cmd *exec.Cmd) ([]byte, error) {
 	cmd.Dir = dir
 
 	if err := os.Chdir(cmd.Dir); err != nil {
-		_, fprintFErr := fmt.Fprintf(GinkgoWriter, "chdir dir: %s\n", err)
+		_, fprintFErr := fmt.Fprintf(ginkgo.GinkgoWriter, "chdir dir: %s\n", err)
 		if fprintFErr != nil {
 			return nil, fprintFErr
 		}
@@ -61,7 +61,7 @@ func Run(cmd *exec.Cmd) ([]byte, error) {
 
 	cmd.Env = append(os.Environ(), "GO111MODULE=on")
 	command := strings.Join(cmd.Args, " ")
-	_, runningWriteErr := fmt.Fprintf(GinkgoWriter, "running: %s\n", command)
+	_, runningWriteErr := fmt.Fprintf(ginkgo.GinkgoWriter, "running: %s\n", command)
 	if runningWriteErr != nil {
 		return nil, runningWriteErr
 	}
@@ -144,7 +144,7 @@ func GetProjectDir() (string, error) {
 	if err != nil {
 		return wd, err
 	}
-	wd = strings.Replace(wd, "/test/e2e", "", -1)
+	wd = strings.ReplaceAll(wd, "/test/e2e", "")
 	return wd, nil
 }
 

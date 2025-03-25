@@ -45,7 +45,12 @@ const (
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 type InstasliceOperator struct {
-	metav1.TypeMeta   `json:",inline"`
+	// TypeMeta data for the operator
+	// +required
+	metav1.TypeMeta `json:",inline"`
+
+	// metadata for the operator
+	// +required
 	metav1.ObjectMeta `json:"metadata"`
 
 	// spec holds user settable values for configuration
@@ -60,8 +65,8 @@ type InstasliceOperator struct {
 type InstasliceOperatorSpec struct {
 	operatorv1.OperatorSpec `json:",inline"`
 
-	// EmulatedMode true configures the operator to not use the GPU backend
-	// +required
+	// emulatedMode true configures the operator to not use the GPU backend
+	// +optional
 	EmulatedMode bool `json:"emulatedMode"`
 }
 
@@ -74,9 +79,17 @@ type InstasliceOperatorStatus struct {
 
 // InstasliceOperatorList contains a list of InstasliceOperator
 type InstasliceOperatorList struct {
+	// Type meta for the operator
+	// +required
 	metav1.TypeMeta `json:",inline"`
+
+	// metadata for the operator
+	// +required
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []InstasliceOperator `json:"items"`
+
+	// items list for operator
+	// +required
+	Items []InstasliceOperator `json:"items"`
 }
 
 type AllocationRequest struct {
@@ -98,7 +111,7 @@ type AllocationStatus struct {
 	// +optional
 	AllocationStatusDaemonset AllocationStatusDaemonset `json:"allocationStatusDaemonset"`
 
-	// allocationStatusDaemonset represents the current status of the allocation from the Controller's perspective
+	// allocationStatusController represents the current status of the allocation from the Controller's perspective
 	// +optional
 	AllocationStatusController AllocationStatusController `json:"allocationStatusController"`
 }
@@ -160,7 +173,7 @@ type DiscoveredNodeResources struct {
 	NodeResources corev1.ResourceList `json:"nodeResources"`
 
 	// bootId represents the current boot id of the node
-	// +kubebuilder:validation:Required
+	// +required
 	BootID string `json:"bootId"`
 }
 
@@ -238,7 +251,10 @@ type InstasliceStatus struct {
 // +kubebuilder:validation:Required
 // +kubebuilder:subresource:status
 type Instaslice struct {
+	// TypeMeta data for an instaslice
 	metav1.TypeMeta `json:",inline"`
+
+	// metadata for an instaslice
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
@@ -256,7 +272,9 @@ type Instaslice struct {
 // InstasliceList contains a list of Instaslice resources
 // +optional
 type InstasliceList struct {
+	// TypeMeta data for an instaslice list
 	metav1.TypeMeta `json:",inline"`
+	// metadata for an instaslice list
 	// +optional
 	metav1.ListMeta `json:"metadata,omitempty"`
 

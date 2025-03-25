@@ -42,7 +42,7 @@ func (r *InstasliceReconciler) rebuildAllocationCache(ctx context.Context) error
 	// Fetch all Instaslice objects using the lister
 	instaslices := &inferencev1alpha1.InstasliceList{}
 	// Use cached informer to list Instaslice objects
-	if err := r.Client.List(ctx, instaslices, client.InNamespace(InstaSliceOperatorNamespace)); err != nil {
+	if err := r.List(ctx, instaslices, client.InNamespace(InstaSliceOperatorNamespace)); err != nil {
 		log.FromContext(ctx).Error(err, "Error listing Instaslice objects from cache")
 		return err
 	}
@@ -63,7 +63,6 @@ func (r *InstasliceReconciler) rebuildAllocationCache(ctx context.Context) error
 }
 
 func (r *InstasliceReconciler) updateCacheWithNewAllocation(podUid types.UID, allocResult inferencev1alpha1.AllocationResult) {
-
 	r.allocationCache[podUid] = allocResult
 }
 

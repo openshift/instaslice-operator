@@ -1,3 +1,8 @@
+GO_TEST_PACKAGES ?= $$(go list ./... | grep -v -E 'e2e|generated')
+GO_BUILD_BINDIR ?= bin
+SHELL = /bin/bash
+export GOTOOLCHAIN=local
+
 # Include the library makefile
 include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 	golang.mk \
@@ -5,8 +10,6 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 	targets/openshift/deps.mk \
 	targets/openshift/crd-schema-gen.mk \
 )
-
-GO_BUILD_BINDIR := bin
 
 .PHONY: manifests
 manifests:
@@ -134,10 +137,6 @@ fmt: ## Run go fmt against code.
 .PHONY: vet
 vet: ## Run go vet against code.
 	go vet ./...
-
-.PHONY: test
-test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 # Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up.
@@ -284,16 +283,18 @@ deploy-instaslice-on-ocp:
 undeploy-instaslice-on-ocp:
 	oc delete ns/instaslice-system
 
-GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
-GOLANGCI_LINT_VERSION ?= v1.61.0
-golangci-lint:
+GOLANGCI_LINT ?= $(shell pwd)/bin/golangci-lint
+GOLANGCI_LINT_VERSION ?= v2.0.2
+
+.PHONY: golangci-lint-download
+golangci-lint-download:
 	@[ -f $(GOLANGCI_LINT) ] || { \
 	set -e ;\
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell dirname $(GOLANGCI_LINT)) $(GOLANGCI_LINT_VERSION) ;\
 	}
 
 .PHONY: lint
-lint: golangci-lint ## Run golangci-lint linter & yamllint
+lint: golangci-lint-download
 	$(GOLANGCI_LINT) run --timeout 5m
 
 .PHONY: lint-fix
