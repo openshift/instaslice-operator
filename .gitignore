@@ -30,3 +30,5 @@ go.work
 # ginkgo reports
 report.json
 report.xml
+
+_output

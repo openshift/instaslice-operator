@@ -152,7 +152,7 @@ means the changes are pending and will be applied after a reboot.
 Create a Kind cluster and install the NVIDIA GPU Operator:
 
 ```console
-bash ./deploy/setup.sh
+bash ./hack/setup.sh
 ```
 
 **Note**: The validator pods `nvidia-cuda-validator-*` and `nvidia-operator-validator-*` of the GPU operator are expected to
