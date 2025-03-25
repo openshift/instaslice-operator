@@ -2496,10 +2496,6 @@ var schemaYAML = typed.YAMLObject(`types:
           elementRelationship: associative
           keys:
           - type
-    - name: managedBootImagesStatus
-      type:
-        namedType: com.github.openshift.api.operator.v1.ManagedBootImages
-      default: {}
     - name: nodeDisruptionPolicyStatus
       type:
         namedType: com.github.openshift.api.operator.v1.NodeDisruptionPolicyStatus
@@ -2884,6 +2880,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: currentRevision
       type:
         scalar: numeric
+      default: 0
     - name: lastFailedCount
       type:
         scalar: numeric
@@ -3888,9 +3885,6 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: numeric
     - name: granularMaxSnapshotsPerBlockVolumeInVVOL
-      type:
-        scalar: numeric
-    - name: maxAllowedBlockVolumesPerNode
       type:
         scalar: numeric
     - name: topologyCategories
