@@ -234,10 +234,14 @@ spec:
                   description: nodeResources specifies the discovered resources of the node
                   type: object
                   required:
+                    - bootId
                     - migPlacement
                     - nodeGpus
                     - nodeResources
                   properties:
+                    bootId:
+                      description: bootId represents the current boot id of the node
+                      type: string
                     migPlacement:
                       description: migPlacement represents GPU instance, compute instance with placement for a profile
                       type: object

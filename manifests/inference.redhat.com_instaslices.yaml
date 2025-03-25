@@ -238,6 +238,9 @@ spec:
                 description: nodeResources specifies the discovered resources of the
                   node
                 properties:
+                  bootId:
+                    description: bootId represents the current boot id of the node
+                    type: string
                   migPlacement:
                     additionalProperties:
                       properties:
@@ -320,6 +323,7 @@ spec:
                       node at boot time
                     type: object
                 required:
+                - bootId
                 - migPlacement
                 - nodeGpus
                 - nodeResources
