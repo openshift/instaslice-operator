@@ -464,15 +464,14 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				if err != nil {
 					continue
 				}
-				// allocation was successful
-				r.updateCacheWithNewAllocation(allocRequest.PodRef.UID, *allocResult)
 				podHasNodeAllocation = true
 				if podHasNodeAllocation {
 					err := utils.UpdateOrDeleteInstasliceAllocations(ctx, r.Client, instaslice.Name, allocResult, allocRequest)
 					if err != nil {
 						return ctrl.Result{Requeue: true}, nil
 					}
-					// allocation was successful
+					// allocation was successful and hence update the cache with new allocation
+					r.updateCacheWithNewAllocation(allocRequest.PodRef.UID, *allocResult)
 					// update deployed pod total metrics
 					if err := r.UpdateDeployedPodTotalMetrics(string(allocResult.Nodename), allocResult.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, allocResult.MigPlacement.Size); err != nil {
 						log.Error(err, "Failed to update deployed pod metrics (node: %s, namespce: %s, pod: %s): %w", allocResult.Nodename, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, err)
