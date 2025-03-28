@@ -1,3 +1,32 @@
+GO_TEST_PACKAGES ?= $$(go list ./... | grep -v -E 'e2e|generated')
+GO_BUILD_BINDIR ?= bin
+SHELL = /usr/bin/env bash
+export GOTOOLCHAIN=local
+
+# Include the library makefile
+include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
+	golang.mk \
+	targets/openshift/images.mk \
+	targets/openshift/deps.mk \
+	targets/openshift/crd-schema-gen.mk \
+)
+
+.PHONY: manifests
+manifests:
+	go build -o _output/tools/bin/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
+	rm -f manifests/instaslice-operator.crd.yaml
+	./_output/tools/bin/controller-gen rbac:roleName=manager-role webhook crd paths=./api/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
+	mv manifests/inference.redhat.com_instasliceoperators.yaml manifests/instaslice-operator.crd.yaml
+	cp manifests/instaslice-operator.crd.yaml deploy/00_instaslice-operator.crd.yaml
+	cp manifests/inference.redhat.com_instaslices.yaml deploy/00_instaslices.crd.yaml
+
+.PHONY: generate
+generate: manifests generate-clients
+
+.PHONY: generate-clients
+generate-clients:
+	GO=GO111MODULE=on GOFLAGS=-mod=readonly hack/update-codegen.sh
+
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
@@ -99,32 +128,7 @@ SHELL = /usr/bin/env bash -o pipefail
 .PHONY: all
 all: build
 
-##@ General
-
-# The help target prints out all targets with their descriptions organized
-# beneath their categories. The categories are represented by '##@' and the
-# target descriptions by '##'. The awk command is responsible for reading the
-# entire set of makefiles included in this invocation, looking for lines of the
-# file as xyz: ## something, and then pretty-format the target and help. Then,
-# if there's a line with ##@ something, that gets pretty-printed as a category.
-# More info on the usage of ANSI control characters for terminal formatting:
-# https://en.wikipedia.org/wiki/ANSI_escape_code#SGR_parameters
-# More info on the awk command:
-# http://linuxcommand.org/lc3_adv_awk.php
-
-.PHONY: help
-help: ## Display this help.
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
-
 ##@ Development
-
-.PHONY: manifests
-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-
-.PHONY: generate
-generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -133,10 +137,6 @@ fmt: ## Run go fmt against code.
 .PHONY: vet
 vet: ## Run go vet against code.
 	go vet ./...
-
-.PHONY: test
-test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 # Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up.
@@ -283,16 +283,18 @@ deploy-instaslice-on-ocp:
 undeploy-instaslice-on-ocp:
 	oc delete ns/instaslice-system
 
-GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
-GOLANGCI_LINT_VERSION ?= v1.61.0
-golangci-lint:
+GOLANGCI_LINT ?= $(shell pwd)/bin/golangci-lint
+GOLANGCI_LINT_VERSION ?= v2.0.2
+
+.PHONY: golangci-lint-download
+golangci-lint-download:
 	@[ -f $(GOLANGCI_LINT) ] || { \
 	set -e ;\
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell dirname $(GOLANGCI_LINT)) $(GOLANGCI_LINT_VERSION) ;\
 	}
 
 .PHONY: lint
-lint: golangci-lint ## Run golangci-lint linter & yamllint
+lint: golangci-lint-download
 	$(GOLANGCI_LINT) run --timeout 5m
 
 .PHONY: lint-fix
@@ -300,11 +302,6 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 	$(GOLANGCI_LINT) run --fix
 
 ##@ Build
-
-.PHONY: build
-build: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/controller/main.go
-	go build -o bin/daemonset cmd/daemonset/main.go
 
 .PHONY: run-controller
 run-controller: manifests generate fmt vet ## Run a controller from your host.
@@ -431,7 +428,7 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.3.0
-CONTROLLER_TOOLS_VERSION ?= v0.16.4
+CONTROLLER_TOOLS_VERSION ?= v0.17.2
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary. If wrong version is installed, it will be removed before downloading.

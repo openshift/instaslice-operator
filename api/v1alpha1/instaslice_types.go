@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	operatorv1 "github.com/openshift/api/operator/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,6 +37,61 @@ const (
 	AllocationStatusCreated  AllocationStatusDaemonset  = "created"
 )
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// InstasliceOperator is the Schema for the InstasliceOperator API
+// +k8s:openapi-gen=true
+// +genclient
+// +kubebuilder:storageversion
+// +kubebuilder:subresource:status
+type InstasliceOperator struct {
+	// TypeMeta data for the operator
+	// +required
+	metav1.TypeMeta `json:",inline"`
+
+	// metadata for the operator
+	// +required
+	metav1.ObjectMeta `json:"metadata"`
+
+	// spec holds user settable values for configuration
+	// +required
+	Spec InstasliceOperatorSpec `json:"spec"`
+	// status holds observed values from the cluster. They may not be overridden.
+	// +optional
+	Status InstasliceOperatorStatus `json:"status"`
+}
+
+// InstasliceOperatorSpec defines the desired state of InstasliceOperator
+type InstasliceOperatorSpec struct {
+	operatorv1.OperatorSpec `json:",inline"`
+
+	// emulatedMode true configures the operator to not use the GPU backend
+	// +optional
+	EmulatedMode bool `json:"emulatedMode"`
+}
+
+// InstasliceOperatorStatus defines the observed state of InstasliceOperator
+type InstasliceOperatorStatus struct {
+	operatorv1.OperatorStatus `json:",inline"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// InstasliceOperatorList contains a list of InstasliceOperator
+type InstasliceOperatorList struct {
+	// Type meta for the operator
+	// +required
+	metav1.TypeMeta `json:",inline"`
+
+	// metadata for the operator
+	// +required
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	// items list for operator
+	// +required
+	Items []InstasliceOperator `json:"items"`
+}
+
 type AllocationRequest struct {
 	// profile specifies the MIG slice profile for allocation
 	// +optional
@@ -53,11 +109,11 @@ type AllocationRequest struct {
 type AllocationStatus struct {
 	// allocationStatusDaemonset represents the current status of the allocation from the DaemonSet's perspective
 	// +optional
-	AllocationStatusDaemonset `json:"allocationStatusDaemonset"`
+	AllocationStatusDaemonset AllocationStatusDaemonset `json:"allocationStatusDaemonset"`
 
-	// allocationStatusDaemonset represents the current status of the allocation from the Controller's perspective
+	// allocationStatusController represents the current status of the allocation from the Controller's perspective
 	// +optional
-	AllocationStatusController `json:"allocationStatusController"`
+	AllocationStatusController AllocationStatusController `json:"allocationStatusController"`
 }
 type AllocationResult struct {
 	// conditions provide additional information about the allocation
@@ -117,7 +173,7 @@ type DiscoveredNodeResources struct {
 	NodeResources corev1.ResourceList `json:"nodeResources"`
 
 	// bootId represents the current boot id of the node
-	// +kubebuilder:validation:Required
+	// +required
 	BootID string `json:"bootId"`
 }
 
@@ -195,7 +251,10 @@ type InstasliceStatus struct {
 // +kubebuilder:validation:Required
 // +kubebuilder:subresource:status
 type Instaslice struct {
+	// TypeMeta data for an instaslice
 	metav1.TypeMeta `json:",inline"`
+
+	// metadata for an instaslice
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
@@ -213,7 +272,9 @@ type Instaslice struct {
 // InstasliceList contains a list of Instaslice resources
 // +optional
 type InstasliceList struct {
+	// TypeMeta data for an instaslice list
 	metav1.TypeMeta `json:",inline"`
+	// metadata for an instaslice list
 	// +optional
 	metav1.ListMeta `json:"metadata,omitempty"`
 

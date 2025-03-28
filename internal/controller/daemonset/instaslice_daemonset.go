@@ -17,7 +17,6 @@ import (
 	"github.com/openshift/instaslice-operator/internal/controller"
 	"github.com/openshift/instaslice-operator/internal/controller/config"
 	"github.com/openshift/instaslice-operator/internal/controller/utils"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -87,7 +86,6 @@ func NewInstasliceDaemonsetReconciler(
 	nodeName string,
 	config *config.Config,
 ) (*InstaSliceDaemonsetReconciler, error) {
-
 	r := &InstaSliceDaemonsetReconciler{
 		Client:   client,
 		Scheme:   scheme,
@@ -102,7 +100,7 @@ func NewInstasliceDaemonsetReconciler(
 		}
 		ret := nvml.Init()
 		if ret != nvml.SUCCESS {
-			err = goerror.New("Unable to initialize NVML")
+			err = goerror.New("unable to initialize NVML")
 		}
 	})
 	if err != nil {
@@ -440,7 +438,7 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 				log.Error(err, "could not create fake capacity", "node_name", r.NodeName)
 				return err
 			}
-			//get metadata.resourceVersion
+			// get metadata.resourceVersion
 			// for i := 1; i < 5; i++ {
 			// 	err := r.Get(ctx, typeNamespacedName, &instaslice)
 			// 	if err == nil {
@@ -457,7 +455,6 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 				log.Error(err, "Retrying fetch fake capacity", "node_name", r.NodeName)
 				return false, nil // Continue retrying
 			})
-
 			if err != nil {
 				log.Error(err, "Failed to fetch fake capacity after retries", "node_name", r.NodeName)
 			}
@@ -486,7 +483,6 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 				log.Info("Waiting for instaslice to become ready", "node_name", r.NodeName)
 				return false, nil
 			})
-
 			if err != nil {
 				log.Error(err, "Timed out waiting for instaslice status", "node_name", r.NodeName)
 			}
@@ -615,7 +611,7 @@ func (r *InstaSliceDaemonsetReconciler) addMigCapacityToNode(ctx context.Context
 		resourceName := controller.OrgInstaslicePrefix + "mig-" + profile
 		patches = append(patches, map[string]interface{}{
 			"op":    "replace",
-			"path":  "/status/capacity/" + strings.Replace(resourceName, "/", "~1", -1),
+			"path":  "/status/capacity/" + strings.ReplaceAll(resourceName, "/", "~1"),
 			"value": fmt.Sprintf("%d", count),
 		})
 	}
@@ -661,10 +657,10 @@ func (r *InstaSliceDaemonsetReconciler) patchNodeStatusForNode(ctx context.Conte
 	return nil
 }
 
-func (r *InstaSliceDaemonsetReconciler) classicalResourcesAndGPUMemOnNode(ctx context.Context, nodeName string, totalGPUMemory string) (corev1.ResourceList, error) {
+func (r *InstaSliceDaemonsetReconciler) classicalResourcesAndGPUMemOnNode(ctx context.Context, nodeName string, totalGPUMemory string) (v1.ResourceList, error) {
 	log := logr.FromContext(ctx)
 	node := &v1.Node{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: nodeName}, node); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: nodeName}, node); err != nil {
 		log.Error(err, "unable to retrieve cpu and memory resource on the node")
 	}
 
@@ -686,9 +682,9 @@ func (r *InstaSliceDaemonsetReconciler) classicalResourcesAndGPUMemOnNode(ctx co
 	}
 
 	// Allocatable = Capacity - System Reserved - Kube Reserved - eviction hard
-	resourceList := corev1.ResourceList{}
-	resourceList[corev1.ResourceCPU] = node.Status.Allocatable[v1.ResourceCPU]
-	resourceList[corev1.ResourceMemory] = node.Status.Allocatable[v1.ResourceMemory]
+	resourceList := v1.ResourceList{}
+	resourceList[v1.ResourceCPU] = node.Status.Allocatable[v1.ResourceCPU]
+	resourceList[v1.ResourceMemory] = node.Status.Allocatable[v1.ResourceMemory]
 
 	return resourceList, nil
 }
