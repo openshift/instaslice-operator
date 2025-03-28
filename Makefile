@@ -1,6 +1,6 @@
 GO_TEST_PACKAGES ?= $$(go list ./... | grep -v -E 'e2e|generated')
 GO_BUILD_BINDIR ?= bin
-SHELL = /bin/bash
+SHELL = /usr/bin/env bash
 export GOTOOLCHAIN=local
 
 # Include the library makefile
