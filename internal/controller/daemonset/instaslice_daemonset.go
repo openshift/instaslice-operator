@@ -832,7 +832,9 @@ func (m MigProfile) String() string {
 func (m MigProfile) Attributes() []string {
 	var attr []string
 	switch m.GIProfileID {
-	case nvml.GPU_INSTANCE_PROFILE_1_SLICE_REV1:
+	// This case checks media extension for both 1g.* and 2g.* profiles
+	// PS : 2g.12gb+me profile is specific to A30 GPU, and support for this profile is experimental for the moment
+	case nvml.GPU_INSTANCE_PROFILE_1_SLICE_REV1, nvml.GPU_INSTANCE_PROFILE_2_SLICE_REV1: 
 		attr = append(attr, controller.AttributeMediaExtensions)
 	}
 	return attr
