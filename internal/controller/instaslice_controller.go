@@ -228,13 +228,9 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						}
 						r.CleanupOrphanedAllocations(ctx, &instasliceList)
 						// update DeployedPodTotal Metrics by setting value to 0 as pod allocation is deleted and pod is no loger consuming slices
-						if err = r.UpdateDeployedPodTotalMetrics(string(allocation.Nodename), allocation.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, 0); err != nil {
-							log.Error(err, "Failed to update deployed pod metrics", "nodeName", allocation.Nodename)
-						}
+						r.UpdateDeployedPodTotalMetrics(string(allocation.Nodename), allocation.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, 0)
 						//update compatible profiles metrics
-						if err := r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name); err != nil {
-							log.Error(err, "Failed to update Compatible Profiles Metrics", "nodeName", instaslice.Name)
-						}
+						r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name)
 						// requeue for the finalizer to be removed
 						return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
 					}
@@ -278,13 +274,9 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						}
 						r.CleanupOrphanedAllocations(ctx, &instasliceList)
 						// update DeployedPodTotal Metrics by setting value to 0 as pod allocation is deleted and pod is no loger consuming slices
-						if err = r.UpdateDeployedPodTotalMetrics(string(allocation.Nodename), allocation.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, 0); err != nil {
-							log.Error(err, "Failed to update deployed pod metrics", "nodeName", allocation.Nodename)
-						}
+						r.UpdateDeployedPodTotalMetrics(string(allocation.Nodename), allocation.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, 0)
 						//update compatible profiles metrics
-						if err := r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name); err != nil {
-							log.Error(err, "Failed to update Compatible Profiles Metrics", "nodeName", instaslice.Name)
-						}
+						r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name)
 						// requeue for the finalizer to be removed
 						return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
 					}
@@ -326,13 +318,9 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					}
 					r.CleanupOrphanedAllocations(ctx, &instasliceList)
 					// update DeployedPodTotal Metrics by setting value to 0 as pod allocation is deleted and pod is no loger consuming slices
-					if err = r.UpdateDeployedPodTotalMetrics(string(allocation.Nodename), allocation.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, 0); err != nil {
-						log.Error(err, "Failed to update deployed pod metrics", "nodeName", allocation.Nodename)
-					}
+					r.UpdateDeployedPodTotalMetrics(string(allocation.Nodename), allocation.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, 0)
 					//update compatible profiles metrics
-					if err := r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name); err != nil {
-						log.Error(err, "Failed to update Compatible Profiles Metrics", "nodeName", instaslice.Name)
-					}
+					r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name)
 					if controllerutil.RemoveFinalizer(pod, FinalizerName) {
 						if err := r.Update(ctx, pod); err != nil {
 							// requeing immediately as the finalizer removal gets lost
@@ -363,6 +351,11 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							if err != nil {
 								return resultRemove, err
 							}
+							r.CleanupOrphanedAllocations(ctx, &instasliceList)
+							// update DeployedPodTotal Metrics by setting value to 0 as pod allocation is deleted and pod is no loger consuming slices
+							r.UpdateDeployedPodTotalMetrics(string(allocation.Nodename), allocation.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, 0)
+							//update compatible profiles metrics
+							r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name)
 						}
 						elapsed := time.Since(pod.DeletionTimestamp.Time)
 						if elapsed > 30*time.Second {
@@ -441,9 +434,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				return ctrl.Result{Requeue: true}, nil
 			}
 			// update compatible profiles metrics
-			if err := r.UpdateCompatibleProfilesMetrics(*updatedInstaslice, instaslice.Name); err != nil {
-				log.Error(err, "Failed to update Compatible Profiles Metrics", "nodeName", updatedInstaslice.Name)
-			}
+			r.UpdateCompatibleProfilesMetrics(*updatedInstaslice, instaslice.Name)
 		}
 		// pod does not have an allocation yet, make allocation
 		// find the node
@@ -472,14 +463,14 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					}
 					// allocation was successful and hence update the cache with new allocation
 					r.updateCacheWithNewAllocation(allocRequest.PodRef.UID, *allocResult)
+					processedSlices, err := r.calculateProfileFitOnGPU(&instaslice, allocRequest.Profile, allocResult.GPUUUID, false, pod)
+					if err != nil {
+						log.Error(err, "failed to calculate processed GPU slices for profile %s: %w", allocRequest.Profile, err)
+					}
 					// update deployed pod total metrics
-					if err := r.UpdateDeployedPodTotalMetrics(string(allocResult.Nodename), allocResult.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, allocResult.MigPlacement.Size); err != nil {
-						log.Error(err, "Failed to update deployed pod metrics (node: %s, namespce: %s, pod: %s): %w", allocResult.Nodename, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, err)
-					}
+					r.UpdateDeployedPodTotalMetrics(string(allocResult.Nodename), allocResult.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, processedSlices)
 					// update total processed GPU slices metrics
-					if err = r.IncrementTotalProcessedGpuSliceMetrics(instaslice, string(allocResult.Nodename), allocResult.GPUUUID, profileName, pod); err != nil {
-						log.Error(err, "Failed to update total processed GPU slices metric", "nodeName", allocResult.Nodename, "gpuID", allocResult.GPUUUID)
-					}
+					r.IncrementTotalProcessedGpuSliceMetrics(string(allocResult.Nodename), allocResult.GPUUUID, profileName, processedSlices)
 					return ctrl.Result{}, nil
 				}
 			}
@@ -697,9 +688,7 @@ func (r *InstasliceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}
 		// Iterate over Instaslices and update Prometheus metrics
 		for _, instaslice := range instasliceList.Items {
-			if err := r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name); err != nil {
-				log.Error(err, "Failed to update compatible profiles metrics", "instaslice", instaslice.Name)
-			}
+			r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name)
 		}
 		log.Info("Successfully initialized compatible profiles metrics for all Instaslice objects")
 		return nil
