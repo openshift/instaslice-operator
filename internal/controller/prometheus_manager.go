@@ -17,11 +17,8 @@ limitations under the License.
 package controller
 
 import (
-	"fmt"
-
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/prometheus/client_golang/prometheus"
-	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
@@ -61,28 +58,21 @@ func RegisterMetrics() {
 }
 
 // UpdateGpuSliceMetrics updates GPU slice allocation metrics
-func (r *InstasliceReconciler) IncrementTotalProcessedGpuSliceMetrics(instasliceObj inferencev1alpha1.Instaslice, nodeName, gpuID string, profile string, pod *v1.Pod) error {
-	processedSlices, err := r.calculateProfileFitOnGPU(&instasliceObj, profile, gpuID, false, pod)
-	if err != nil {
-		return fmt.Errorf("failed to calculate processed GPU slices for profile %s: %w", profile, err)
-	}
-	instasliceMetrics.processedSlices.WithLabelValues(nodeName, gpuID).Add(float64(processedSlices))
-	return nil
+func (r *InstasliceReconciler) IncrementTotalProcessedGpuSliceMetrics(nodeName, gpuID string, profile string, size int32) {
+	instasliceMetrics.processedSlices.WithLabelValues(nodeName, gpuID).Add(float64(size))
 }
 
 // UpdateGpuSliceMetrics updates GPU slice allocation metrics
-func (r *InstasliceReconciler) UpdateDeployedPodTotalMetrics(nodeName, gpuID, namespace, podname, profile string, size int32) error {
+func (r *InstasliceReconciler) UpdateDeployedPodTotalMetrics(nodeName, gpuID, namespace, podname, profile string, size int32) {
 	if namespace == "" && podname == "" && profile == "" {
-		return fmt.Errorf("[UpdateDeployedPodTotalMetrics] : missing required parameters, no prometheus update needed")
+		return
 	}
-	instasliceMetrics.deployedPodTotal.WithLabelValues(
-		nodeName, gpuID, namespace, podname, profile).Set(float64(size))
-	return nil
+	instasliceMetrics.deployedPodTotal.WithLabelValues(nodeName, gpuID, namespace, podname, profile).Set(float64(size))
 }
 
 // UpdateCompatibleProfilesMetrics updates metrics based on remaining GPU slices and calculates compatible profiles dynamically
 // TODO: store metrics per gpu and when there is an update, calculate a fit for only one GPU instead of all GPUs on the host
-func (r *InstasliceReconciler) UpdateCompatibleProfilesMetrics(instasliceObj inferencev1alpha1.Instaslice, nodeName string) error {
+func (r *InstasliceReconciler) UpdateCompatibleProfilesMetrics(instasliceObj inferencev1alpha1.Instaslice, nodeName string) {
 	sortedGPUs := sortGPUs(&instasliceObj)
 	// Iterate over each profile
 	for profileName, migPlacement := range instasliceObj.Status.NodeResources.MigPlacement {
@@ -92,7 +82,7 @@ func (r *InstasliceReconciler) UpdateCompatibleProfilesMetrics(instasliceObj inf
 			for _, gpuID := range sortedGPUs {
 				fit, err := r.calculateProfileFitOnGPU(&instasliceObj, profileName, gpuID, true, nil)
 				if err != nil {
-					return fmt.Errorf("failed to calculate compatible profiles for profile %s: %w", profileName, err)
+					return
 				}
 				totalFit += fit
 			}
@@ -100,5 +90,4 @@ func (r *InstasliceReconciler) UpdateCompatibleProfilesMetrics(instasliceObj inf
 			instasliceMetrics.compatibleProfiles.WithLabelValues(profileName, nodeName).Set(float64(totalFit))
 		}
 	}
-	return nil
 }
