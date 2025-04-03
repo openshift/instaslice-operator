@@ -440,15 +440,6 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 				log.Error(err, "could not create fake capacity", "node_name", r.NodeName)
 				return err
 			}
-			//get metadata.resourceVersion
-			// for i := 1; i < 5; i++ {
-			// 	err := r.Get(ctx, typeNamespacedName, &instaslice)
-			// 	if err == nil {
-			// 		break
-			// 	}
-			// 	log.Error(err, "Retrying fetch fake capacity", "attempt", i+1, "node_name", r.NodeName)
-			// 	time.Sleep(2 * time.Second)
-			// }
 			err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 10*time.Second, true, func(ctx context.Context) (done bool, err error) {
 				err = r.Get(ctx, typeNamespacedName, &instaslice)
 				if err == nil {
@@ -471,7 +462,6 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 				return err
 			}
 			// let the update propagate
-			// time.Sleep(2 * time.Second)
 			err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 10*time.Second, true, func(ctx context.Context) (done bool, err error) {
 				err = r.Get(ctx, typeNamespacedName, &instaslice)
 				if err != nil {
