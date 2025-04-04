@@ -2,6 +2,8 @@ module github.com/openshift/instaslice-operator
 
 go 1.23.0
 
+toolchain go1.24.1
+
 require (
 	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/manifestival/controller-runtime-client v0.4.0
@@ -9,9 +11,9 @@ require (
 	github.com/onsi/ginkgo/v2 v2.23.0
 	github.com/onsi/gomega v1.36.2
 	github.com/stretchr/testify v1.10.0
-	k8s.io/apimachinery v0.32.1
-	k8s.io/client-go v0.32.1
-	sigs.k8s.io/controller-runtime v0.20.3
+	k8s.io/apimachinery v0.32.3
+	k8s.io/client-go v0.32.3
+	sigs.k8s.io/controller-runtime v0.20.4
 )
 
 require (
@@ -98,7 +100,7 @@ require (
 	google.golang.org/protobuf v1.36.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.32.1
+	k8s.io/api v0.32.3
 	k8s.io/apiextensions-apiserver v0.32.1 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
