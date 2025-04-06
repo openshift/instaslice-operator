@@ -1,5 +1,5 @@
-# cel.dev/expr v0.18.0
-## explicit; go 1.21.1
+# cel.dev/expr v0.23.1
+## explicit; go 1.22.0
 cel.dev/expr
 # github.com/NVIDIA/go-nvml v0.12.4-1
 ## explicit; go 1.20
