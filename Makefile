@@ -247,7 +247,7 @@ undeploy-cert-manager-ocp:
 .PHONY: deploy-nfd-ocp
 deploy-nfd-ocp:
 	oc apply -f hack/manifests/nfd.yaml
-	oc wait --for condition=established --timeout=60s crd/nodefeaturediscoveries.nfd.openshift.io -n openshift-nfd
+	oc wait --for condition=established --timeout=300s crd/nodefeaturediscoveries.nfd.openshift.io -n openshift-nfd
 	oc apply -f hack/manifests/nfd-instance.yaml
 	oc describe node | egrep 'Roles|pci' # check for at least on enabled node
 
@@ -259,7 +259,7 @@ undeploy-nfd-ocp:
 .PHONY: deploy-nvidia-ocp
 deploy-nvidia-ocp:
 	oc apply -f hack/manifests/nvidia-cpu-operator.yaml
-	oc wait --for condition=established --timeout=60s crd/clusterpolicies.nvidia.com
+	oc wait --for condition=established --timeout=300s crd/clusterpolicies.nvidia.com
 	oc apply -f hack/manifests/gpu-cluster-policy.yaml
 	oc label $(shell oc get node -o name) nvidia.com/mig.config=all-enabled --overwrite
 	oc wait --for=condition=Ready pod -l app=nvidia-operator-validator  -n nvidia-gpu-operator --timeout=300s
