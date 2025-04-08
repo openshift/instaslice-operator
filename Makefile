@@ -260,10 +260,11 @@ undeploy-nfd-ocp:
 .PHONY: deploy-nvidia-ocp
 deploy-nvidia-ocp:
 	oc apply -f hack/manifests/nvidia-cpu-operator.yaml
+	oc wait pods -l app=gpu-operator -n nvidia-gpu-operator --for jsonpath="{status.phase}"=Running --timeout=300s
 	oc wait --for condition=established --timeout=300s crd/clusterpolicies.nvidia.com
 	oc apply -f hack/manifests/gpu-cluster-policy.yaml
 	oc label $(shell oc get node -o name) nvidia.com/mig.config=all-enabled --overwrite
-	oc wait --for=condition=Ready pod -l app=nvidia-operator-validator  -n nvidia-gpu-operator --timeout=300s
+	oc wait pods --for=condition=Ready -l app=nvidia-operator-validator  -n nvidia-gpu-operator --timeout=300s
 
 .PHONY: undeploy-nvidia-ocp
 undeploy-nvidia-ocp:
