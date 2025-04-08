@@ -247,7 +247,8 @@ undeploy-cert-manager-ocp:
 .PHONY: deploy-nfd-ocp
 deploy-nfd-ocp:
 	oc apply -f hack/manifests/nfd.yaml
-	oc wait --for condition=established --timeout=300s crd/nodefeaturediscoveries.nfd.openshift.io -n openshift-nfd
+	oc wait pods -n openshift-nfd -l control-plane=controller-manager --for jsonpath="{status.phase}"=Running --timeout=300s
+	oc wait crd/nodefeaturediscoveries.nfd.openshift.io -n openshift-nfd --for condition=established --timeout=300s
 	oc apply -f hack/manifests/nfd-instance.yaml
 	oc describe node | egrep 'Roles|pci' # check for at least on enabled node
 
