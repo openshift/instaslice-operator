@@ -254,6 +254,11 @@ deploy-nfd-ocp:
 	oc apply -f hack/manifests/nfd-instance.yaml
 	oc describe node | egrep 'Roles|pci' # check for at least on enabled node
 
+.PHONY: deploy-nfd-ocp-without-waits
+deploy-nfd-ocp-without-waits:
+	oc apply -f hack/manifests/nfd.yaml
+	oc apply -f hack/manifests/nfd-instance.yaml
+
 .PHONY: undeploy-nfd-ocp
 undeploy-nfd-ocp:
 	oc delete -f hack/manifests/nfd-instance.yaml
@@ -270,6 +275,12 @@ deploy-nvidia-ocp:
 	oc label $(shell oc get node -o name) nvidia.com/mig.config=all-enabled --overwrite
 	oc wait pods --for=create -l app=nvidia-operator-validator  -n nvidia-gpu-operator --timeout=300s
 	oc wait pods --for=condition=Ready -l app=nvidia-operator-validator  -n nvidia-gpu-operator --timeout=300s
+
+.PHONY: deploy-nvidia-ocp-without-waits
+deploy-nvidia-ocp-without-waits:
+	oc apply -f hack/manifests/nvidia-cpu-operator.yaml
+	oc apply -f hack/manifests/gpu-cluster-policy.yaml
+	oc label $(shell oc get node -o name) nvidia.com/mig.config=all-enabled --overwrite
 
 .PHONY: undeploy-nvidia-ocp
 undeploy-nvidia-ocp:
