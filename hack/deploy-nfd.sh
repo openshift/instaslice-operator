@@ -3,8 +3,8 @@
 set -eou pipefail
 
 KUBECTL=${KUBECTL:-kubectl}
-NFD_TIMEOUT=${NFD_TIMEOUT:-120}
-TIMEOUT=${TIMEOUT:-2m}
+NFD_TIMEOUT=${NFD_TIMEOUT:-600}
+TIMEOUT=${TIMEOUT:-10m}
 
 _kubectl() {
 	${KUBECTL} $@
