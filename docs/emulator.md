@@ -17,18 +17,6 @@ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/
 make install
 ```
 
-- Add GPU capacity to the cluster using command
-
-```console
-kubectl apply -f test/e2e/resources/instaslice-fake-capacity.yaml
-```
-
-- Check if InstaSlice object exists using command
-
-```console
-kubectl describe instaslice
-```
-
 - Deploy the controller using command
 
 ```console
@@ -41,10 +29,17 @@ make deploy-emulated
 kubectl get pods -n instaslice-system --watch
 ```
 
+
 ```
 NAME                                                      READY   STATUS    RESTARTS   AGE
 instaslice-operator-controller-daemonset-fbwmk            1/1     Running   0          118s
 instaslice-operator-controller-manager-579bc859cf-pb9t6   2/2     Running   0          118s
+```
+
+-  Check if InstaSlice object exists using command
+
+```console
+kubectl describe instaslice -n instaslice-system
 ```
 
 > [!IMPORTANT]
