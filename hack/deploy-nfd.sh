@@ -23,7 +23,7 @@ _wait_for_pods_to_exist() {
 			echo "Waited for pods in namespace \"$ns\" with name prefix \"$pod_name_prefix\" to exist for $max_wait_secs seconds without luck. Returning with error."
 			return 1
 		fi
-		if kubectl -n "$ns" describe pod "$pod_name_prefix" --request-timeout "5s" &>/dev/null; then
+		if _kubectl -n "$ns" describe pod "$pod_name_prefix" --request-timeout "5s" &>/dev/null; then
 			echo "Pods in namespace \"$ns\" with name prefix \"$pod_name_prefix\" exist."
 			break
 		else
