@@ -139,7 +139,7 @@ spec:
       value: $(tasks.daemonset-build-image-index.results.IMAGE_URL)
     - description: ""
       name: DAEMONSET_IMAGE_DIGEST
-      value: $(tasks.daemosnet-build-image-index.results.IMAGE_DIGEST)
+      value: $(tasks.daemonset-build-image-index.results.IMAGE_DIGEST)
     - description: ""
       name: OPERATOR_IMAGE_URL
       value: $(tasks.operator-build-image-index.results.IMAGE_URL)
