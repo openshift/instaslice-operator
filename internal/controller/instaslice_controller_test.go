@@ -34,6 +34,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
@@ -176,6 +178,104 @@ var _ = Describe("ensureDaemonSetExists", func() {
 	})
 })
 
+var _ = Describe("Instaslice Predicate", func() {
+	var mutatedPod, plainPod *v1.Pod
+
+	BeforeEach(func() {
+		mutatedPod = &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{"instaslice.redhat.com/mutated": "true"},
+			},
+		}
+		plainPod = &v1.Pod{}
+	})
+
+	It("should return true for created mutated pod", func() {
+		predicate := newInstaslicePredicate()
+		Expect(predicate.Create(event.CreateEvent{Object: mutatedPod})).To(BeTrue())
+	})
+
+	It("should return false for created plain pod", func() {
+		predicate := newInstaslicePredicate()
+		Expect(predicate.Create(event.CreateEvent{Object: plainPod})).To(BeFalse())
+	})
+
+	It("should return true for updated pod if annotation exists", func() {
+		predicate := newInstaslicePredicate()
+		Expect(predicate.Update(event.UpdateEvent{ObjectOld: plainPod, ObjectNew: mutatedPod})).To(BeTrue())
+	})
+
+	It("should return true for updated pod if content changed", func() {
+		plainPod2 := plainPod.DeepCopy()
+		plainPod2.SetName("new-name")
+		predicate := newInstaslicePredicate()
+		Expect(predicate.Update(event.UpdateEvent{ObjectOld: plainPod, ObjectNew: plainPod2})).To(BeTrue())
+	})
+
+	It("should return false for delete plain pod", func() {
+		predicate := newInstaslicePredicate()
+		Expect(predicate.Delete(event.DeleteEvent{Object: plainPod})).To(BeFalse())
+	})
+
+	It("should return true for delete mutated pod", func() {
+		predicate := newInstaslicePredicate()
+		Expect(predicate.Delete(event.DeleteEvent{Object: mutatedPod})).To(BeTrue())
+	})
+})
+
+var _ = Describe("hasInstasliceMutation", func() {
+	It("should return true if annotation is present", func() {
+		pod := &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{"instaslice.redhat.com/mutated": "true"},
+			},
+		}
+		Expect(hasInstasliceMutation(pod)).To(BeTrue())
+	})
+
+	It("should return false if annotation is missing", func() {
+		pod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{}}}
+		Expect(hasInstasliceMutation(pod)).To(BeFalse())
+	})
+
+	It("should return false for non-pod object", func() {
+		nonPod := &v1.Node{}
+		Expect(hasInstasliceMutation(nonPod)).To(BeFalse())
+	})
+})
+
+var _ = Describe("isEqual", func() {
+	It("should return true when both spec and status are the same", func() {
+		obj1 := &inferencev1alpha1.Instaslice{}
+		obj2 := obj1.DeepCopy()
+		Expect(isEqual(obj1, obj2)).To(BeTrue())
+	})
+
+	It("should return false if status differs", func() {
+		obj1 := &inferencev1alpha1.Instaslice{}
+		obj2 := &inferencev1alpha1.Instaslice{}
+		obj2.Status.Conditions = []metav1.Condition{{Type: "Ready"}} // simulate a status change
+		Expect(isEqual(obj1, obj2)).To(BeFalse())
+	})
+
+	It("should return false for non-instaslice objects", func() {
+		Expect(isEqual(&v1.Pod{}, &v1.Pod{})).To(BeFalse())
+	})
+})
+
+func newInstaslicePredicate() predicate.Funcs {
+	return predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool {
+			return hasInstasliceMutation(e.Object)
+		},
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return hasInstasliceMutation(e.ObjectNew) || !isEqual(e.ObjectOld, e.ObjectNew)
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return hasInstasliceMutation(e.Object)
+		},
+	}
+}
 func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 	_ = Describe("InstasliceReconciler processInstasliceAllocation", func() {
 		var (

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -46,9 +47,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logr "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -523,9 +526,25 @@ func (r *InstasliceReconciler) setupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
+	// pod filtering
+	// only watches Pods that:
+	// have the mutation annotation, or
+	// have meaningful Change
+	instaslicePredicate := predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool {
+			return hasInstasliceMutation(e.Object)
+		},
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return hasInstasliceMutation(e.ObjectNew) || !isEqual(e.ObjectOld, e.ObjectNew)
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return hasInstasliceMutation(e.Object)
+		},
+	}
 	err = ctrl.NewControllerManagedBy(mgr).
 		For(&v1.Pod{}).Named("InstaSlice-controller").
 		Watches(&inferencev1alpha1.Instaslice{}, handler.EnqueueRequestsFromMapFunc(r.podMapFunc)).
+		WithEventFilter(instaslicePredicate).
 		Watches(&v1.Node{},
 			&handler.EnqueueRequestForObject{}).
 		Complete(r)
@@ -661,6 +680,35 @@ func (r *InstasliceReconciler) createInstaSliceDaemonSet(namespace string) *apps
 		},
 	}
 	return daemonSet
+}
+
+// hasInstasliceMutation checks if a Pod has been mutated by the webhook
+func hasInstasliceMutation(obj client.Object) bool {
+	pod, ok := obj.(*v1.Pod)
+	if !ok {
+		return false
+	}
+
+	if value, exists := pod.Annotations["instaslice.redhat.com/mutated"]; exists && value == "true" {
+		return true
+	}
+
+	return false
+}
+
+// isEqual checks whether two Instaslice custom resources are "meaningfully different"
+// returns true, if both Spec and Status are identical
+func isEqual(oldObj, newObj client.Object) bool {
+	oldInstaslice, ok1 := oldObj.(*inferencev1alpha1.Instaslice)
+	newInstaslice, ok2 := newObj.(*inferencev1alpha1.Instaslice)
+
+	if !ok1 || !ok2 {
+		return false // Type mismatch, consider this an update
+	}
+
+	// Compare the relevant fields that matter for reconciliation
+	return reflect.DeepEqual(oldInstaslice.Spec, newInstaslice.Spec) &&
+		reflect.DeepEqual(oldInstaslice.Status, newInstaslice.Status)
 }
 
 // Extract profile name from the container limits spec

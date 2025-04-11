@@ -132,6 +132,7 @@ func TestHandle(t *testing.T) {
 				g.Expect(found).To(BeTrue(), fmt.Sprintf("%s limit not found in the modified pod", instasliceQuotaResourceName))
 				expectedMemory := resource.MustParse(tt.expectedLimit)
 				g.Expect(actualMemory.Cmp(expectedMemory)).To(Equal(0), fmt.Sprintf("Expected %s to be %s", instasliceQuotaResourceName, tt.expectedLimit))
+				g.Expect(modifiedPod.Annotations).To(HaveKeyWithValue("instaslice.redhat.com/mutated", "true"), "Expected mutated annotation to be added")
 			} else {
 				g.Expect(resp.Allowed).To(BeTrue(), "Expected request to be allowed without mutation")
 				g.Expect(resp.Patches).To(BeEmpty(), "Expected no patches but found some")
