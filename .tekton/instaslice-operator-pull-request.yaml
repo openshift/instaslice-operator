@@ -116,7 +116,11 @@ spec:
       type: string
     - default: "true"
       description: Add built image into an OCI image index
-      name: build-image-index
+      name: operator-build-image-index
+      type: string
+    - default: "true"
+      description: Add built image into an OCI image index
+      name: daemonset-build-image-index
       type: string
     - default: []
       description: Array of --build-arg values ("arg=value" strings) for buildah
