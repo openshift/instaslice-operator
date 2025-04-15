@@ -2,6 +2,7 @@
 
 InstaSlice uses stable APIs and works with GPU operator to create mig slices on demand.
 
+
 # Why InstaSlice
 
 Partitionable accelerators provided by vendors need partition to be created at node boot-time or to change partitions one would have to evict all the workloads at the node level to create new set of partitions.
