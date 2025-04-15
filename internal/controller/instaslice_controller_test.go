@@ -28,12 +28,15 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
@@ -173,6 +176,54 @@ var _ = Describe("ensureDaemonSetExists", func() {
 		}
 		err := reconciler.ensureDaemonSetExists(ctx)
 		Expect(err).NotTo(HaveOccurred())
+	})
+})
+
+var _ = Describe("Instaslice Predicate", func() {
+	var mutatedPod, plainPod *v1.Pod
+
+	BeforeEach(func() {
+		mutatedPod = &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{LabelInstasliceMutated: "true"},
+			},
+		}
+		plainPod = &v1.Pod{}
+	})
+
+	labelSelector, _ := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			LabelInstasliceMutated: "true",
+		},
+	})
+	predicate := predicate.NewPredicateFuncs(func(obj client.Object) bool {
+		return labelSelector.Matches(labels.Set(obj.GetLabels()))
+	})
+
+	It("should return true for created mutated pod", func() {
+		Expect(predicate.Create(event.CreateEvent{Object: mutatedPod})).To(BeTrue())
+	})
+
+	It("should return false for created plain pod", func() {
+		Expect(predicate.Create(event.CreateEvent{Object: plainPod})).To(BeFalse())
+	})
+
+	It("should return true for updated pod if label exists", func() {
+		Expect(predicate.Update(event.UpdateEvent{ObjectOld: plainPod, ObjectNew: mutatedPod})).To(BeTrue())
+	})
+
+	It("should return false for updated pod if no label", func() {
+		plainPod2 := plainPod.DeepCopy()
+		plainPod2.SetName("new-name")
+		Expect(predicate.Update(event.UpdateEvent{ObjectOld: plainPod, ObjectNew: plainPod2})).To(BeFalse())
+	})
+
+	It("should return false for delete plain pod", func() {
+		Expect(predicate.Delete(event.DeleteEvent{Object: plainPod})).To(BeFalse())
+	})
+
+	It("should return true for delete mutated pod", func() {
+		Expect(predicate.Delete(event.DeleteEvent{Object: mutatedPod})).To(BeTrue())
 	})
 })
 
