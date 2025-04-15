@@ -219,7 +219,7 @@ test-e2e-konflux: wait-for-instaslice-operator-stable
 	# else exit 1; \
 	# fi
 	hack/label-node.sh
-	ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m ./test/e2e
+	go run ./vendor/github.com/onsi/ginkgo/v2/ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m ./test/e2e
 
 .PHONY: create-kind-cluster
 create-kind-cluster:

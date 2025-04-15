@@ -265,9 +265,8 @@ spec:
                 && chmod +x kubectl oc \
                 && mkdir ~/bin \
                 && mv oc kubectl ~/bin/
-              export PATH=$PATH:~/bin:~/go/bin
+              export GOPATH=$HOME/go
+              export PATH=$PATH:~/bin:$GOPATH/bin
               cd instaslice-operator
               # git checkout e2e-test-steps # for testing
-              go install github.com/onsi/ginkgo/v2/ginkgo
-              go get github.com/onsi/gomega/...
               make test-e2e-konflux
