@@ -258,15 +258,16 @@ spec:
                 mountPath: /credentials
             image: registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.23-openshift-4.19
             script: |
-              # git clone https://github.com/cpmeadors/instaslice-operator # for testing
-              git clone https://github.com/openshift/instaslice-operator
               curl -L -o oc.tar.gz https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/latest-4.17/openshift-client-linux-amd64-rhel9.tar.gz \
                 && tar -xvzf oc.tar.gz \
                 && chmod +x kubectl oc \
                 && mkdir ~/bin \
                 && mv oc kubectl ~/bin/
+
               export GOPATH=$HOME/go
               export PATH=$PATH:~/bin:$GOPATH/bin
-              cd instaslice-operator
-              # git checkout e2e-test-steps # for testing
+
+              git clone "$(tasks.parse-metadata.results.source-git-url)" source
+              cd source
+              git checkout $(tasks.parse-metadata.results.source-git-revision)
               make test-e2e-konflux
