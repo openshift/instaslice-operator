@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: quay.io/cmeadors/instaslice-operator
-  newTag: test
+  newTag: latest

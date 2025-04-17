@@ -181,19 +181,14 @@ test-e2e-ocp: wait-for-instaslice-operator-stable
 test-e2e-ocp: export EMULATOR_MODE=false
 test-e2e-ocp:
 	$(eval FOCUS_ARG := $(if $(FOCUS),--focus="$(FOCUS)"))
-	ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m $(FOCUS_ARG) ./test/e2e
+	go run github.com/onsi/ginkgo/v2/ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m $(FOCUS_ARG) ./test/e2e
 
 PHONY: cleanup-test-e2e-ocp
 cleanup-test-e2e-ocp: KUBECTL=oc
 cleanup-test-e2e-ocp: ocp-undeploy
 
 wait-for-instaslice-operator-stable:
-	@echo "---- Waiting for instaslice-operator stable state ----"
-	oc wait --for=condition=Available deployment/instaslice-operator-controller-manager \
-		-n instaslice-system --timeout=120s || $(MAKE) test-e2e-debug-instaslice
-	oc rollout status daemonset/instaslice-operator-controller-daemonset \
-		-n instaslice-system --timeout=120s || $(MAKE) test-e2e-debug-instaslice
-	@echo "---- /Waiting for instaslice-operator stable state ----"
+	hack/wait-for-instaslice.sh
 .PHONY: wait-for-instaslice-operator-stable
 
 test-e2e-debug-instaslice:
