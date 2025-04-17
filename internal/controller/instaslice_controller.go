@@ -99,6 +99,7 @@ type NodeReconciler struct {
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=nodes/status,verbs=get;list;update;patch;watch
 //+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=get;list;watch;create;update;delete
+//+kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;delete
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=list
 //+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=create;update;get;watch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -290,7 +291,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						r.CleanupOrphanedAllocations(ctx, &instasliceList)
 						// update DeployedPodTotal Metrics by setting value to 0 as pod allocation is deleted and pod is no loger consuming slices
 						r.UpdateDeployedPodTotalMetrics(string(allocation.Nodename), allocation.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, 0)
-						//update compatible profiles metrics
+						// update compatible profiles metrics
 						r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name)
 						// requeue for the finalizer to be removed
 						return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
@@ -336,7 +337,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						r.CleanupOrphanedAllocations(ctx, &instasliceList)
 						// update DeployedPodTotal Metrics by setting value to 0 as pod allocation is deleted and pod is no loger consuming slices
 						r.UpdateDeployedPodTotalMetrics(string(allocation.Nodename), allocation.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, 0)
-						//update compatible profiles metrics
+						// update compatible profiles metrics
 						r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name)
 						// requeue for the finalizer to be removed
 						return ctrl.Result{RequeueAfter: Requeue2sDelay}, nil
@@ -380,7 +381,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					r.CleanupOrphanedAllocations(ctx, &instasliceList)
 					// update DeployedPodTotal Metrics by setting value to 0 as pod allocation is deleted and pod is no loger consuming slices
 					r.UpdateDeployedPodTotalMetrics(string(allocation.Nodename), allocation.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, 0)
-					//update compatible profiles metrics
+					// update compatible profiles metrics
 					r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name)
 					if controllerutil.RemoveFinalizer(pod, FinalizerName) {
 						if err := r.Update(ctx, pod); err != nil {
@@ -415,7 +416,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							r.CleanupOrphanedAllocations(ctx, &instasliceList)
 							// update DeployedPodTotal Metrics by setting value to 0 as pod allocation is deleted and pod is no loger consuming slices
 							r.UpdateDeployedPodTotalMetrics(string(allocation.Nodename), allocation.GPUUUID, allocRequest.PodRef.Namespace, allocRequest.PodRef.Name, allocRequest.Profile, 0)
-							//update compatible profiles metrics
+							// update compatible profiles metrics
 							r.UpdateCompatibleProfilesMetrics(instaslice, instaslice.Name)
 						}
 						elapsed := time.Since(pod.DeletionTimestamp.Time)
@@ -642,7 +643,6 @@ func (r *InstasliceReconciler) setupWithManager(mgr ctrl.Manager) error {
 		For(&v1.Pod{}).Named("InstaSlice-controller").
 		Watches(&inferencev1alpha1.Instaslice{}, handler.EnqueueRequestsFromMapFunc(r.podMapFunc)).
 		Complete(r)
-
 	if err != nil {
 		log := mgr.GetLogger() // Get logger from the manager
 		log.Error(err, "Failed to set up Instaslice controller")
@@ -915,7 +915,8 @@ func (r *InstasliceReconciler) removeInstaSliceFinalizer(ctx context.Context, re
 // Policy based allocation - FirstFit
 func (r *FirstFitPolicy) SetAllocationDetails(profileName string, newStart, size int32, podUUID types.UID, nodename types.NodeName,
 	allocationStatus inferencev1alpha1.AllocationStatus, discoveredGiprofile int32, Ciprofileid int32, Ciengprofileid int32,
-	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID, availableResourceList v1.ResourceList) (*inferencev1alpha1.AllocationRequest, *inferencev1alpha1.AllocationResult) {
+	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID, availableResourceList v1.ResourceList,
+) (*inferencev1alpha1.AllocationRequest, *inferencev1alpha1.AllocationResult) {
 	return &inferencev1alpha1.AllocationRequest{
 			Profile: profileName,
 			Resources: v1.ResourceRequirements{
@@ -946,7 +947,8 @@ func (r *FirstFitPolicy) SetAllocationDetails(profileName string, newStart, size
 // Policy based allocation - LeftToRIght
 func (l *LeftToRightPolicy) SetAllocationDetails(profileName string, newStart, size int32, podUUID types.UID, nodename types.NodeName,
 	allocationStatus inferencev1alpha1.AllocationStatus, discoveredGiprofile int32, Ciprofileid int32, Ciengprofileid int32,
-	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID, availableResourceList v1.ResourceList) *inferencev1alpha1.AllocationRequest {
+	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID, availableResourceList v1.ResourceList,
+) *inferencev1alpha1.AllocationRequest {
 	// Implement the left-to-right policy here
 	return &inferencev1alpha1.AllocationRequest{}
 }
@@ -954,7 +956,8 @@ func (l *LeftToRightPolicy) SetAllocationDetails(profileName string, newStart, s
 // Policy based allocation - RigghToLeft
 func (l *RightToLeftPolicy) SetAllocationDetails(profileName string, newStart, size int32, podUUID types.UID, nodename types.NodeName,
 	allocationStatus inferencev1alpha1.AllocationStatus, discoveredGiprofile int32, Ciprofileid int32, Ciengprofileid int32,
-	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID, availableResourceList v1.ResourceList) *inferencev1alpha1.AllocationRequest {
+	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID, availableResourceList v1.ResourceList,
+) *inferencev1alpha1.AllocationRequest {
 	// Implement the left-to-right policy here
 	return &inferencev1alpha1.AllocationRequest{}
 }

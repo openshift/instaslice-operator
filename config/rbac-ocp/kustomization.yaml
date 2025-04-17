@@ -20,3 +20,4 @@ resources:
 - instaslice-operator-scc.yaml
 - openshift_cluster_role.yaml
 - openshift_scc_cluster_role_binding.yaml
+- openshift_scc_privileged_role_binding.yaml

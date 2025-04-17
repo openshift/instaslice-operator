@@ -11,7 +11,7 @@ webhooks:
       name: webhook-service
       namespace: system
       path: /mutate-v1-pod
-  failurePolicy: Ignore
+  failurePolicy: Fail
   name: instaslice.redhat.com
   rules:
   - apiGroups:

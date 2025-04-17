@@ -203,7 +203,6 @@ var _ = Describe("controller", Ordered, func() {
 					}
 					return len(podList.Items) == 0
 				}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Expected all pods to be deleted")
-
 			})
 
 			Eventually(func() error {
@@ -211,6 +210,8 @@ var _ = Describe("controller", Ordered, func() {
 				if err != nil {
 					return err
 				}
+
+				log.Printf("DEBUG: vectoradd-finalizer pod: %v\n", pod)
 
 				for _, finalizer := range pod.ObjectMeta.Finalizers {
 					if finalizer == controller.FinalizerName {
@@ -846,7 +847,7 @@ var _ = Describe("controller", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to retrieve instaslice objects")
 			for _, podItem := range podList.Items {
 				// Wait for the pod status to be "Running"
-				var pod = &corev1.Pod{}
+				pod := &corev1.Pod{}
 				Eventually(func() bool {
 					pod, err = clientSet.CoreV1().Pods(podItem.Namespace).Get(ctx, podItem.Name, metav1.GetOptions{})
 					return pod.Status.Phase == corev1.PodRunning
@@ -855,7 +856,7 @@ var _ = Describe("controller", Ordered, func() {
 				Expect(len(pod.Spec.Containers[0].EnvFrom)).To(Not(Equal(0)), fmt.Sprintf("No configMap reference in the pod %s", pod.Name))
 				// get the config map name from the pod reference
 				cmRefName := pod.Spec.Containers[0].EnvFrom[0].ConfigMapRef.Name
-				var cm = &corev1.ConfigMap{}
+				cm := &corev1.ConfigMap{}
 				Eventually(func() error {
 					cm, err = clientSet.CoreV1().ConfigMaps(pod.Namespace).Get(ctx, cmRefName, metav1.GetOptions{})
 					return err

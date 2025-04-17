@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-//+kubebuilder:webhook:path=/mutate-v1-pod,mutating=true,failurePolicy=ignore,sideEffects=None,groups="",resources=pods,verbs=create,versions=v1,name=instaslice.redhat.com,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/mutate-v1-pod,mutating=true,failurePolicy=fail,sideEffects=None,groups="",resources=pods,verbs=create,versions=v1,name=instaslice.redhat.com,admissionReviewVersions=v1
 
 type PodAnnotator struct {
 	Client  client.Client
@@ -120,7 +120,7 @@ func performQuotaArithmetic(pod *v1.Pod, req admission.Request) admission.Respon
 			resourceParts := strings.Split(strings.TrimPrefix(string(resourceName), NvidiaMIGPrefix), ".")
 
 			if len(resourceParts) == 2 {
-				//gpuPart := resourceParts[0]
+				// gpuPart := resourceParts[0]
 				memoryPart := resourceParts[1]
 				memoryValue, err := strconv.Atoi(strings.TrimSuffix(memoryPart, "gb"))
 				if err != nil {

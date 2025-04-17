@@ -70,7 +70,7 @@ spec:
         - /manager
         args:
         - --leader-elect
-        image: controller:latest
+        image: controller
         imagePullPolicy: Always
         name: manager
         securityContext:
@@ -101,7 +101,7 @@ spec:
             memory: 64Mi
         env:
           - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
-            value: <IMG_DMST>
+            value: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:a43e85e247fac3e083a4aad85171931dced76827b5b10a289a31862c1087a93f
           - name: EMULATOR_MODE
             value: "false"
           - name: AUTO_LABEL_MANAGED_NODES
