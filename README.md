@@ -8,6 +8,7 @@ Partitionable accelerators provided by vendors need partition to be created at n
 
 InstaSlice will help if
 
+
  - user does not know all the accelerators partitions needed a priori on every node on the cluster
  - user partition requirements change at the workload level rather than the node level
  - user does not want to learn or use new API to request accelerators  slices
