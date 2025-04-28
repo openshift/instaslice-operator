@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/created-by: instaslice-operator
     app.kubernetes.io/part-of: instaslice-operator
     app.kubernetes.io/managed-by: kustomize
-  name: instaslice-system
+  name: system
 ---
 apiVersion: apps/v1
 kind: Deployment
