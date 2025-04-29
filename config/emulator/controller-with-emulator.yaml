@@ -11,3 +11,5 @@ spec:
           env:
             - name: EMULATOR_MODE
               value: "true"
+            - name: AUTO_LABEL_MANAGED_NODES
+              value: "true"

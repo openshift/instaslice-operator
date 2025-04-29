@@ -89,8 +89,8 @@ func UpdateOrDeleteInstasliceAllocations(ctx context.Context, kubeClient client.
 	}
 	err = kubeClient.Status().Patch(ctx, &newInstaslice, client.MergeFrom(originalInstaSliceObj)) // TODO - try with update
 	if err != nil {
-		log.FromContext(ctx).Info("error patching allocation result ", err, "pod uuid", allocRequest.PodRef.UID)
-		return fmt.Errorf("error updating the instaslie object status, %s, err: %v", name, err)
+		log.FromContext(ctx).Info("error patching allocation result", "error", err, "pod uuid", allocRequest.PodRef.UID)
+		return fmt.Errorf("error updating the instaslice object status, %s, err: %v", name, err)
 	}
 	return nil
 }
