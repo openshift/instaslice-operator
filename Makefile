@@ -148,6 +148,7 @@ test-e2e-kind-emulated: export IMG_TAG=test-e2e
 test-e2e-kind-emulated: export KIND_NAME=kind-e2e
 test-e2e-kind-emulated: export KIND_CONTEXT=kind-kind-e2e
 test-e2e-kind-emulated: export KIND_NODE_NAME=${KIND_NAME}-control-plane
+test-e2e-kind-emulated: export AUTO_LABEL_MANAGED_NODES=true
 test-e2e-kind-emulated: export EMULATOR_MODE=true
 test-e2e-kind-emulated: docker-build docker-push create-kind-cluster deploy-cert-manager deploy-instaslice-emulated-on-kind
 	export KIND=$(KIND) KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
@@ -170,7 +171,7 @@ check-gpu-nodes:
 test-e2e-ocp-emulated: container-build-ocp docker-push bundle-ocp-emulated bundle-build-ocp bundle-push deploy-cert-manager-ocp deploy-instaslice-on-ocp
 	hack/label-node.sh
 	$(eval FOCUS_ARG := $(if $(FOCUS),--focus="$(FOCUS)"))
-	EMULATOR_MODE=true ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m $(FOCUS_ARG) ./test/e2e
+	EMULATOR_MODE=true AUTO_LABEL_MANAGED_NODES=true ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m $(FOCUS_ARG) ./test/e2e
 
 PHONY: cleanup-test-e2e-ocp-emulated
 cleanup-test-e2e-ocp-emulated: KUBECTL=oc
@@ -179,6 +180,7 @@ cleanup-test-e2e-ocp-emulated: ocp-undeploy-emulated
 .PHONY: test-e2e-ocp
 test-e2e-ocp: wait-for-instaslice-operator-stable
 test-e2e-ocp: export EMULATOR_MODE=false
+test-e2e-ocp: export AUTO_LABEL_MANAGED_NODES=true
 test-e2e-ocp:
 	$(eval FOCUS_ARG := $(if $(FOCUS),--focus="$(FOCUS)"))
 	ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m $(FOCUS_ARG) ./test/e2e

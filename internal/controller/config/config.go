@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	DefaultEmulatorMode = false
-	DefaultWebhookMode  = true
+	DefaultEmulatorMode          = false
+	DefaultWebhookMode           = true
+	DefaultAutoLabelManagedNodes = false
 	// TODO fix this image
 	DefaultDaemonsetImage    = "quay.io/amalvank/instaslicev2-daemonset:latest"
 	DefaultManifestConfigDir = "/config"
@@ -26,14 +27,18 @@ type Config struct {
 
 	// ManifestConfigDir manifest directory
 	ManifestConfigDir string `json:"manifest_config_dir"`
+
+	// AutoLabelManagedNodes automatically labels mig capable nodes with "instaslice.redhat.com/managed "at daemonset startup
+	AutoLabelManagedNodes bool `json:"auto_label_managed_nodes"`
 }
 
 func NewConfig() *Config {
 	return &Config{
-		EmulatorModeEnable: DefaultEmulatorMode,
-		WebhookEnable:      DefaultWebhookMode,
-		DaemonsetImage:     DefaultDaemonsetImage,
-		ManifestConfigDir:  DefaultManifestConfigDir,
+		EmulatorModeEnable:    DefaultEmulatorMode,
+		WebhookEnable:         DefaultWebhookMode,
+		DaemonsetImage:        DefaultDaemonsetImage,
+		ManifestConfigDir:     DefaultManifestConfigDir,
+		AutoLabelManagedNodes: DefaultAutoLabelManagedNodes,
 	}
 }
 
@@ -59,6 +64,10 @@ func ConfigFromEnvironment() *Config {
 
 	if manifestConfigDir, ok := os.LookupEnv("MANIFEST_CONFIG_DIR"); ok {
 		config.ManifestConfigDir = manifestConfigDir
+	}
+
+	if autoLabel, ok := os.LookupEnv("AUTO_LABEL_MANAGED_NODES"); ok {
+		config.AutoLabelManagedNodes = strings.EqualFold(autoLabel, "true")
 	}
 
 	return config

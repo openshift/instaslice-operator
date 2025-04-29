@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -40,6 +41,97 @@ import (
 	"github.com/openshift/instaslice-operator/internal/controller/config"
 	"github.com/openshift/instaslice-operator/internal/controller/utils"
 )
+
+var _ = Describe("NodeReconciler", func() {
+	var (
+		ctx        context.Context
+		scheme     *runtime.Scheme
+		rNode      *NodeReconciler
+		node       *v1.Node
+		instaslice *inferencev1alpha1.Instaslice
+		objs       []client.Object
+	)
+
+	BeforeEach(func() {
+		ctx = context.TODO()
+		scheme = runtime.NewScheme()
+		_ = v1.AddToScheme(scheme)
+		_ = inferencev1alpha1.AddToScheme(scheme)
+		objs = []client.Object{}
+	})
+
+	newFakeClient := func() client.Client {
+		return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
+	}
+
+	Describe("NodeReconciler", func() {
+		BeforeEach(func() {
+			node = &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "fake-node",
+					Labels: map[string]string{
+						"nvidia.com/mig.capable": "true",
+					},
+				},
+				Status: v1.NodeStatus{
+					Capacity:    v1.ResourceList{},
+					Allocatable: v1.ResourceList{},
+					NodeInfo:    v1.NodeSystemInfo{BootID: "boot-123"},
+				},
+			}
+			objs = append(objs, node)
+		})
+
+		It("should do nothing if node is labeled as managed", func() {
+			node.Labels["instaslice.redhat.com/managed"] = "true"
+			instaslice = &inferencev1alpha1.Instaslice{
+				ObjectMeta: metav1.ObjectMeta{Name: node.Name, Namespace: InstaSliceOperatorNamespace},
+			}
+			objs = append(objs, instaslice)
+
+			rNode = &NodeReconciler{Client: newFakeClient()}
+			req := reconcile.Request{NamespacedName: types.NamespacedName{Name: node.Name}}
+
+			result, err := rNode.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(reconcile.Result{}))
+
+			// Ensure the Instaslice CR still exists
+			cr := &inferencev1alpha1.Instaslice{}
+			err = rNode.Get(ctx, client.ObjectKey{Name: node.Name, Namespace: InstaSliceOperatorNamespace}, cr)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should delete Instaslice and cleanup node if managed label is missing", func() {
+			instaslice = &inferencev1alpha1.Instaslice{
+				ObjectMeta: metav1.ObjectMeta{Name: node.Name, Namespace: InstaSliceOperatorNamespace},
+			}
+			objs = append(objs, instaslice)
+
+			node.Status.Capacity["instaslice.redhat.com/resource1"] = resource.MustParse("5")
+			node.Status.Allocatable["instaslice.redhat.com/resource1"] = resource.MustParse("5")
+
+			rNode = &NodeReconciler{Client: newFakeClient()}
+			req := reconcile.Request{NamespacedName: types.NamespacedName{Name: node.Name}}
+
+			result, err := rNode.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(reconcile.Result{}))
+
+			// Verify Instaslice CR was deleted
+			cr := &inferencev1alpha1.Instaslice{}
+			err = rNode.Get(ctx, client.ObjectKey{Name: node.Name, Namespace: InstaSliceOperatorNamespace}, cr)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+			// Verify node resources were cleaned
+			nodeUpdated := &v1.Node{}
+			err = rNode.Get(ctx, client.ObjectKey{Name: node.Name}, nodeUpdated)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(nodeUpdated.Status.Capacity).ToNot(HaveKey("instaslice.redhat.com/resource1"))
+			Expect(nodeUpdated.Status.Allocatable).ToNot(HaveKey("instaslice.redhat.com/resource1"))
+		})
+	})
+})
 
 var _ = Describe("isDaemonSetPodReady", func() {
 	var (
@@ -631,199 +723,277 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 		})
 
 		It("should handle a pod having the limits defined with a valid profile", func() {
+			ctx := context.TODO()
+			scheme := runtime.NewScheme()
+			_ = v1.AddToScheme(scheme)
+			_ = inferencev1alpha1.AddToScheme(scheme)
+			_ = appsv1.AddToScheme(scheme)
+
+			podUID := types.UID("test-pod-uid-1")
+
 			pod := &v1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
-				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-pod-1",
+					Name:      "test-pod",
 					Namespace: InstaSliceOperatorNamespace,
-					UID:       types.UID(podUUID),
+					UID:       podUID,
 					Finalizers: []string{
 						FinalizerName,
 					},
 				},
 				Spec: v1.PodSpec{
 					RestartPolicy:   v1.RestartPolicyOnFailure,
-					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: GateName}),
-					Containers: []v1.Container{
-						{
-							Name:  "vectoradd-cpu",
-							Image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8",
-							Resources: v1.ResourceRequirements{
-								Requests: v1.ResourceList{
-									v1.ResourceCPU:    resource.MustParse("500m"),
-									v1.ResourceMemory: resource.MustParse("256Mi"),
-								},
-								// Define a valid profile
-								Limits: v1.ResourceList{
-									"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
-								},
-							},
-							Command: []string{
-								"sh",
-								"-c",
-								"sleep 20",
+					SchedulingGates: []v1.PodSchedulingGate{{Name: GateName}},
+					Containers: []v1.Container{{
+						Name:  "vectoradd-cpu",
+						Image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8",
+						Resources: v1.ResourceRequirements{
+							Limits: v1.ResourceList{
+								"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
 							},
 						},
-					},
+					}},
 				},
-				Status: v1.PodStatus{Phase: v1.PodPending, Conditions: []v1.PodCondition{{Message: "blocked"}}},
+				Status: v1.PodStatus{Phase: v1.PodPending},
 			}
-			Expect(fakeClient.Create(ctx, pod)).To(Succeed())
-			// reconcile request over the pod name
-			req.Name = pod.Name
+
+			daemonSet := &appsv1.DaemonSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      InstasliceDaemonsetName,
+					Namespace: InstaSliceOperatorNamespace,
+					Labels:    daemonSetlabel,
+				},
+			}
+			daemonSetPod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "daemonset-pod",
+					Namespace: InstaSliceOperatorNamespace,
+					Labels:    daemonSetlabel,
+				},
+				Status: v1.PodStatus{Phase: v1.PodRunning, ContainerStatuses: []v1.ContainerStatus{{Ready: true}}},
+			}
+
+			node := &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-node",
+				},
+				Status: v1.NodeStatus{
+					NodeInfo: v1.NodeSystemInfo{BootID: "bootid-123"},
+				},
+			}
+
+			instaslice := &inferencev1alpha1.Instaslice{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-node",
+					Namespace: InstaSliceOperatorNamespace,
+				},
+				Spec: inferencev1alpha1.InstasliceSpec{
+					PodAllocationRequests: map[types.UID]inferencev1alpha1.AllocationRequest{},
+				},
+				Status: inferencev1alpha1.InstasliceStatus{
+					NodeResources:        inferencev1alpha1.DiscoveredNodeResources{BootID: "bootid-123"},
+					PodAllocationResults: map[types.UID]inferencev1alpha1.AllocationResult{},
+				},
+			}
+
+			cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+				pod, daemonSet, daemonSetPod, node, instaslice,
+			).Build()
+
+			r := &InstasliceReconciler{Client: cl, Config: config.ConfigFromEnvironment()}
+
+			req := ctrl.Request{NamespacedName: types.NamespacedName{
+				Name:      "test-pod",
+				Namespace: InstaSliceOperatorNamespace,
+			}}
+
 			result, err := r.Reconcile(ctx, req)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result.Requeue).To(Equal(false))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
 		})
 
 		It("should handle a pod having the limits and AllocationStatus set to Created", func() {
+			ctx := context.TODO()
+			scheme := runtime.NewScheme()
+			_ = v1.AddToScheme(scheme)
+			_ = inferencev1alpha1.AddToScheme(scheme)
+			_ = appsv1.AddToScheme(scheme)
+
+			podUID := types.UID("test-pod-uid-2")
+
 			pod := &v1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
-				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-pod-1",
+					Name:      "test-pod-created",
 					Namespace: InstaSliceOperatorNamespace,
-					UID:       types.UID(podUUID),
+					UID:       podUID,
 					Finalizers: []string{
 						FinalizerName,
 					},
 				},
 				Spec: v1.PodSpec{
 					RestartPolicy:   v1.RestartPolicyOnFailure,
-					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: GateName}),
-					Containers: []v1.Container{
-						{
-							Name:  "vectoradd-cpu",
-							Image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8",
-							Resources: v1.ResourceRequirements{
-								Requests: v1.ResourceList{
-									v1.ResourceCPU:    resource.MustParse("500m"),
-									v1.ResourceMemory: resource.MustParse("256Mi"),
-								},
-								// Define a valid profile
-								Limits: v1.ResourceList{
-									"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
-								},
+					SchedulingGates: []v1.PodSchedulingGate{{Name: GateName}},
+					Containers: []v1.Container{{
+						Name:  "vectoradd-cpu",
+						Image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8",
+						Resources: v1.ResourceRequirements{
+							Limits: v1.ResourceList{
+								"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
 							},
-							Command: []string{
-								"sh",
-								"-c",
-								"sleep 20",
+						},
+					}},
+				},
+				Status: v1.PodStatus{Phase: v1.PodPending, Conditions: []v1.PodCondition{{Message: "blocked"}}},
+			}
+
+			node := &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-node",
+				},
+				Status: v1.NodeStatus{
+					NodeInfo: v1.NodeSystemInfo{BootID: "bootid-456"},
+				},
+			}
+
+			instaslice := &inferencev1alpha1.Instaslice{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-node",
+					Namespace: InstaSliceOperatorNamespace,
+				},
+				Spec: inferencev1alpha1.InstasliceSpec{
+					PodAllocationRequests: map[types.UID]inferencev1alpha1.AllocationRequest{
+						podUID: {
+							Profile: "test-profile",
+							PodRef: v1.ObjectReference{
+								Name:      "test-pod-created",
+								Namespace: InstaSliceOperatorNamespace,
+								UID:       podUID,
 							},
 						},
 					},
 				},
-				Status: v1.PodStatus{Phase: v1.PodPending, Conditions: []v1.PodCondition{{Message: "blocked"}}},
-			}
-			Expect(fakeClient.Create(ctx, pod)).To(Succeed())
-			// Update the Instaslice object's Allocation status of the pod to AllocationStatusCreated
-
-			currentSlice := &inferencev1alpha1.Instaslice{}
-			Expect(fakeClient.Get(ctx, types.NamespacedName{
-				Name:      "test-instaslice",
-				Namespace: InstaSliceOperatorNamespace,
-			}, currentSlice)).To(Succeed())
-
-			currentSlice.Spec.PodAllocationRequests[types.UID(podUUID)] = inferencev1alpha1.AllocationRequest{
-				Profile: "test-profile",
-				PodRef: v1.ObjectReference{
-					Name:      pod.Name,
-					Namespace: InstaSliceOperatorNamespace,
-					UID:       types.UID(podUUID),
+				Status: inferencev1alpha1.InstasliceStatus{
+					NodeResources: inferencev1alpha1.DiscoveredNodeResources{
+						BootID: "bootid-456",
+					},
+					PodAllocationResults: map[types.UID]inferencev1alpha1.AllocationResult{
+						podUID: {
+							AllocationStatus: inferencev1alpha1.AllocationStatus{
+								AllocationStatusDaemonset: inferencev1alpha1.AllocationStatusCreated,
+							},
+							GPUUUID:                     "fake-gpu",
+							Nodename:                    "test-node",
+							ConfigMapResourceIdentifier: "configmap-uid",
+						},
+					},
 				},
 			}
 
-			currentSlice.Status.PodAllocationResults[types.UID(podUUID)] = inferencev1alpha1.AllocationResult{
-				AllocationStatus:            inferencev1alpha1.AllocationStatus{AllocationStatusDaemonset: inferencev1alpha1.AllocationStatusCreated},
-				GPUUUID:                     "fake-gpu-uuid",
-				Nodename:                    "fake-node",
-				ConfigMapResourceIdentifier: "fake-configmap-uid",
-			}
+			cl := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(pod, node, instaslice).
+				WithStatusSubresource(&inferencev1alpha1.Instaslice{}).
+				Build()
 
-			Expect(fakeClient.Update(ctx, currentSlice)).To(Succeed())
-			req.Name = pod.Name
+			r := &InstasliceReconciler{Client: cl, Config: config.ConfigFromEnvironment()}
+			req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pod-created", Namespace: InstaSliceOperatorNamespace}}
 			result, err := r.Reconcile(ctx, req)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal(ctrl.Result{}))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(ctrl.Result{Requeue: true}))
+
+			// Validate Pod not modified inappropriately
+			fetchedPod := &v1.Pod{}
+			err = cl.Get(ctx, client.ObjectKey{Name: "test-pod-created", Namespace: InstaSliceOperatorNamespace}, fetchedPod)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fetchedPod.Finalizers).To(ContainElement(FinalizerName))
+			Expect(fetchedPod.Spec.SchedulingGates).ToNot(ContainElement(v1.PodSchedulingGate{Name: GateName}))
+
+			// Validate Instaslice status remains correct
+			fetchedSlice := &inferencev1alpha1.Instaslice{}
+			err = cl.Get(ctx, client.ObjectKey{Name: "test-node", Namespace: InstaSliceOperatorNamespace}, fetchedSlice)
+			Expect(err).NotTo(HaveOccurred())
+			resultStatus := fetchedSlice.Status.PodAllocationResults[podUID]
+			Expect(resultStatus.AllocationStatus.AllocationStatusDaemonset).To(Equal(inferencev1alpha1.AllocationStatusCreated))
+			Expect(resultStatus.GPUUUID).To(Equal("fake-gpu"))
+
 		})
 
 		It("should handle a pod having the limits and no allocation details present in the Instaslice", func() {
+			ctx := context.TODO()
+			scheme := runtime.NewScheme()
+			_ = v1.AddToScheme(scheme)
+			_ = inferencev1alpha1.AddToScheme(scheme)
+			_ = appsv1.AddToScheme(scheme)
+
+			podUID := types.UID("test-pod-uid-3")
+
 			pod := &v1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
-				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-pod-1",
+					Name:      "test-pod-noalloc",
 					Namespace: InstaSliceOperatorNamespace,
-					UID:       types.UID(podUUID),
+					UID:       podUID,
 					Finalizers: []string{
 						FinalizerName,
 					},
 				},
 				Spec: v1.PodSpec{
 					RestartPolicy:   v1.RestartPolicyOnFailure,
-					SchedulingGates: append(pod.Spec.SchedulingGates, v1.PodSchedulingGate{Name: GateName}),
-					Containers: []v1.Container{
-						{
-							Name:  "vectoradd-cpu",
-							Image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8",
-							Resources: v1.ResourceRequirements{
-								Requests: v1.ResourceList{
-									v1.ResourceCPU:    resource.MustParse("500m"),
-									v1.ResourceMemory: resource.MustParse("256Mi"),
-								},
-								// Define a valid profile
-								Limits: v1.ResourceList{
-									"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
-								},
-							},
-							Command: []string{
-								"sh",
-								"-c",
-								"sleep 20",
+					SchedulingGates: []v1.PodSchedulingGate{{Name: GateName}},
+					Containers: []v1.Container{{
+						Name:  "vectoradd-cpu",
+						Image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8",
+						Resources: v1.ResourceRequirements{
+							Limits: v1.ResourceList{
+								"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
 							},
 						},
-					},
+					}},
 				},
 				Status: v1.PodStatus{Phase: v1.PodPending, Conditions: []v1.PodCondition{{Message: "blocked"}}},
 			}
-			Expect(fakeClient.Create(ctx, pod)).To(Succeed())
-			// Update the instaslice with a unknown podUUID and expect Pod not to have allocations
 
-			currentSlice := &inferencev1alpha1.Instaslice{}
-			Expect(fakeClient.Get(ctx, types.NamespacedName{
-				Name:      "test-instaslice",
-				Namespace: InstaSliceOperatorNamespace,
-			}, currentSlice)).To(Succeed())
-
-			currentSlice.Spec.PodAllocationRequests[types.UID(podUUID)], currentSlice.Status.PodAllocationResults[types.UID(podUUID)] =
-				inferencev1alpha1.AllocationRequest{
-					Profile: "test-profile",
-					PodRef: v1.ObjectReference{
-						Name:      pod.Name,
-						Namespace: InstaSliceOperatorNamespace,
-						UID:       types.UID(podUUID),
-					},
-					Resources: v1.ResourceRequirements{},
+			node := &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-node",
 				},
-				inferencev1alpha1.AllocationResult{
-					AllocationStatus:            inferencev1alpha1.AllocationStatus{AllocationStatusDaemonset: inferencev1alpha1.AllocationStatusCreated},
-					GPUUUID:                     "fake-gpu-uuid",
-					Nodename:                    "fake-node",
-					ConfigMapResourceIdentifier: "fake-configmap-uid",
-				}
+				Status: v1.NodeStatus{
+					NodeInfo: v1.NodeSystemInfo{BootID: "bootid-789"},
+				},
+			}
 
-			Expect(fakeClient.Update(ctx, instaslice)).To(Succeed())
-			req.Name = pod.Name
+			instaslice := &inferencev1alpha1.Instaslice{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-node",
+					Namespace: InstaSliceOperatorNamespace,
+				},
+				Spec: inferencev1alpha1.InstasliceSpec{
+					PodAllocationRequests: map[types.UID]inferencev1alpha1.AllocationRequest{},
+				},
+				Status: inferencev1alpha1.InstasliceStatus{
+					NodeResources:        inferencev1alpha1.DiscoveredNodeResources{BootID: "bootid-789"},
+					PodAllocationResults: map[types.UID]inferencev1alpha1.AllocationResult{},
+				},
+			}
+
+			cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pod, node, instaslice).Build()
+
+			r := &InstasliceReconciler{Client: cl, Config: config.ConfigFromEnvironment()}
+			req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pod-noalloc", Namespace: InstaSliceOperatorNamespace}}
 			result, err := r.Reconcile(ctx, req)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(Equal(false))
+			// Pod is untouched (gate not removed, finalizer intact)
+			fetchedPod := &v1.Pod{}
+			err = cl.Get(ctx, client.ObjectKey{Name: "test-pod-noalloc", Namespace: InstaSliceOperatorNamespace}, fetchedPod)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fetchedPod.Finalizers).To(ContainElement(FinalizerName))
+			Expect(fetchedPod.Spec.SchedulingGates).To(ContainElement(v1.PodSchedulingGate{Name: GateName}))
+			// Instaslice is untouched
+			fetchedSlice := &inferencev1alpha1.Instaslice{}
+			err = cl.Get(ctx, client.ObjectKey{Name: "test-node", Namespace: InstaSliceOperatorNamespace}, fetchedSlice)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fetchedSlice.Spec.PodAllocationRequests).To(BeEmpty())
+			Expect(fetchedSlice.Status.PodAllocationResults).To(BeEmpty())
+
 		})
 	})
 }
