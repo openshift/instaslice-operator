@@ -41,10 +41,12 @@ _wait_for_node() {
 		current_time=$(date +%s)
 		echo "Waiting for Node"
 		if (((current_time - start_time) > max_wait_secs)); then
+			echo "Waiting for Node timed out"
 			return 1
 		fi
-		if _kubectl wait node -l nvidia.com/mig.capable=true --timeout=20s --for=condition=ready --request-timeout=2s &>/dev/null; then
+		if _kubectl wait node --timeout=20s --for=condition=ready --request-timeout=2s &>/dev/null; then
 			echo "Node Label Found"
+			_kubectl get node $(${KUBECTL} get node -o name) -o yaml
 			break
 		else
 			sleep $interval_secs
