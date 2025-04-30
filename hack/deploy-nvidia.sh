@@ -79,6 +79,7 @@ _wait_for_pods_to_exist nvidia-gpu-operator gpu-operator ${TIMEOUT}
 _kubectl wait --for condition=established --timeout=300s crd/clusterpolicies.nvidia.com
 _kubectl apply -f hack/manifests/gpu-cluster-policy.yaml
 _kubectl label $(${KUBECTL} get node -o name) nvidia.com/mig.config=all-enabled --overwrite
+sleep 1m
 echo "Waiting for Node to have nvidia.com/mig.capable=true label"
 _wait_for_node ${NODE_TIMEOUT}
 echo "Success: Nvidia deployed"
