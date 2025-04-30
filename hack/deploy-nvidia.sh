@@ -43,7 +43,7 @@ _wait_for_node() {
 			echo "Waiting for Node"
 			return 1
 		fi
-		if _kubectl wait node -l nvidia.com/mig.capable=true --timeout=900s --for=condition=ready; then
+		if _kubectl wait node -l nvidia.com/mig.capable=true --timeout=900s --for=condition=ready --request-timeout=2s; then
 			echo "Node Label Found"
 			break
 		else
