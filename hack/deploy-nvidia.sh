@@ -44,11 +44,11 @@ _wait_for_node() {
 			echo "Waiting for Node timed out"
 			return 1
 		fi
-		if _kubectl wait node --timeout=20s --for=condition=ready --request-timeout=2s &>/dev/null; then
+		if _kubectl wait node -l nvidia.com/mig.capable=true --timeout=20s --for=condition=ready --request-timeout=2s; then
 			echo "Node Label Found"
-			_kubectl get node $(${KUBECTL} get node -o name) -o yaml
 			break
 		else
+			_kubectl get pods -A
 			sleep $interval_secs
 		fi
 	done
