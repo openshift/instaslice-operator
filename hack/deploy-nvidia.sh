@@ -48,7 +48,7 @@ _wait_for_node() {
 			echo "Node Label Found"
 			break
 		else
-			_kubectl get pods -A
+			_kubectl get pods -n nvidia-gpu-operator
 			sleep $interval_secs
 		fi
 	done
@@ -79,13 +79,20 @@ _kubectl apply -f hack/manifests/nvidia-cpu-operator.yaml
 echo "Waiting for Nvidia for ${TIMEOUT}"
 _wait_for_pods_to_exist nvidia-gpu-operator gpu-operator ${TIMEOUT}
 _kubectl wait --for condition=established --timeout=300s crd/clusterpolicies.nvidia.com
+echo "Uptime before gpu cluster policy"
+_kubectl debug $(${KUBECTL} get node -o name) -- chroot /host uptime
 _kubectl apply -f hack/manifests/gpu-cluster-policy.yaml
+sleep 10m
 _kubectl label $(${KUBECTL} get node -o name) nvidia.com/mig.config=all-enabled --overwrite
 # gpu operator is going to reboot the node at this point.
 # API access will be down, so sleep for a period of time.
 echo "Waiting for reboot"
 sleep 10m
 _wait_for_node ${NODE_TIMEOUT}
+echo "Uptime after _wait_for_node"
+_kubectl debug $(${KUBECTL} get node -o name) -- chroot /host uptime
+_kubectl get pods -n nvidia-gpu-operator
 # wait for the gpu cluster policy to be ready
 _kubectl wait --for=condition=ready clusterpolicy/gpu-cluster-policy --timeout=5m
+_kubectl get pods -n nvidia-gpu-operator
 echo "Success: Nvidia deployed"
