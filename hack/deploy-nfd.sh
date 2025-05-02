@@ -3,7 +3,7 @@
 set -eou pipefail
 
 KUBECTL=${KUBECTL:-kubectl}
-NFD_TIMEOUT=${NFD_TIMEOUT:-600}
+NFD_TIMEOUT=${NFD_TIMEOUT:-900}
 TIMEOUT=${TIMEOUT:-10m}
 
 _kubectl() {
@@ -27,6 +27,7 @@ _wait_for_pods_to_exist() {
 			echo "Pods in namespace \"$ns\" with name prefix \"$pod_name_prefix\" exist."
 			break
 		else
+			_kubectl get pods -n "$ns"
 			sleep $interval_secs
 		fi
 	done
