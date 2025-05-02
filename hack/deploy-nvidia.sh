@@ -75,6 +75,8 @@ _wait_for_apiserver() {
 	done
 }
 
+_kubectl get node $(${KUBECTL} get node -o name) -o yaml
+exit 0
 echo "Applying Nvidia"
 _kubectl apply -f hack/manifests/nvidia-cpu-operator.yaml
 echo "Waiting for Nvidia for ${TIMEOUT}"
