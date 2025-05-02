@@ -37,7 +37,6 @@ echo "Applying NFD minifest"
 _kubectl apply -f hack/manifests/nfd.yaml
 echo "Waiting for NFD for ${NFD_TIMEOUT}s"
 _wait_for_pods_to_exist openshift-nfd nfd-controller-manager ${NFD_TIMEOUT}
-_kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n openshift-nfd --timeout=${TIMEOUT}
 _kubectl apply -f hack/manifests/nfd-instance.yaml
 _kubectl wait nodefeaturediscovery -n openshift-nfd --for=condition=Available --timeout=15m --all
 echo "Success: nfd deployed"
