@@ -3,15 +3,11 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: openshift-nfd
-  labels:
-    name: openshift-nfd
-    openshift.io/cluster-monitoring: "true"
 ---
 apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
-  generateName: openshift-nfd-
-  name: openshift-nfd
+  name: openshift-nfd-group
   namespace: openshift-nfd
 spec:
   targetNamespaces:
