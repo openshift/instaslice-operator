@@ -60,6 +60,20 @@ _wait_for_nfd() {
 
 echo "Applying NFD minifest"
 _kubectl apply -f hack/manifests/nfd.yaml
+local channel=$(_kubectl get packagemanifest nfd -n openshift-marketplace -o jsonpath='{.status.defaultChannel}')
+_kubectl apply -f - <<EOF
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: nfd
+  namespace: openshift-nfd
+spec:
+  channel: ${channel}
+  installPlanApproval: Automatic
+  name: nfd
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+EOF
 echo "Waiting for NFD for ${NFD_TIMEOUT}s"
 _wait_for_nfd ${NFD_TIMEOUT}
 _kubectl apply -f hack/manifests/nfd-instance.yaml
