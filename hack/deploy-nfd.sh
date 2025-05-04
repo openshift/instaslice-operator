@@ -18,12 +18,12 @@ _wait_for_nfd() {
 	local csv_name=""
 
 	for ((i = 1; i <= 60; i++)); do
-		output=$(oc get sub nfd -n openshift-nfd -o jsonpath='{.status.currentCSV}' >>/dev/null && echo "exists" || echo "not found")
+		output=$(_kubectl get sub nfd -n openshift-nfd -o jsonpath='{.status.currentCSV}' >>/dev/null && echo "exists" || echo "not found")
 		if [ "$output" != "exists" ]; then
 			sleep 2
 			continue
 		fi
-		csv_name=$(oc get sub nfd -n openshift-nfd -o jsonpath='{.status.currentCSV}')
+		csv_name=$(_kubectl get sub nfd -n openshift-nfd -o jsonpath='{.status.currentCSV}')
 		if [ "$csv_name" != "" ]; then
 			break
 		fi
