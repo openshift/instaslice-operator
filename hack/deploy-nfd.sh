@@ -1,80 +1,77 @@
 #!/usr/bin/env bash
 
 set -eou pipefail
+set -x
 
-KUBECTL=${KUBECTL:-kubectl}
-NFD_TIMEOUT=${NFD_TIMEOUT:-900}
-TIMEOUT=${TIMEOUT:-10m}
+oc apply -f - <<EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-nfd
+EOF
 
-_kubectl() {
-	${KUBECTL} $@
-}
+oc apply -f - <<EOF
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: openshift-nfd-group
+  namespace: openshift-nfd
+spec:
+  targetNamespaces:
+  - openshift-nfd
+EOF
 
-_wait_for_nfd() {
-	local max_wait_secs=$1
-	local interval_secs=2
-	local api_ready=0
-	local start_time
-	local csv_name=""
-
-	for ((i = 1; i <= 60; i++)); do
-		output=$(_kubectl get sub nfd -n openshift-nfd -o jsonpath='{.status.currentCSV}' >>/dev/null && echo "exists" || echo "not found")
-		if [ "$output" != "exists" ]; then
-			sleep 2
-			continue
-		fi
-		csv_name=$(_kubectl get sub nfd -n openshift-nfd -o jsonpath='{.status.currentCSV}')
-		if [ "$csv_name" != "" ]; then
-			break
-		fi
-		sleep 10
-	done
-
-	echo "* Using CSV: ${csv_name}"
-	start_time=$(date +%s)
-	for ((i = 1; i <= 20; i++)); do
-		sleep 30
-		current_time=$(date +%s)
-		if (((current_time - start_time) > max_wait_secs)); then
-			echo "Waiting for NFD timeout"
-			return 1
-		fi
-		output=$(_kubectl get csv -n openshift-nfd $csv_name -o jsonpath='{.status.phase}' >>/dev/null && echo "exists" || echo "not found")
-		if [ "$output" != "exists" ]; then
-			continue
-		fi
-		phase=$(_kubectl get csv -n openshift-nfd $csv_name -o jsonpath='{.status.phase}')
-		if [ "$phase" == "Succeeded" ]; then
-			api_ready=1
-			break
-		fi
-
-		if [ $api_ready -eq 0 ]; then
-			echo "nfd-operator subscription could not install in the allotted time."
-			exit 1
-		fi
-
-		echo "NFD Ready"
-	done
-}
-
-echo "Applying NFD minifest"
-_kubectl apply -f hack/manifests/nfd.yaml
-_kubectl apply -f - <<EOF
+channel=$(oc get packagemanifest nfd -n openshift-marketplace -o jsonpath='{.status.defaultChannel}')
+oc apply -f - <<EOF
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: nfd
   namespace: openshift-nfd
 spec:
-  channel: "stable"
+  channel: ${channel}
   installPlanApproval: Automatic
   name: nfd
   source: redhat-operators
   sourceNamespace: openshift-marketplace
 EOF
-echo "Waiting for NFD for ${NFD_TIMEOUT}s"
-_wait_for_nfd ${NFD_TIMEOUT}
-_kubectl apply -f hack/manifests/nfd-instance.yaml
-_kubectl wait nodefeaturediscovery -n openshift-nfd --for=condition=Available --timeout=15m --all
-echo "Success: nfd deployed"
+
+CSVName=""
+for ((i = 1; i <= 60; i++)); do
+	output=$(oc get sub nfd -n openshift-nfd -o jsonpath='{.status.currentCSV}' >>/dev/null && echo "exists" || echo "not found")
+	if [ "$output" != "exists" ]; then
+		sleep 2
+		continue
+	fi
+	CSVName=$(oc get sub nfd -n openshift-nfd -o jsonpath='{.status.currentCSV}')
+	if [ "$CSVName" != "" ]; then
+		break
+	fi
+	sleep 10
+done
+
+_apiReady=0
+echo "* Using CSV: ${CSVName}"
+for ((i = 1; i <= 20; i++)); do
+	sleep 30
+	output=$(oc get csv -n openshift-nfd $CSVName -o jsonpath='{.status.phase}' >>/dev/null && echo "exists" || echo "not found")
+	if [ "$output" != "exists" ]; then
+		continue
+	fi
+	phase=$(oc get csv -n openshift-nfd $CSVName -o jsonpath='{.status.phase}')
+	if [ "$phase" == "Succeeded" ]; then
+		_apiReady=1
+		break
+	fi
+	echo "Waiting for CSV to be ready"
+done
+
+if [ $_apiReady -eq 0 ]; then
+	echo "nfd-operator subscription could not install in the allotted time."
+	exit 1
+fi
+echo "nfd-operator installed successfully"
+
+oc get csv -n openshift-nfd $CSVName -o jsonpath='{.metadata.annotations.alm-examples}' | jq '.[0]' >/tmp/nodefeaturediscovery.json
+oc apply -f /tmp/nodefeaturediscovery.json
+oc wait nodefeaturediscovery -n openshift-nfd --for=condition=Available --timeout=15m --all
