@@ -50,7 +50,7 @@ _wait_for_node() {
 			break
 		else
 			_kubectl get pods -n nvidia-gpu-operator
-			_kubectl logs -n nvidia-gpu-operator -l app=nvidia-driver-daemonset-418.94.202504291430-0 --all-containers || true
+			_kubectl logs -n nvidia-gpu-operator -l app=nvidia-driver-daemonset-418.94.202505022309-0 --all-containers || true
 			sleep $interval_secs
 		fi
 	done
