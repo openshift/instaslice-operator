@@ -248,44 +248,6 @@ func TestInstaSliceDaemonsetReconciler_addMigCapacityToNode(t *testing.T) {
 	assert.NoError(t, reconciler.addMigCapacityToNode(ctx, instaslice))
 }
 
-func TestInstaSliceDaemonsetReconciler_classicalResourcesAndGPUMemOnNode(t *testing.T) {
-	// Set up the scheme for the client
-	s := scheme.Scheme
-	_ = v1.AddToScheme(s)
-	_ = inferencev1alpha1.AddToScheme(s)
-	_ = appsv1.AddToScheme(s)
-
-	nodeName := "test-node"
-
-	// Use the fake client
-	client := fake.NewClientBuilder().WithScheme(s).Build()
-
-	// Set NODE_NAME and EMULATOR_MODE env variables
-	assert.NoError(t, os.Setenv("NODE_NAME", nodeName))
-	assert.NoError(t, os.Setenv("EMULATOR_MODE", controller.EmulatorModeTrue))
-
-	// Create the reconciler with the fake client
-	reconciler := &InstaSliceDaemonsetReconciler{
-		Client:   client,
-		NodeName: nodeName,
-	}
-	// Create a background context
-	ctx := context.Background()
-	// create a fake node object
-	node := &v1.Node{}
-	node.Name = nodeName
-	node.Status.Allocatable = v1.ResourceList{
-		v1.ResourceCPU:    resource.MustParse("10m"),
-		v1.ResourceMemory: resource.MustParse("500Mi"),
-	}
-
-	assert.NoError(t, client.Create(ctx, node))
-	nodeResourceList, err := reconciler.classicalResourcesAndGPUMemOnNode(ctx, nodeName, "30")
-	assert.Equal(t, resource.MustParse("10m"), nodeResourceList[v1.ResourceCPU])
-	assert.Equal(t, resource.MustParse("500Mi"), nodeResourceList[v1.ResourceMemory])
-	assert.NoError(t, err)
-}
-
 func TestNewMigProfile(t *testing.T) {
 	type args struct {
 		giProfileID            int

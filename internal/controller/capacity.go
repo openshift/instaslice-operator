@@ -23,9 +23,7 @@ import (
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // checks the classical resources like CPU and memory and continuous GPU index available
@@ -38,24 +36,7 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 		return nil, nil, err
 	}
 
-	availableResources := r.availableClassicalResourcesOnNode(updatedInstaSliceObject)
-	nodeAvailableCpu := availableResources[v1.ResourceCPU]
-	nodeAvailableMemory := availableResources[v1.ResourceMemory]
-
-	cpuRequest, cpuOk := pod.Spec.Containers[0].Resources.Requests[v1.ResourceCPU]
-	if cpuOk {
-		log.FromContext(ctx).Info("cpu request obtained", "pod", pod.Name, "value", cpuRequest.String())
-	} else {
-		log.FromContext(ctx).Info("cpu request not set for", "pod", pod.Name)
-	}
-	memoryRequest, memOk := pod.Spec.Containers[0].Resources.Requests[v1.ResourceMemory]
-	if memOk {
-		log.FromContext(ctx).Info("memory request obtained", "pod", pod.Name, "value", memoryRequest.String())
-	} else {
-		log.FromContext(ctx).Info("memory request not set for", "pod", pod.Name)
-	}
-
-	if cpuRequest.Cmp(nodeAvailableCpu) < 0 && memoryRequest.Cmp(nodeAvailableMemory) < 0 {
+	if r.ResourceCache.Fits(instaslice.Name, pod) {
 		// TODO: Discover GPU UUIDs for selection. (This may work for A100 and H100 for now.)
 		gpuUUIDs := sortGPUs(updatedInstaSliceObject)
 		for _, gpuuuid := range gpuUUIDs {
@@ -87,10 +68,6 @@ func (r *InstasliceReconciler) findNodeAndDeviceForASlice(ctx context.Context, i
 				pod.GetName(),
 				gpuuuid,
 				types.UID(resourceIdentifier),
-				v1.ResourceList{
-					v1.ResourceCPU:    cpuRequest,
-					v1.ResourceMemory: memoryRequest,
-				},
 			)
 			return allocRequest, allocResult, nil
 		}
@@ -204,32 +181,4 @@ func (r *InstasliceReconciler) getStartIndexFromAllocationResults(instaslice *in
 
 	}
 	return newStart
-}
-
-func (r *InstasliceReconciler) availableClassicalResourcesOnNode(instaslice *inferencev1alpha1.Instaslice) v1.ResourceList {
-	allocatedCpu := resource.MustParse("0")
-	allocatedMemory := resource.MustParse("0")
-
-	for _, allocRequest := range instaslice.Spec.PodAllocationRequests {
-		if cpuReq := allocRequest.Resources.Requests.Cpu(); cpuReq != nil {
-			allocatedCpu.Add(*cpuReq)
-		}
-		if memReq := allocRequest.Resources.Requests.Memory(); memReq != nil {
-			allocatedMemory.Add(*memReq)
-		}
-	}
-
-	totalNodeCpu := instaslice.Status.NodeResources.NodeResources.Cpu()
-	totalNodeMem := instaslice.Status.NodeResources.NodeResources.Memory()
-
-	availableCpu := totalNodeCpu.DeepCopy()
-	availableCpu.Sub(allocatedCpu)
-
-	availableMemory := totalNodeMem.DeepCopy()
-	availableMemory.Sub(allocatedMemory)
-
-	return v1.ResourceList{
-		v1.ResourceCPU:    availableCpu,
-		v1.ResourceMemory: availableMemory,
-	}
 }
