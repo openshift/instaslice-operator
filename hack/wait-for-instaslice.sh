@@ -42,6 +42,7 @@ _wait_for_daemonset_to_exist() {
 		if _kubectl rollout status daemonset/instaslice-operator-controller-daemonset -n instaslice-system; then
 			break
 		else
+			_kubectl logs -n instaslice-system instaslice-operator-controller-manager --all-containers --request-timeout=20s
 			sleep $interval_secs
 		fi
 	done
