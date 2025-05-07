@@ -363,28 +363,43 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 			if err != nil {
 				log.Error(err, "Failed to fetch fake capacity after retries", "node_name", r.NodeName)
 			}
-			/// >>>>> change here to list : for each instaslice; do this
+			/// >>>>> change here to list : for each instaslice; do this (Done)
 			fakeCapacity = utils.GenerateFakeCapacitySim(r.NodeName)
 
 			for _, is := range fakeCapacity {
+				// Récupérer l'état actuel de l'instaslice avant de le modifier
+				var currentInstaslice inferencev1alpha1.Instaslice
+				currentNamespacedName := types.NamespacedName{
+					Name:      is.Name,
+					Namespace: is.Namespace,
+				}
 
-				instaslice.Name = is.Name
-				instaslice.Namespace = is.Namespace
-				instaslice.Status = is.Status
-				err = r.Status().Update(ctx, &instaslice)
-				if err != nil {
+				if err := r.Get(ctx, currentNamespacedName, &currentInstaslice); err != nil {
+					log.Error(err, "Failed to get instaslice", "name", is.Name, "namespace", is.Namespace)
+					return err
+				}
+
+				// Mettre à jour uniquement le statut
+				currentInstaslice.Status = is.Status
+
+				// Mettre à jour le statut
+				if err := r.Status().Update(ctx, &currentInstaslice); err != nil {
 					log.Error(err, "could not update fake capacity", "node_name", r.NodeName)
 					return err
 				}
-				// let the update propagate
+
+				// Laisser la mise à jour se propager
 				time.Sleep(2 * time.Second)
-				err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 10*time.Second, true, func(ctx context.Context) (done bool, err error) {
-					err = r.Get(ctx, typeNamespacedName, &instaslice)
-					if err != nil {
+
+				// Attendre que la mise à jour soit effective
+				err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 10*time.Second, true, func(ctx context.Context) (done bool, err error) {
+					var updatedInstaslice inferencev1alpha1.Instaslice
+					if err := r.Get(ctx, currentNamespacedName, &updatedInstaslice); err != nil {
 						log.Error(err, "Failed to fetch instaslice status", "node_name", r.NodeName)
 						return false, nil
 					}
-					if len(instaslice.Status.NodeResources.NodeGPUs) == len(is.Status.NodeResources.NodeGPUs) {
+
+					if len(updatedInstaslice.Status.NodeResources.NodeGPUs) == len(is.Status.NodeResources.NodeGPUs) {
 						return true, nil
 					}
 
