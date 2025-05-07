@@ -23,14 +23,13 @@ metadata:
     capabilities: Basic Install
     categories: Drivers and plugins
     containerImage: quay.io/ibm/instaslice-controller:kubecon
-    createdAt: "2024-11-06T17:06:29Z"
+    createdAt: "2025-04-23T17:42:28Z"
     description: InstaSlice works with GPU operator to create mig slices on demand
-    operators.operatorframework.io/builder: operator-sdk-v1.34.1
+    operators.operatorframework.io/builder: operator-sdk-v1.38.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/openshift/instaslice-operator
     support: https://github.com/openshift/instaslice-operator/issues
-  name: instaslice-operator.v0.0.1
-  namespace: placeholder
+  name: instaslice-operator.v0.0.2
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
@@ -110,20 +109,13 @@ spec:
           - ""
           resources:
           - nodes
+          - nodes/status
           verbs:
           - get
           - list
           - patch
           - update
           - watch
-        - apiGroups:
-          - ""
-          resources:
-          - nodes/status
-          verbs:
-          - get
-          - patch
-          - update
         - apiGroups:
           - apps
           resources:
@@ -161,6 +153,21 @@ spec:
           - get
           - patch
           - update
+        - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes
+          verbs:
+          - list
+        - apiGroups:
+          - security.openshift.io
+          resources:
+          - securitycontextconstraints
+          verbs:
+          - create
+          - get
+          - update
+          - watch
         - nonResourceURLs:
           - /metrics
           verbs:
@@ -204,16 +211,17 @@ spec:
               containers:
               - args:
                 - --health-probe-bind-address=:8081
-                - --metrics-bind-address=127.0.0.1:8080
+                - --metrics-bind-address=:8443
                 - --leader-elect
                 command:
                 - /manager
                 env:
-                - name: EMULATOR_MODE
-                  value: "false"
                 - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
                   value: quay.io/ibm/instaslice-daemonset:kubecon
+                - name: EMULATOR_MODE
+                  value: "false"
                 image: quay.io/ibm/instaslice-controller:kubecon
+                imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -243,12 +251,13 @@ spec:
                   capabilities:
                     drop:
                     - ALL
+                  runAsUser: 1000
                 volumeMounts:
                 - mountPath: /tmp/k8s-webhook-server/serving-certs
                   name: cert
                   readOnly: true
               securityContext:
-                runAsNonRoot: true
+                runAsNonRoot: false
                 seccompProfile:
                   type: RuntimeDefault
               serviceAccountName: instaslice-operator-controller-manager
