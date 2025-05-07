@@ -340,7 +340,9 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 		}
 
 		if r.Config.EmulatorModeEnable && r.Config.Simulation {
-			fakeCapacity := utils.GenerateFakeCapacitySim(r.NodeName)
+			var NodesConf *utils.NodeConfig
+			NodesConf, err := r.readJSONFromConfigMap(ctx, "config", "instaslice-system", "data")
+			fakeCapacity := utils.GenerateFakeCapacitySim(NodesConf)
 			for _, is := range fakeCapacity {
 
 				err := r.Create(ctx, is)
@@ -364,7 +366,7 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 				log.Error(err, "Failed to fetch fake capacity after retries", "node_name", r.NodeName)
 			}
 			/// >>>>> change here to list : for each instaslice; do this (Done)
-			fakeCapacity = utils.GenerateFakeCapacitySim(r.NodeName)
+			fakeCapacity = utils.GenerateFakeCapacitySim(NodesConf)
 
 			for _, is := range fakeCapacity {
 				// Récupérer l'état actuel de l'instaslice avant de le modifier
@@ -1053,4 +1055,27 @@ func (r *InstaSliceDaemonsetReconciler) checkConfigMapExists(ctx context.Context
 	}
 	log.Info("ConfigMap exists", "name", name, "namespace", namespace)
 	return true, nil
+}
+
+func (r *InstaSliceDaemonsetReconciler) readJSONFromConfigMap(ctx context.Context, configMapName, namespace, key string) (*utils.NodeConfig, error) {
+	log := logr.FromContext(ctx)
+	var configMap v1.ConfigMap
+	err := r.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: namespace}, &configMap)
+	if err != nil {
+		log.Info("ConfigMap not found ", "name", configMapName)
+
+	}
+
+	jsonData, ok := configMap.Data[key]
+
+	if !ok {
+		return nil, fmt.Errorf("key %s not found in ConfigMap %s", key, configMapName)
+	}
+
+	var config utils.NodeConfig
+	if err := json.Unmarshal([]byte(jsonData), &config); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config data: %w", err)
+	}
+	return &config, nil
+
 }

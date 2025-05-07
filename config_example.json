@@ -1,0 +1,16 @@
+{
+    "Nodes": [
+        {
+            "name" : "node-1",
+            "num" : "1"
+        },
+        {
+            "name" : "node-2",
+            "num" : "2"
+        },
+        {
+            "name" : "node-master",
+            "num" : "3"
+        }
+    ]
+}
