@@ -386,9 +386,9 @@ ocp-deploy: container-build-ocp docker-push bundle-ocp bundle-build-ocp bundle-p
 deploy-emulated: KUSTOMIZATION=emulator
 deploy-emulated: deploy
 
-.PHONY: deploy-simulation ## Deploy controller in emulator mode
-deploy-emulated: KUSTOMIZATION=simulation
-deploy-emulated: deploy
+.PHONY: deploy-sim ## Deploy controller in emulator mode
+deploy-sim: KUSTOMIZATION=simulation
+deploy-sim: deploy
 
 
 .PHONY: ocp-deploy-emulated ## Deploy controller in emulator mode in Openshift
