@@ -364,35 +364,39 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 				log.Error(err, "Failed to fetch fake capacity after retries", "node_name", r.NodeName)
 			}
 			/// >>>>> change here to list : for each instaslice; do this
-			//	fakeCapacity = utils.GenerateFakeCapacitySim(r.NodeName)
-			//	instaslice.Name = fakeCapacity.Name
-			//	instaslice.Namespace = fakeCapacity.Namespace
-			//	instaslice.Status = fakeCapacity.Status
-			//	err = r.Status().Update(ctx, &instaslice)
-			//	if err != nil {
-			//		log.Error(err, "could not update fake capacity", "node_name", r.NodeName)
-			//		return err
-			//	}
-			// let the update propagate
-			// time.Sleep(2 * time.Second)
-			//	err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 10*time.Second, true, func(ctx context.Context) (done bool, err error) {
-			//		err = r.Get(ctx, typeNamespacedName, &instaslice)
-			//		if err != nil {
-			//			log.Error(err, "Failed to fetch instaslice status", "node_name", r.NodeName)
-			//			return false, nil
-			//		}
+			fakeCapacity = utils.GenerateFakeCapacitySim(r.NodeName)
 
-			//				if len(instaslice.Status.NodeResources.NodeGPUs) == len(fakeCapacity.Status.NodeResources.NodeGPUs) {
-			//					return true, nil
-			//				}
+			for _, is := range fakeCapacity {
 
-			//				log.Info("Waiting for instaslice to become ready", "node_name", r.NodeName)
-			//				return false, nil
-			//			})
+				instaslice.Name = is.Name
+				instaslice.Namespace = is.Namespace
+				instaslice.Status = is.Status
+				err = r.Status().Update(ctx, &instaslice)
+				if err != nil {
+					log.Error(err, "could not update fake capacity", "node_name", r.NodeName)
+					return err
+				}
+				// let the update propagate
+				time.Sleep(2 * time.Second)
+				err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 10*time.Second, true, func(ctx context.Context) (done bool, err error) {
+					err = r.Get(ctx, typeNamespacedName, &instaslice)
+					if err != nil {
+						log.Error(err, "Failed to fetch instaslice status", "node_name", r.NodeName)
+						return false, nil
+					}
+					if len(instaslice.Status.NodeResources.NodeGPUs) == len(is.Status.NodeResources.NodeGPUs) {
+						return true, nil
+					}
 
-			if err != nil {
-				log.Error(err, "Timed out waiting for instaslice status", "node_name", r.NodeName)
+					log.Info("Waiting for instaslice to become ready", "node_name", r.NodeName)
+					return false, nil
+				})
+
+				if err != nil {
+					log.Error(err, "Timed out waiting for instaslice status", "node_name", r.NodeName)
+				}
 			}
+
 		} else if r.Config.EmulatorModeEnable && !r.Config.Simulation {
 			fakeCapacity := utils.GenerateFakeCapacity(r.NodeName)
 
