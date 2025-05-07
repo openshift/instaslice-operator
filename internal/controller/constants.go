@@ -20,6 +20,7 @@ import "time"
 
 const (
 	OrgInstaslicePrefix              = "instaslice.redhat.com/"
+	managedLabel                     = OrgInstaslicePrefix + "managed"
 	GateName                         = OrgInstaslicePrefix + "accelerator"
 	FinalizerName                    = GateName
 	QuotaResourceName                = OrgInstaslicePrefix + "accelerator-memory-quota"
@@ -29,6 +30,8 @@ const (
 	EmulatorModeFalse                = "false"
 	EmulatorModeTrue                 = "true"
 	InstaslicePodMutatedTrue         = "true"
+	InstasliceManagedTrue            = "true"
+	MigCapableTrue                   = "true"
 	AttributeMediaExtensions         = "me"
 	InstaSliceOperatorNamespace      = "instaslice-system"
 	NvidiaMIGPrefix                  = "nvidia.com/mig-"
