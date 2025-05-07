@@ -12,6 +12,8 @@ const (
 	// TODO fix this image
 	DefaultDaemonsetImage    = "quay.io/amalvank/instaslicev2-daemonset:latest"
 	DefaultManifestConfigDir = "/config"
+
+	DefaultSimulation = false
 )
 
 type Config struct {
@@ -26,6 +28,9 @@ type Config struct {
 
 	// ManifestConfigDir manifest directory
 	ManifestConfigDir string `json:"manifest_config_dir"`
+
+	// Simulation Mode
+	Simulation bool `json:"simulation"`
 }
 
 func NewConfig() *Config {
@@ -34,6 +39,7 @@ func NewConfig() *Config {
 		WebhookEnable:      DefaultWebhookMode,
 		DaemonsetImage:     DefaultDaemonsetImage,
 		ManifestConfigDir:  DefaultManifestConfigDir,
+		Simulation:         DefaultSimulation,
 	}
 }
 
@@ -47,6 +53,10 @@ func ConfigFromEnvironment() *Config {
 
 	if emulatorMode, ok := os.LookupEnv("EMULATOR_MODE"); ok {
 		config.EmulatorModeEnable = strings.EqualFold(emulatorMode, "true")
+	}
+
+	if Simulation, ok := os.LookupEnv("SIMULATION"); ok {
+		config.Simulation = strings.EqualFold(Simulation, "true")
 	}
 
 	if webhookEnable, ok := os.LookupEnv("WEBHOOK_ENABLE"); ok {

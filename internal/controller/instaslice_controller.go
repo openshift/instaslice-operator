@@ -487,6 +487,7 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 // createInstaSliceDaemonSet - create the DaemonSet object
 func (r *InstasliceReconciler) createInstaSliceDaemonSet(namespace string) *appsv1.DaemonSet {
 	emulatorMode := r.Config.EmulatorModeEnable
+	simulation := r.Config.Simulation
 	instasliceDaemonsetImage := r.Config.DaemonsetImage
 
 	// Base DaemonSet structure
@@ -550,6 +551,10 @@ func (r *InstasliceReconciler) createInstaSliceDaemonSet(namespace string) *apps
 								{
 									Name:  "EMULATOR_MODE",
 									Value: fmt.Sprintf("%v", emulatorMode),
+								},
+								{
+									Name:  "SIMULATION",
+									Value: fmt.Sprintf("%v", simulation),
 								},
 							},
 						},

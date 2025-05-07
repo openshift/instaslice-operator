@@ -118,143 +118,146 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 		return ctrl.Result{}, nil
 	}
 
-	nsName := types.NamespacedName{
-		Name:      r.NodeName,
-		Namespace: controller.InstaSliceOperatorNamespace,
-	}
+	//	nsName := types.NamespacedName{
+	//		Name:      r.NodeName,
+	//		Namespace: controller.InstaSliceOperatorNamespace,
+	//	}
 
-	var instaslice inferencev1alpha1.Instaslice
-	if err := r.Get(ctx, nsName, &instaslice); err != nil {
+	var instaSlices inferencev1alpha1.InstasliceList
+	if err := r.List(ctx, &instaSlices); err != nil {
 		log.Error(err, "Error getting Instaslice", "name", r.NodeName)
 		return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, err
 	}
 
-	for podUID, allocResult := range instaslice.Status.PodAllocationResults {
+	// >>>>>> change here : for each instaslice... do the same thing
+	for _, instaslice := range instaSlices.Items {
+		for podUID, allocResult := range instaslice.Status.PodAllocationResults {
 
-		podRef := instaslice.Spec.PodAllocationRequests[podUID].PodRef
+			podRef := instaslice.Spec.PodAllocationRequests[podUID].PodRef
 
-		// 1) Handle "deleting"
-		if allocResult.AllocationStatus.AllocationStatusController == inferencev1alpha1.AllocationStatusDeleting &&
-			allocResult.AllocationStatus.AllocationStatusDaemonset == inferencev1alpha1.AllocationStatusCreated &&
-			allocResult.Nodename == types.NodeName(r.NodeName) {
+			// 1) Handle "deleting"
+			if allocResult.AllocationStatus.AllocationStatusController == inferencev1alpha1.AllocationStatusDeleting &&
+				allocResult.AllocationStatus.AllocationStatusDaemonset == inferencev1alpha1.AllocationStatusCreated &&
+				allocResult.Nodename == types.NodeName(r.NodeName) {
 
-			log.Info("Performing cleanup for pod", "podRef", podRef)
-			if !r.Config.EmulatorModeEnable {
-				exists, err := r.checkConfigMapExists(ctx, string(allocResult.ConfigMapResourceIdentifier), podRef.Namespace)
-				if err != nil {
-					log.Error(err, "error checking configmap existence", "podRef", podRef)
-					return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, err
-				}
-				if exists {
-					err := r.cleanUpCiAndGi(ctx, &allocResult, podRef)
+				log.Info("Performing cleanup for pod", "podRef", podRef)
+				if !r.Config.EmulatorModeEnable {
+					exists, err := r.checkConfigMapExists(ctx, string(allocResult.ConfigMapResourceIdentifier), podRef.Namespace)
 					if err != nil {
-						// NVML shutdowm took time or NVML init may have failed.
-						log.Error(err, "error cleaning up ci and gi retrying", podRef)
+						log.Error(err, "error checking configmap existence", "podRef", podRef)
 						return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, err
 					}
-				}
-			}
-			err := r.deleteConfigMap(ctx,
-				string(allocResult.ConfigMapResourceIdentifier),
-				podRef.Namespace)
-			if err != nil && !errors.IsNotFound(err) {
-				log.Error(err, "error deleting config map for pod", "pod", podRef.Name)
-				return ctrl.Result{Requeue: true}, err
-			}
-
-			newAlloc := allocResult
-			newAlloc.AllocationStatus.AllocationStatusDaemonset = inferencev1alpha1.AllocationStatusDeleted
-			instaslice.Status.PodAllocationResults[podUID] = newAlloc
-			if err := r.Status().Update(ctx, &instaslice); err != nil {
-				log.Error(err, "error updating Instaslice status for pod cleanup", "podRef", podRef)
-				return ctrl.Result{Requeue: true}, err
-			}
-			return ctrl.Result{}, nil
-		}
-
-		// 2) Handle "creating"
-		if allocResult.AllocationStatus.AllocationStatusController == inferencev1alpha1.AllocationStatusCreating &&
-			allocResult.AllocationStatus.AllocationStatusDaemonset == "" &&
-			allocResult.Nodename == types.NodeName(r.NodeName) {
-			exists, err := r.checkConfigMapExists(ctx, string(allocResult.ConfigMapResourceIdentifier), podRef.Namespace)
-			if err != nil {
-				log.Error(err, "error obtianing configmap", string(allocResult.ConfigMapResourceIdentifier))
-				return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, err
-			}
-			log.Info("creating allocation for pod", "podRef", podRef)
-			// We can look up the *request* in spec to see the profile or resource demands
-			allocationRequest, haveReq := instaslice.Spec.PodAllocationRequests[podUID]
-			if !haveReq {
-				// There's no allocation request
-				log.Info("No matching PodAllocationRequest for this result; skipping", podRef)
-				continue
-			}
-			if !exists {
-				if r.Config.EmulatorModeEnable {
-					// configmap with fake MIG uuid
-					err := r.createConfigMap(ctx,
-						string(allocResult.ConfigMapResourceIdentifier),
-						podRef.Namespace,
-						string(allocResult.ConfigMapResourceIdentifier))
-					if err != nil {
-						log.Error(err, "failed to create config map (emulator mode)")
-						return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, err
-					}
-					// Emulating cost to create CI and GI on a GPU
-					time.Sleep(controller.Requeue1sDelay)
-				} else {
-					device, retCode := nvml.DeviceGetHandleByUUID(allocResult.GPUUUID)
-					if retCode != nvml.SUCCESS {
-						log.Error(retCode, "error getting GPU device handle", "gpuUUID", allocResult.GPUUUID)
-						return ctrl.Result{}, goerror.New("error fetching GPU device handle")
-					}
-
-					selectedMig, ok := instaslice.Status.NodeResources.MigPlacement[allocationRequest.Profile]
-					if !ok {
-						log.Info("No suitable MIG profile in NodeResources; skipping creation", podRef, allocResult)
-						continue
-					}
-
-					placement := nvml.GpuInstancePlacement{
-						Start: uint32(allocResult.MigPlacement.Start),
-						Size:  uint32(allocResult.MigPlacement.Size),
-					}
-
-					giProfileInfo, retGI := device.GetGpuInstanceProfileInfo(int(selectedMig.GIProfileID))
-					if retGI != nvml.SUCCESS {
-						log.Error(retGI, "error getting GPU instance profile info", "GIProfileID", selectedMig.GIProfileID)
-						return ctrl.Result{}, goerror.New("cannot get GI profile info")
-					}
-
-					ciProfileID := selectedMig.CIProfileID
-
-					createdMigInfos, err := r.createSliceAndPopulateMigInfos(
-						ctx, device, giProfileInfo, placement, ciProfileID, podRef.Name)
-					if err != nil {
-						log.Error(err, "MIG creation not successful", "podRef", podRef)
-						return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, err
-					}
-
-					for migUuid, migDevice := range createdMigInfos {
-						if migDevice.start == allocResult.MigPlacement.Start && migDevice.uuid == allocResult.GPUUUID && giProfileInfo.Id == migDevice.giInfo.ProfileId {
-							if err := r.createConfigMap(ctx, migUuid, podRef.Namespace, string(allocResult.ConfigMapResourceIdentifier)); err != nil {
-								return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, err
-							}
-							log.Info("done creating mig slice for ", "pod", podRef.Name, "parentgpu", allocResult.GPUUUID, "miguuid", migUuid)
-							break
+					if exists {
+						err := r.cleanUpCiAndGi(ctx, &allocResult, podRef)
+						if err != nil {
+							// NVML shutdowm took time or NVML init may have failed.
+							log.Error(err, "error cleaning up ci and gi retrying", podRef)
+							return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, err
 						}
 					}
 				}
+				err := r.deleteConfigMap(ctx,
+					string(allocResult.ConfigMapResourceIdentifier),
+					podRef.Namespace)
+				if err != nil && !errors.IsNotFound(err) {
+					log.Error(err, "error deleting config map for pod", "pod", podRef.Name)
+					return ctrl.Result{Requeue: true}, err
+				}
+
+				newAlloc := allocResult
+				newAlloc.AllocationStatus.AllocationStatusDaemonset = inferencev1alpha1.AllocationStatusDeleted
+				instaslice.Status.PodAllocationResults[podUID] = newAlloc
+				if err := r.Status().Update(ctx, &instaslice); err != nil {
+					log.Error(err, "error updating Instaslice status for pod cleanup", "podRef", podRef)
+					return ctrl.Result{Requeue: true}, err
+				}
+				return ctrl.Result{}, nil
 			}
 
-			newAllocationRequest := instaslice.Spec.PodAllocationRequests[podUID]
-			newAllocationResult := instaslice.Status.PodAllocationResults[podUID]
-			newAllocationResult.AllocationStatus.AllocationStatusDaemonset = inferencev1alpha1.AllocationStatusCreated
-			if err := utils.UpdateOrDeleteInstasliceAllocations(ctx, r.Client, instaslice.Name, &newAllocationResult, &newAllocationRequest); err != nil {
-				return ctrl.Result{Requeue: true}, err
-			}
+			// 2) Handle "creating"
+			if allocResult.AllocationStatus.AllocationStatusController == inferencev1alpha1.AllocationStatusCreating &&
+				allocResult.AllocationStatus.AllocationStatusDaemonset == "" &&
+				allocResult.Nodename == types.NodeName(r.NodeName) {
+				exists, err := r.checkConfigMapExists(ctx, string(allocResult.ConfigMapResourceIdentifier), podRef.Namespace)
+				if err != nil {
+					log.Error(err, "error obtianing configmap", string(allocResult.ConfigMapResourceIdentifier))
+					return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, err
+				}
+				log.Info("creating allocation for pod", "podRef", podRef)
+				// We can look up the *request* in spec to see the profile or resource demands
+				allocationRequest, haveReq := instaslice.Spec.PodAllocationRequests[podUID]
+				if !haveReq {
+					// There's no allocation request
+					log.Info("No matching PodAllocationRequest for this result; skipping", podRef)
+					continue
+				}
+				if !exists {
+					if r.Config.EmulatorModeEnable {
+						// configmap with fake MIG uuid
+						err := r.createConfigMap(ctx,
+							string(allocResult.ConfigMapResourceIdentifier),
+							podRef.Namespace,
+							string(allocResult.ConfigMapResourceIdentifier))
+						if err != nil {
+							log.Error(err, "failed to create config map (emulator mode)")
+							return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, err
+						}
+						// Emulating cost to create CI and GI on a GPU
+						time.Sleep(controller.Requeue1sDelay)
+					} else {
+						device, retCode := nvml.DeviceGetHandleByUUID(allocResult.GPUUUID)
+						if retCode != nvml.SUCCESS {
+							log.Error(retCode, "error getting GPU device handle", "gpuUUID", allocResult.GPUUUID)
+							return ctrl.Result{}, goerror.New("error fetching GPU device handle")
+						}
 
-			return ctrl.Result{}, nil
+						selectedMig, ok := instaslice.Status.NodeResources.MigPlacement[allocationRequest.Profile]
+						if !ok {
+							log.Info("No suitable MIG profile in NodeResources; skipping creation", podRef, allocResult)
+							continue
+						}
+
+						placement := nvml.GpuInstancePlacement{
+							Start: uint32(allocResult.MigPlacement.Start),
+							Size:  uint32(allocResult.MigPlacement.Size),
+						}
+
+						giProfileInfo, retGI := device.GetGpuInstanceProfileInfo(int(selectedMig.GIProfileID))
+						if retGI != nvml.SUCCESS {
+							log.Error(retGI, "error getting GPU instance profile info", "GIProfileID", selectedMig.GIProfileID)
+							return ctrl.Result{}, goerror.New("cannot get GI profile info")
+						}
+
+						ciProfileID := selectedMig.CIProfileID
+
+						createdMigInfos, err := r.createSliceAndPopulateMigInfos(
+							ctx, device, giProfileInfo, placement, ciProfileID, podRef.Name)
+						if err != nil {
+							log.Error(err, "MIG creation not successful", "podRef", podRef)
+							return ctrl.Result{RequeueAfter: controller.Requeue2sDelay}, err
+						}
+
+						for migUuid, migDevice := range createdMigInfos {
+							if migDevice.start == allocResult.MigPlacement.Start && migDevice.uuid == allocResult.GPUUUID && giProfileInfo.Id == migDevice.giInfo.ProfileId {
+								if err := r.createConfigMap(ctx, migUuid, podRef.Namespace, string(allocResult.ConfigMapResourceIdentifier)); err != nil {
+									return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, err
+								}
+								log.Info("done creating mig slice for ", "pod", podRef.Name, "parentgpu", allocResult.GPUUUID, "miguuid", migUuid)
+								break
+							}
+						}
+					}
+				}
+
+				newAllocationRequest := instaslice.Spec.PodAllocationRequests[podUID]
+				newAllocationResult := instaslice.Status.PodAllocationResults[podUID]
+				newAllocationResult.AllocationStatus.AllocationStatusDaemonset = inferencev1alpha1.AllocationStatusCreated
+				if err := utils.UpdateOrDeleteInstasliceAllocations(ctx, r.Client, instaslice.Name, &newAllocationResult, &newAllocationRequest); err != nil {
+					return ctrl.Result{Requeue: true}, err
+				}
+
+				return ctrl.Result{}, nil
+			}
 		}
 	}
 
@@ -336,22 +339,18 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 			log.Error(err, "Unable to fetch Instaslice for node", "nodeName", r.NodeName)
 		}
 
-		if r.Config.EmulatorModeEnable {
-			fakeCapacity := utils.GenerateFakeCapacity(r.NodeName)
-			err := r.Create(ctx, fakeCapacity)
-			if err != nil && !errors.IsAlreadyExists(err) {
-				log.Error(err, "could not create fake capacity", "node_name", r.NodeName)
-				return err
+		if r.Config.EmulatorModeEnable && r.Config.Simulation {
+			fakeCapacity := utils.GenerateFakeCapacitySim(r.NodeName)
+			for _, is := range fakeCapacity {
+
+				err := r.Create(ctx, is)
+				if err != nil && !errors.IsAlreadyExists(err) {
+					log.Error(err, "could not create fake capacity", "node_name", r.NodeName)
+					return err
+				}
 			}
-			//get metadata.resourceVersion
-			// for i := 1; i < 5; i++ {
-			// 	err := r.Get(ctx, typeNamespacedName, &instaslice)
-			// 	if err == nil {
-			// 		break
-			// 	}
-			// 	log.Error(err, "Retrying fetch fake capacity", "attempt", i+1, "node_name", r.NodeName)
-			// 	time.Sleep(2 * time.Second)
-			// }
+
+			// >>>>>> change here to list
 			err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 10*time.Second, true, func(ctx context.Context) (done bool, err error) {
 				err = r.Get(ctx, typeNamespacedName, &instaslice)
 				if err == nil {
@@ -364,6 +363,69 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 			if err != nil {
 				log.Error(err, "Failed to fetch fake capacity after retries", "node_name", r.NodeName)
 			}
+			/// >>>>> change here to list : for each instaslice; do this
+			//	fakeCapacity = utils.GenerateFakeCapacitySim(r.NodeName)
+			//	instaslice.Name = fakeCapacity.Name
+			//	instaslice.Namespace = fakeCapacity.Namespace
+			//	instaslice.Status = fakeCapacity.Status
+			//	err = r.Status().Update(ctx, &instaslice)
+			//	if err != nil {
+			//		log.Error(err, "could not update fake capacity", "node_name", r.NodeName)
+			//		return err
+			//	}
+			// let the update propagate
+			// time.Sleep(2 * time.Second)
+			//	err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 10*time.Second, true, func(ctx context.Context) (done bool, err error) {
+			//		err = r.Get(ctx, typeNamespacedName, &instaslice)
+			//		if err != nil {
+			//			log.Error(err, "Failed to fetch instaslice status", "node_name", r.NodeName)
+			//			return false, nil
+			//		}
+
+			//				if len(instaslice.Status.NodeResources.NodeGPUs) == len(fakeCapacity.Status.NodeResources.NodeGPUs) {
+			//					return true, nil
+			//				}
+
+			//				log.Info("Waiting for instaslice to become ready", "node_name", r.NodeName)
+			//				return false, nil
+			//			})
+
+			if err != nil {
+				log.Error(err, "Timed out waiting for instaslice status", "node_name", r.NodeName)
+			}
+		} else if r.Config.EmulatorModeEnable && !r.Config.Simulation {
+			fakeCapacity := utils.GenerateFakeCapacity(r.NodeName)
+
+			err := r.Create(ctx, &instaslice)
+			if err != nil && !errors.IsAlreadyExists(err) {
+				log.Error(err, "could not create fake capacity", "node_name", r.NodeName)
+				return err
+			}
+
+			//get metadata.resourceVersion
+			// for i := 1; i < 5; i++ {
+			// 	err := r.Get(ctx, typeNamespacedName, &instaslice)
+			// 	if err == nil {
+			// 		break
+			// 	}
+			// 	log.Error(err, "Retrying fetch fake capacity", "attempt", i+1, "node_name", r.NodeName)
+			// 	time.Sleep(2 * time.Second)
+			// }
+
+			// >>>>>> change here to list
+			err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 10*time.Second, true, func(ctx context.Context) (done bool, err error) {
+				err = r.Get(ctx, typeNamespacedName, &instaslice)
+				if err == nil {
+					return true, nil // Success, stop polling
+				}
+				log.Error(err, "Retrying fetch fake capacity", "node_name", r.NodeName)
+				return false, nil // Continue retrying
+			})
+
+			if err != nil {
+				log.Error(err, "Failed to fetch fake capacity after retries", "node_name", r.NodeName)
+			}
+			/// >>>>> change here to list : for each instaslice; do this
 			fakeCapacity = utils.GenerateFakeCapacity(r.NodeName)
 			instaslice.Name = fakeCapacity.Name
 			instaslice.Namespace = fakeCapacity.Namespace
@@ -411,7 +473,7 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 		}
 
 		// Patch the node capacity with GPU memory in emulator mode
-		if r.Config.EmulatorModeEnable {
+		if r.Config.EmulatorModeEnable { // >>>>>> Add a condition here for simulation, if simulation : don't need to change node ( or give it unfinite capacity)
 			fakeCapacity := utils.GenerateFakeCapacity(r.NodeName)
 			totalEmulatedGPUMemory, err := CalculateTotalMemoryGB(fakeCapacity.Status.NodeResources.NodeGPUs)
 			if err != nil {
