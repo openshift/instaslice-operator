@@ -39,7 +39,7 @@ _wait_for_daemonset_to_exist() {
 			echo "Timed out for daemonset"
 			return 1
 		fi
-		if _kubectl rollout status daemonset/instaslice-operator-controller-daemonset -n instaslice-system; then
+		if _kubectl rollout status daemonset/instaslice-operator-controller-daemonset -n instaslice-system --timeout=20s; then
 			break
 		else
 			_kubectl logs -n instaslice-system instaslice-operator-controller-manager --all-containers --request-timeout=20s
