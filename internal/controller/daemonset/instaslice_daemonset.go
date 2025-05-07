@@ -341,7 +341,7 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 
 		if r.Config.EmulatorModeEnable && r.Config.Simulation {
 			var NodesConf *utils.NodeConfig
-			NodesConf, err := r.readJSONFromConfigMap(ctx, "config", "instaslice-system", "data")
+			NodesConf, nil := r.readJSONFromConfigMap(ctx, "config", "instaslice-system", "data")
 			fakeCapacity := utils.GenerateFakeCapacitySim(NodesConf)
 			for _, is := range fakeCapacity {
 
