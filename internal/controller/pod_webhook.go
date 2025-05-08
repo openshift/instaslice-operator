@@ -80,12 +80,6 @@ func (a *PodAnnotator) Handle(ctx context.Context, req admission.Request) admiss
 		},
 	})
 
-	// Add annotation, if pod mutated
-	if pod.Labels == nil {
-		pod.Labels = make(map[string]string)
-	}
-	pod.Labels[LabelInstasliceMutated] = "true"
-
 	// Marshal the updated pod object back to JSON
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {

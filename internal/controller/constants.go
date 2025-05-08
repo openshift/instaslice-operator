@@ -23,12 +23,10 @@ const (
 	GateName                         = OrgInstaslicePrefix + "accelerator"
 	FinalizerName                    = GateName
 	QuotaResourceName                = OrgInstaslicePrefix + "accelerator-memory-quota"
-	LabelInstasliceMutated           = OrgInstaslicePrefix + "mutated"
 	GPUMemoryLabelName               = "nvidia.com/gpu.memory"
 	GPUCountLabelName                = "nvidia.com/gpu.count"
 	EmulatorModeFalse                = "false"
 	EmulatorModeTrue                 = "true"
-	InstaslicePodMutatedTrue         = "true"
 	AttributeMediaExtensions         = "me"
 	InstaSliceOperatorNamespace      = "instaslice-system"
 	NvidiaMIGPrefix                  = "nvidia.com/mig-"

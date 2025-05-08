@@ -39,7 +39,6 @@ import (
 	authv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -139,16 +138,6 @@ var _ = BeforeSuite(func() {
 	} else {
 		templateVars.NodeNames = []string{nodeNames[0]}
 	}
-
-	// add label to namespace default, only pods in namespace with label get processed
-	_, err = clientSet.CoreV1().Namespaces().Patch(ctx, "default", types.MergePatchType, []byte(`{
-		"metadata": {
-		  "labels": {
-			"instaslice.redhat.com/enable-mutation": "true"
-		  }
-		}
-	  }`), metav1.PatchOptions{})
-	Expect(err).NotTo(HaveOccurred(), "Failed to label default namespace")
 
 	GinkgoWriter.Printf("cri-bin: %v\n", criBin)
 	GinkgoWriter.Printf("kubectl-bin: %v\n", kubectlBin)
@@ -280,27 +269,6 @@ var _ = Describe("controller", Ordered, func() {
 				"controller_runtime_reconcile_total",
 			))
 		})
-		It("should not mutate pods in an unlabeled namespace", func() {
-			_, err := clientSet.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "no-mutation-ns",
-				},
-			}, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			pod := resources.GetNoMutationPod()
-
-			err = k8sClient.Create(ctx, pod)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create the pod")
-
-			Consistently(func() string {
-				pod, _ := clientSet.CoreV1().Pods("no-mutation-ns").Get(ctx, "no-mutation-pod", metav1.GetOptions{})
-				if pod == nil {
-					return "MISSING"
-				}
-				return pod.Labels["instaslice.redhat.com/mutated"]
-			}, 10*time.Second, 2*time.Second).ShouldNot(Equal("true"), "Webhook should not mutate pod in unlabeled namespace")
-		})
-
 		It("should create a pod with no requests and check the allocation in instaslice object", func() {
 			pod := resources.GetVectorAddNoReqPod()
 			err := k8sClient.Create(ctx, pod)
