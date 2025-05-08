@@ -46,11 +46,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logr "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -525,27 +523,9 @@ func (r *InstasliceReconciler) setupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
-
-	// pod filtering
-	// only watches Pods that: have the mutation label
-	// Use event-based predicate with label checks and update detection
-	instaslicePredicate := predicate.Funcs{
-		CreateFunc: func(e event.CreateEvent) bool {
-			return e.Object != nil && e.Object.GetLabels()[LabelInstasliceMutated] == InstaslicePodMutatedTrue
-		},
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			return (e.ObjectNew != nil && e.ObjectNew.GetLabels()[LabelInstasliceMutated] == InstaslicePodMutatedTrue) ||
-				e.ObjectOld.GetResourceVersion() != e.ObjectNew.GetResourceVersion()
-		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
-			return e.Object != nil && e.Object.GetLabels()[LabelInstasliceMutated] == InstaslicePodMutatedTrue
-		},
-	}
-
 	err = ctrl.NewControllerManagedBy(mgr).
 		For(&v1.Pod{}).Named("InstaSlice-controller").
 		Watches(&inferencev1alpha1.Instaslice{}, handler.EnqueueRequestsFromMapFunc(r.podMapFunc)).
-		WithEventFilter(instaslicePredicate).
 		Watches(&v1.Node{},
 			&handler.EnqueueRequestForObject{}).
 		Complete(r)

@@ -49,22 +49,6 @@ $ oc new-project instaslice-system
 $ operator-sdk run bundle quay.io/ibm/instaslice-bundle:v0.0.2 -n instaslice-system
 ```
 
-### ⚠️ Required Webhook Setup for Mutation
-
-The mutation webhook uses a namespace selector, so **only namespaces labeled like below will be processed**:
-
-```bash
-kubectl label namespace <target-ns> instaslice.redhat.com/enable-mutation=true
-```
-
-For example:
-
-```bash
-kubectl label namespace default instaslice.redhat.com/enable-mutation=true
-```
-
-If this label is missing, pods in that namespace **will not be mutated**.
-
 ### Running a sample workload
 Please note that running a sample workload requires availability of compatible GPUs (nvidia A100, H100, H200) on the worker nodes.
 
