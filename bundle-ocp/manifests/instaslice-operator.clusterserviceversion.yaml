@@ -338,7 +338,7 @@ spec:
                 - /manager
                 env:
                 - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
-                  value: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:2552d54ebcc0c00eb821581da3e2416621946a53232eb0cdbf0b91ee96267ae7
+                  value: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:a43e85e247fac3e083a4aad85171931dced76827b5b10a289a31862c1087a93f
                 - name: EMULATOR_MODE
                   value: "true"
                 image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:c4989eed5cf6ed63240d937727d258cb1cf862b371f5f1b3c4010b5f96196ead
@@ -463,7 +463,7 @@ spec:
     name: Codeflare
     url: https://github.com/openshift/instaslice-operator
   relatedImages:
-  - image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:2552d54ebcc0c00eb821581da3e2416621946a53232eb0cdbf0b91ee96267ae7
+  - image: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:a43e85e247fac3e083a4aad85171931dced76827b5b10a289a31862c1087a93f
     name: instaslice-daemonset
   version: 0.0.2
   webhookdefinitions:
