@@ -1,21 +1,6 @@
 resources:
-  - manifests.yaml
-  - service.yaml
+- manifests.yaml
+- service.yaml
 
 configurations:
-  - kustomizeconfig.yaml
-
-patches:
-  - patch: |-
-      apiVersion: admissionregistration.k8s.io/v1
-      kind: MutatingWebhookConfiguration
-      metadata:
-        name: mutating-webhook-configuration
-      webhooks:
-        - name: instaslice.redhat.com
-          namespaceSelector:
-            matchLabels:
-              instaslice.redhat.com/enable-mutation: "true"
-    target:
-      kind: MutatingWebhookConfiguration
-      name: mutating-webhook-configuration
+- kustomizeconfig.yaml
