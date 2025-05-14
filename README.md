@@ -49,6 +49,39 @@ $ oc new-project instaslice-system
 $ operator-sdk run bundle quay.io/ibm/instaslice-bundle:v0.0.2 -n instaslice-system
 ```
 
+### Node Management Label
+
+InstaSlice now manages only nodes explicitly labeled with:
+
+```bash
+instaslice.redhat.com/managed=true
+```
+
+To enable management of a node by InstaSlice:
+
+```bash
+kubectl label node <node-name> instaslice.redhat.com/managed=true
+```
+
+To opt-out a node from InstaSlice management:
+
+```bash
+kubectl label node <node-name> instaslice.redhat.com/managed-
+```
+
+### Optional: Auto-Labeling Nodes
+
+You can enable automatic labeling of all MIG-capable nodes at operator startup using the following environment variable:
+
+```yaml
+- name: AUTO_LABEL_MANAGED_NODES
+  value: "true"
+```
+
+This can be configured in your controller Deployment. When enabled:
+- Nodes with `nvidia.com/mig.capable=true` will automatically be labeled as managed.
+- Disabled by default to preserve admin control.
+
 ### Running a sample workload
 Please note that running a sample workload requires availability of compatible GPUs (nvidia A100, H100, H200) on the worker nodes.
 
