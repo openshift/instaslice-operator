@@ -5,7 +5,7 @@ metadata:
     alm-examples: '[]'
     capabilities: Basic Install
     categories: Drivers and plugins
-    containerImage: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:29365a3e04f9070b8a3909aae88d4850501cbb447cfb8cef2090a5034dd07178
+    containerImage: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:9e11b26064e62a07146fa3269198dd66439425972284d497816795f75ffb36db
     description: InstaSlice works with GPU operator to create mig slices on demand
     features.operators.openshift.io/cnf: "false"				
     features.operators.openshift.io/cni: "false"				
