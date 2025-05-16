@@ -15,7 +15,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: controller-manager
-  namespace: system
+  namespace: instaslice-system
   labels:
     control-plane: controller-manager
     app.kubernetes.io/name: deployment

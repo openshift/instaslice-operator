@@ -181,21 +181,17 @@ cleanup-test-e2e-ocp-emulated: ocp-undeploy-emulated
 test-e2e-ocp: wait-for-instaslice-operator-stable
 test-e2e-ocp: export EMULATOR_MODE=false
 test-e2e-ocp: export AUTO_LABEL_MANAGED_NODES=true
+test-e2e-ocp: export KUBECTL_BIN=oc
 test-e2e-ocp:
 	$(eval FOCUS_ARG := $(if $(FOCUS),--focus="$(FOCUS)"))
-	ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m $(FOCUS_ARG) ./test/e2e
+	go run github.com/onsi/ginkgo/v2/ginkgo -v --json-report=report.json --junit-report=report.xml --timeout 20m $(FOCUS_ARG) ./test/e2e
 
 PHONY: cleanup-test-e2e-ocp
 cleanup-test-e2e-ocp: KUBECTL=oc
 cleanup-test-e2e-ocp: ocp-undeploy
 
 wait-for-instaslice-operator-stable:
-	@echo "---- Waiting for instaslice-operator stable state ----"
-	oc wait --for=condition=Available deployment/instaslice-operator-controller-manager \
-		-n instaslice-system --timeout=120s || $(MAKE) test-e2e-debug-instaslice
-	oc rollout status daemonset/instaslice-operator-controller-daemonset \
-		-n instaslice-system --timeout=120s || $(MAKE) test-e2e-debug-instaslice
-	@echo "---- /Waiting for instaslice-operator stable state ----"
+	hack/wait-for-instaslice.sh
 .PHONY: wait-for-instaslice-operator-stable
 
 test-e2e-debug-instaslice:
@@ -425,7 +421,7 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v5.3.0
+KUSTOMIZE_VERSION ?= v5.6.0
 CONTROLLER_TOOLS_VERSION ?= v0.16.4
 
 .PHONY: kustomize
@@ -475,16 +471,16 @@ bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metada
 .PHONY: bundle-ocp
 bundle-ocp: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
 	# $(OPERATOR_SDK) generate kustomize manifests --output-dir config/manifests-ocp -q ## stomps on custom csv
-	cd config/manager-ocp && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp | sed -e "s|<IMG>|$(IMG)|g" | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS) --output-dir bundle-ocp --overwrite=false
-	$(OPERATOR_SDK) bundle validate ./bundle-ocp
+	#cd config/manager-ocp && $(KUSTOMIZE) edit set image controller=$(IMG)
+	rm -rf bundle-ocp/manifests && mkdir bundle-ocp/manifests
+	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp -o bundle-ocp/manifests/kustomize.yaml
 
 .PHONY: bundle-ocp-emulated
 bundle-ocp-emulated: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
 	# $(OPERATOR_SDK) generate kustomize manifests --output-dir config/manifests-ocp-emulated -q  ## stomps on custom csv
-	cd config/manager-ocp && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp-emulated | sed -e "s|<IMG>|$(IMG)|g" | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS) --output-dir bundle-ocp --overwrite=false
-	$(OPERATOR_SDK) bundle validate ./bundle-ocp
+	#cd config/manager-ocp && $(KUSTOMIZE) edit set image controller=$(IMG)
+	rm -rf bundle-ocp/manifests && mkdir bundle-ocp/manifests
+	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp-emulated -o bundle-ocp/manifests/kustomize.yaml
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.

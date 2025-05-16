@@ -21,7 +21,6 @@ metadata:
     repository: https://github.com/openshift/instaslice-operator
     support: https://github.com/openshift/instaslice-operator/issues
   name: instaslice-operator.v0.0.0
-  namespace: placeholder
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:

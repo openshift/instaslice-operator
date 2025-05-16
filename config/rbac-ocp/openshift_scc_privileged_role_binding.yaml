@@ -1,12 +1,12 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: use-scc-instaslice-operator
+  name: system:openshift:scc:privileged
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:privileged
 subjects:
 - kind: ServiceAccount
   name: controller-manager
   namespace: instaslice-system
-roleRef:
-  kind: ClusterRole
-  name: cluster-role
-  apiGroup: rbac.authorization.k8s.io
