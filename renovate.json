@@ -40,6 +40,6 @@
     ]
   },
   "gomod": {
-    "enabled": true
+    "enabled": false
   }
 }
