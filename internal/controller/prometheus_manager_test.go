@@ -67,7 +67,6 @@ var _ = Describe("Instaslice Controller Metrics", func() {
 							Namespace: InstaSliceOperatorNamespace,
 							UID:       pod.UID,
 						},
-						Resources: v1.ResourceRequirements{},
 					},
 				},
 			},

@@ -2,7 +2,6 @@ package utils
 
 import (
 	"github.com/openshift/instaslice-operator/api/v1alpha1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -107,10 +106,6 @@ func GenerateFakeCapacity(nodeName string) *v1alpha1.Instaslice {
 							{Size: 2, Start: 6},
 						},
 					},
-				},
-				NodeResources: v1.ResourceList{
-					v1.ResourceCPU:    resource.MustParse("72"),
-					v1.ResourceMemory: resource.MustParse("1000000000"),
 				},
 				BootID: "fake-boot-id",
 			},

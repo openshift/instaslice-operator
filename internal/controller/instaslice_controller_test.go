@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
+	"github.com/openshift/instaslice-operator/internal/controller/cache"
 	"github.com/openshift/instaslice-operator/internal/controller/config"
 	"github.com/openshift/instaslice-operator/internal/controller/utils"
 )
@@ -327,7 +328,6 @@ func TestChangesAllocationDeletionAndFinalizer(t *testing.T) {
 								Namespace: InstaSliceOperatorNamespace,
 								UID:       pod.UID,
 							},
-							Resources: v1.ResourceRequirements{},
 						},
 					},
 				},
@@ -484,7 +484,6 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 								Namespace: InstaSliceOperatorNamespace,
 								UID:       pod.UID,
 							},
-							Resources: v1.ResourceRequirements{},
 						},
 					},
 				},
@@ -976,7 +975,9 @@ func TestInstasliceReconciler_Reconcile(t *testing.T) {
 
 			cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pod, node, instaslice).Build()
 
-			r := &InstasliceReconciler{Client: cl, Config: config.ConfigFromEnvironment()}
+			cache := cache.NewResourceCache()
+
+			r := &InstasliceReconciler{Client: cl, Config: config.ConfigFromEnvironment(), ResourceCache: cache}
 			req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pod-noalloc", Namespace: InstaSliceOperatorNamespace}}
 			result, err := r.Reconcile(ctx, req)
 			Expect(err).NotTo(HaveOccurred())
@@ -1198,7 +1199,6 @@ func TestFirstFitPolicy_SetAllocationDetails(t *testing.T) {
 				tt.args.podName,
 				tt.args.gpuUuid,
 				tt.args.resourceIdentifier,
-				tt.args.availableClassicalResources,
 			)
 
 			assert.Equalf(
@@ -1208,7 +1208,7 @@ func TestFirstFitPolicy_SetAllocationDetails(t *testing.T) {
 				"AllocationResult(%v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v)",
 				tt.args.profileName, tt.args.newStart, tt.args.size, tt.args.podUUID, tt.args.nodename, tt.args.allocationStatus,
 				tt.args.discoveredGiprofile, tt.args.Ciprofileid, tt.args.Ciengprofileid, tt.args.namespace,
-				tt.args.podName, tt.args.gpuUuid, tt.args.resourceIdentifier, tt.args.availableClassicalResources,
+				tt.args.podName, tt.args.gpuUuid, tt.args.resourceIdentifier,
 			)
 		})
 	}
@@ -1499,7 +1499,6 @@ var _ = Describe("Metrics Incrementation", func() {
 							Namespace: InstaSliceOperatorNamespace,
 							UID:       pod.UID,
 						},
-						Resources: v1.ResourceRequirements{},
 					},
 				},
 			},

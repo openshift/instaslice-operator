@@ -31,6 +31,7 @@ import (
 
 	mfc "github.com/manifestival/controller-runtime-client"
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
+	rcache "github.com/openshift/instaslice-operator/internal/controller/cache"
 	"github.com/openshift/instaslice-operator/internal/controller/config"
 	mf "github.com/openshift/instaslice-operator/internal/controller/manifests"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -38,7 +39,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -67,14 +67,14 @@ type InstasliceReconciler struct {
 	allocationCache    map[types.UID]inferencev1alpha1.AllocationResult
 	isCacheInitialized bool
 	// Optional override for testing
-	createDSFn func(namespace string) *appsv1.DaemonSet
+	createDSFn    func(namespace string) *appsv1.DaemonSet
+	ResourceCache *rcache.ResourceCache
 }
 
 // AllocationPolicy interface with a single method
 type AllocationPolicy interface {
 	SetAllocationDetails(profileName string, newStart, size int32, podUUID types.UID, nodename types.NodeName, allocationStatus inferencev1alpha1.AllocationStatus,
-		discoveredGiprofile int32, Ciprofileid int32, Ciengprofileid int32, namespace string, podName string, gpuUuid string, resourceIndetifier types.UID,
-		nodeResourceList v1.ResourceList) (*inferencev1alpha1.AllocationRequest, *inferencev1alpha1.AllocationResult)
+		discoveredGiprofile int32, Ciprofileid int32, Ciengprofileid int32, namespace string, podName string, gpuUuid string, resourceIndetifier types.UID) (*inferencev1alpha1.AllocationRequest, *inferencev1alpha1.AllocationResult)
 }
 
 // not implemented
@@ -915,16 +915,9 @@ func (r *InstasliceReconciler) removeInstaSliceFinalizer(ctx context.Context, re
 // Policy based allocation - FirstFit
 func (r *FirstFitPolicy) SetAllocationDetails(profileName string, newStart, size int32, podUUID types.UID, nodename types.NodeName,
 	allocationStatus inferencev1alpha1.AllocationStatus, discoveredGiprofile int32, Ciprofileid int32, Ciengprofileid int32,
-	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID, availableResourceList v1.ResourceList,
-) (*inferencev1alpha1.AllocationRequest, *inferencev1alpha1.AllocationResult) {
+	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID) (*inferencev1alpha1.AllocationRequest, *inferencev1alpha1.AllocationResult) {
 	return &inferencev1alpha1.AllocationRequest{
 			Profile: profileName,
-			Resources: v1.ResourceRequirements{
-				Requests: map[v1.ResourceName]resource.Quantity{
-					v1.ResourceCPU:    *availableResourceList.Cpu(),
-					v1.ResourceMemory: *availableResourceList.Memory(),
-				},
-			},
 			PodRef: v1.ObjectReference{
 				Kind:      "Pod",
 				Namespace: namespace,
@@ -947,8 +940,7 @@ func (r *FirstFitPolicy) SetAllocationDetails(profileName string, newStart, size
 // Policy based allocation - LeftToRIght
 func (l *LeftToRightPolicy) SetAllocationDetails(profileName string, newStart, size int32, podUUID types.UID, nodename types.NodeName,
 	allocationStatus inferencev1alpha1.AllocationStatus, discoveredGiprofile int32, Ciprofileid int32, Ciengprofileid int32,
-	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID, availableResourceList v1.ResourceList,
-) *inferencev1alpha1.AllocationRequest {
+	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID) *inferencev1alpha1.AllocationRequest {
 	// Implement the left-to-right policy here
 	return &inferencev1alpha1.AllocationRequest{}
 }
@@ -956,8 +948,7 @@ func (l *LeftToRightPolicy) SetAllocationDetails(profileName string, newStart, s
 // Policy based allocation - RigghToLeft
 func (l *RightToLeftPolicy) SetAllocationDetails(profileName string, newStart, size int32, podUUID types.UID, nodename types.NodeName,
 	allocationStatus inferencev1alpha1.AllocationStatus, discoveredGiprofile int32, Ciprofileid int32, Ciengprofileid int32,
-	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID, availableResourceList v1.ResourceList,
-) *inferencev1alpha1.AllocationRequest {
+	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID) *inferencev1alpha1.AllocationRequest {
 	// Implement the left-to-right policy here
 	return &inferencev1alpha1.AllocationRequest{}
 }

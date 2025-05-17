@@ -41,10 +41,6 @@ type AllocationRequest struct {
 	// +optional
 	Profile string `json:"profile"`
 
-	// resources specifies resource requirements for the allocation
-	// +optional
-	Resources corev1.ResourceRequirements `json:"resources"`
-
 	// podRef is a reference to the gated Pod requesting the allocation
 	// +optional
 	PodRef corev1.ObjectReference `json:"podRef"`
@@ -111,10 +107,6 @@ type DiscoveredNodeResources struct {
 	// migPlacement represents GPU instance, compute instance with placement for a profile
 	// +required
 	MigPlacement map[string]Mig `json:"migPlacement"`
-
-	// nodeResources represents the resource list of the node at boot time
-	// +required
-	NodeResources corev1.ResourceList `json:"nodeResources"`
 
 	// bootId represents the current boot id of the node
 	// +kubebuilder:validation:Required
