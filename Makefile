@@ -267,8 +267,7 @@ deploy-instaslice-emulated-on-kind:
 
 .PHONY: deploy-instaslice-on-ocp
 deploy-instaslice-on-ocp:
-	oc new-project instaslice-system
-	operator-sdk run bundle ${BUNDLE_IMG} -n instaslice-system
+	oc apply -f bundle-ocp/manifests/kustomize.yaml
 
 .PHONY: undeploy-instaslice-on-ocp
 undeploy-instaslice-on-ocp:
@@ -471,16 +470,22 @@ bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metada
 .PHONY: bundle-ocp
 bundle-ocp: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
 	# $(OPERATOR_SDK) generate kustomize manifests --output-dir config/manifests-ocp -q ## stomps on custom csv
-	#cd config/manager-ocp && $(KUSTOMIZE) edit set image controller=$(IMG)
 	rm -rf bundle-ocp/manifests && mkdir bundle-ocp/manifests
-	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp -o bundle-ocp/manifests/kustomize.yaml
+ifdef $(IMG)
+	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp  > bundle-ocp/manifests/kustomize.yaml
+else
+	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp | sed -e "s|containerImage: .*|containerImage: $(IMG)|g" | sed -e "s|value: .*instaslice-daemonset-rhel9.*|value: $(IMG_DMST)|g" > bundle-ocp/manifests/kustomize.yaml
+endif
 
 .PHONY: bundle-ocp-emulated
 bundle-ocp-emulated: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
 	# $(OPERATOR_SDK) generate kustomize manifests --output-dir config/manifests-ocp-emulated -q  ## stomps on custom csv
-	#cd config/manager-ocp && $(KUSTOMIZE) edit set image controller=$(IMG)
 	rm -rf bundle-ocp/manifests && mkdir bundle-ocp/manifests
-	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp-emulated -o bundle-ocp/manifests/kustomize.yaml
+ifdef $(IMG)
+	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp-emulated  > bundle-ocp/manifests/kustomize.yaml
+else
+	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp-emulated | sed -e "s|containerImage: .*|containerImage: $(IMG)|g" | sed -e "s|value: .*instaslice-daemonset-rhel9.*|value: $(IMG_DMST)|g" > bundle-ocp/manifests/kustomize.yaml
+endif
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
