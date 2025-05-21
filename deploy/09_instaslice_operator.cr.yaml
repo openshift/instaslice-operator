@@ -1,0 +1,10 @@
+apiVersion: inference.redhat.com/v1alpha1
+kind: InstasliceOperator
+metadata:
+  name: cluster
+  namespace: instaslice-system
+spec:
+  managementState: Managed
+  logLevel: Normal
+  operatorLogLevel: Normal
+  emulatedMode: false

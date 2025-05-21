@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: instaslice-operator-operand
+  namespace: instaslice-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: instaslice-operator-operand
+subjects:
+  - kind: ServiceAccount
+    name: instaslice-operator-operand
+    namespace: instaslice-system
