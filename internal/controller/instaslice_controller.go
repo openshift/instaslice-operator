@@ -766,6 +766,7 @@ func (r *InstasliceReconciler) createInstaSliceDaemonSet(namespace string) *apps
 							SecurityContext: &v1.SecurityContext{
 								AllowPrivilegeEscalation: func(b bool) *bool { return &b }(true),
 								Privileged:               func(b bool) *bool { return &b }(true),
+								ReadOnlyRootFilesystem:   func(b bool) *bool { return &b }(true),
 								Capabilities: &v1.Capabilities{
 									Add: []v1.Capability{"ALL"},
 								},
