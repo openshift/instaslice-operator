@@ -14,4 +14,4 @@ fsGroup:
   type: RunAsAny
 supplementalGroups:
   type: RunAsAny
-readOnlyRootFilesystem: false
+readOnlyRootFilesystem: true
