@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: webhook
+    app.kubernetes.io/created-by: instaslice-operator
+    app.kubernetes.io/instance: webhook-service
+    app.kubernetes.io/managed-by: instaslice-operator
+    app.kubernetes.io/name: instaslice-operator-webhook
+    app.kubernetes.io/part-of: instaslice-operator
+  name: instaslice-operator-webhook
+  namespace: instaslice-system
+spec:
+  selector:
+    app.kubernetes.io/name: instaslice-operator-webhook
+  ports:
+  - port: 8443
+    protocol: TCP
+    targetPort: 8443

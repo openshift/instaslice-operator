@@ -1,0 +1,37 @@
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.23 AS build
+
+WORKDIR /workspace
+
+COPY . .
+RUN GO_BUILD_PACKAGES=./cmd/instaslice-daemonset make
+
+FROM nvcr.io/nvidia/cuda:12.8.0-base-ubi9
+
+ENV NVIDIA_DISABLE_REQUIRE="true"
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+WORKDIR /
+
+COPY --from=build /workspace/instaslice-daemonset /usr/bin
+
+ARG NAME=instaslice-daemonset
+ARG DESCRIPTION="The Instaslice daemonset."
+
+LABEL com.redhat.component=$NAME
+LABEL description=$DESCRIPTION
+LABEL io.k8s.description=$DESCRIPTION
+LABEL io.k8s.display-name=$NAME
+LABEL name=$NAME
+LABEL summary=$DESCRIPTION
+LABEL distribution-scope=public
+LABEL release="1"
+LABEL url="https://access.redhat.com/"
+LABEL vendor="Red Hat, Inc."
+LABEL version="1"
+LABEL maintainer="Red Hat"
+
+LABEL io.openshift.tags=""
+# Licenses
+
+COPY LICENSE /licenses/LICENSE

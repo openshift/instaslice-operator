@@ -1,7 +1,0 @@
-# Only people with access to suitable GPUs and willing to test changes should be on this list.
-approvers:
-- harche
-- asm582
-
-options:
-  no_parent_owners: true
