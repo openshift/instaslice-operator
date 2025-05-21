@@ -4,6 +4,7 @@ all: build
 SOURCE_GIT_TAG ?=$(shell git describe --long --tags --abbrev=7 --match 'v[0-9]*' || echo 'v1.0.0-$(SOURCE_GIT_COMMIT)')
 SOURCE_GIT_COMMIT ?=$(shell git rev-parse --short "HEAD^{commit}" 2>/dev/null)
 IMAGE_TAG ?= latest
+REGISTRY ?= quay.io/some.user
 
 # OS_GIT_VERSION is populated by ART
 # If building out of the ART pipeline, fallback to SOURCE_GIT_TAG
@@ -55,6 +56,14 @@ regen-crd:
 	mv manifests/inference.redhat.com_instasliceoperators.yaml manifests/instaslice-operator.crd.yaml
 	cp manifests/instaslice-operator.crd.yaml deploy/00_instaslice-operator.crd.yaml
 	cp manifests/inference.redhat.com_instaslices.yaml deploy/00_instaslices.crd.yaml
+
+build-images:
+	podman build -f Dockerfile.ocp -t ${REGISTRY}/instaslice-operator:${IMAGE_TAG} .
+	podman push ${REGISTRY}/instaslice-operator:${IMAGE_TAG}
+	podman build -f Dockerfile.daemonset.ocp -t ${REGISTRY}/instaslice-daemonset:${IMAGE_TAG} .
+	podman push ${REGISTRY}/instaslice-daemonset:${IMAGE_TAG}
+	podman build -f Dockerfile.webhook.ocp -t ${REGISTRY}/instaslice-webhook:${IMAGE_TAG} .
+	podman push ${REGISTRY}/instaslice-webhook:${IMAGE_TAG}
 
 generate: regen-crd generate-clients
 .PHONY: generate
