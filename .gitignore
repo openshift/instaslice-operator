@@ -31,3 +31,7 @@ go.work.sum
 # ginkgo reports
 report.json
 report.xml
+
+instaslice-daemonset
+instaslice-operator
+instaslice-webhook

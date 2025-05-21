@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    cert-manager.io/inject-ca-from: $(CERTIFICATE_NAMESPACE)/$(CERTIFICATE_NAME)
+  labels:
+    app.kubernetes.io/managed-by: instaslice-operator
+    app.kubernetes.io/name: instaslice-operator-webhook
+    app.kubernetes.io/part-of: instaslice-operator
+    app.kubernetes.io/version: 0.0.1
+  name: instaslice-operator-webhook
+  namespace: instaslice-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: instaslice-operator-webhook
+      app.kubernetes.io/part-of: instaslice-operator
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: instaslice-operator-webhook
+        openshift.io/required-scc: restricted-v2
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        app.kubernetes.io/managed-by: instaslice-operator
+        app.kubernetes.io/name: instaslice-operator-webhook
+        app.kubernetes.io/part-of: instaslice-operator
+        app.kubernetes.io/version: 0.0.1
+    spec:
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/part-of: instalice-operator
+            weight: 100
+      automountServiceAccountToken: false
+      containers:
+      - command:
+          - /usr/bin/instaslice-webhook
+        args:
+          - serve
+          - --tls=true
+          - --tlskey=/tmp/k8s-webhook-server/serving-certs/tls.key
+          - --tlscert=/tmp/k8s-webhook-server/serving-certs/tls.crt
+          - --cacert=/tmp/k8s-webhook-server/serving-certs/ca.crt
+        image: quay.io/ryan.phillips/instaslice-webhook
+        name: instaslice-operator-webhook
+        livenessProbe:
+          httpGet:
+            scheme: HTTPS
+            path: /healthz
+            port: https
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            scheme: HTTPS
+            path: /readyz
+            port: https
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        ports:
+        - containerPort: 8443
+          name: https
+        resources:
+          requests:
+            cpu: 5m
+            memory: 30Mi
+        securityContext: {}
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: cert
+          readOnly: true
+      priorityClassName: system-cluster-critical
+      securityContext: {}
+      serviceAccountName: instaslice-operator
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: webhook-server-cert

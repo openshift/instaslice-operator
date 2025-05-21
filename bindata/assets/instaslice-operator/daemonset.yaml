@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: instaslice-daemonset
+  namespace: instaslice-system
+  labels:
+    k8s-app: instaslice-daemonset
+spec:
+  selector:
+    matchLabels:
+      name: instaslice-daemonset
+  template:
+    metadata:
+      labels:
+        name: instaslice-daemonset
+    spec:
+      nodeSelector:
+        nvidia.com/mig.capable: "true"
+      securityContext:
+        runAsNonRoot: false
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: instaslice-operator
+      containers:
+      - name: instaslice-daemonset
+        securityContext:
+          allowPrivilegeEscalation: true
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop: [ "ALL" ]
+        image: quay.io/ryan.phillips/instaslice-daemonset
+        command:
+          - /usr/bin/instaslice-daemonset
+        args:
+          - "daemonset"
+        volumeMounts:
+          - name: tmp
+            mountPath: "/tmp"
+        env:
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: EMULATED_MODE
+            value: "false"
+          - name: NVIDIA_MIG_CONFIG_DEVICES
+            value: "all"
+      volumes:
+        - name: tmp
+          emptyDir: {}

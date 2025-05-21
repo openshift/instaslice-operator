@@ -2,15 +2,15 @@ FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.23 AS bui
 
 WORKDIR /workspace
 COPY . .
-RUN GO_BUILD_PACKAGES=./cmd/instaslice-operator make
+RUN GO_BUILD_PACKAGES=./cmd/instaslice-webhook make
 
 FROM registry.redhat.io/rhel9-4-els/rhel-minimal:9.4
 WORKDIR /
-COPY --from=build /workspace/instaslice-operator /usr/bin
+COPY --from=build /workspace/instaslice-webhook /usr/bin
 USER 65532:65532
 
-ARG NAME=instaslice-operator
-ARG DESCRIPTION="The Instaslice operator."
+ARG NAME=instaslice-webhook
+ARG DESCRIPTION="The Instaslice webhook."
 
 LABEL com.redhat.component=$NAME
 LABEL description=$DESCRIPTION
