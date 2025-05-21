@@ -55,6 +55,8 @@ endif
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
 OPERATOR_SDK_VERSION ?= v1.34.1
 
+OVERRIDE_IMAGE ?= false
+
 # Image URL to use all building/pushing image targets
 IMG ?= $(IMAGE_TAG_BASE)-controller:$(IMG_TAG)
 IMG_DMST ?= $(IMAGE_TAG_BASE)-daemonset:$(IMG_TAG)
@@ -267,8 +269,7 @@ deploy-instaslice-emulated-on-kind:
 
 .PHONY: deploy-instaslice-on-ocp
 deploy-instaslice-on-ocp:
-	oc new-project instaslice-system
-	operator-sdk run bundle ${BUNDLE_IMG} -n instaslice-system
+	oc apply -f bundle-ocp/manifests/kustomize.yaml || true
 
 .PHONY: undeploy-instaslice-on-ocp
 undeploy-instaslice-on-ocp:
@@ -373,6 +374,7 @@ deploy-dry-run: manifests kustomize ## Perform a dry-run deployment and save out
 	$(KUSTOMIZE) build config/$(KUSTOMIZATION) | sed -e "s|<IMG_DMST>|$(IMG_DMST)|g" | $(KUBECTL) apply --dry-run=client -f - > deploy-dry-run.yaml
 
 .PHONY: ocp-deploy
+ocp-deploy: OVERRIDE_IMAGE=true
 ocp-deploy: container-build-ocp docker-push bundle-ocp bundle-build-ocp bundle-push deploy-instaslice-on-ocp
 
 .PHONY: deploy-emulated ## Deploy controller in emulator mode
@@ -471,16 +473,22 @@ bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metada
 .PHONY: bundle-ocp
 bundle-ocp: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
 	# $(OPERATOR_SDK) generate kustomize manifests --output-dir config/manifests-ocp -q ## stomps on custom csv
-	#cd config/manager-ocp && $(KUSTOMIZE) edit set image controller=$(IMG)
 	rm -rf bundle-ocp/manifests && mkdir bundle-ocp/manifests
-	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp -o bundle-ocp/manifests/kustomize.yaml
+	if [ $(OVERRIDE_IMAGE) = true ]; then \
+		$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp | sed -e "s|containerImage: .*|containerImage: $(IMG)|g" |sed -e "s|image:.*instaslice-rhel9-operator.*|image: $(IMG)|g" | sed -e "s|value: .*instaslice-daemonset-rhel9.*|value: $(IMG_DMST)|g" > bundle-ocp/manifests/kustomize.yaml ;\
+	else \
+		$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp > bundle-ocp/manifests/kustomize.yaml ;\
+	fi
 
 .PHONY: bundle-ocp-emulated
 bundle-ocp-emulated: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
 	# $(OPERATOR_SDK) generate kustomize manifests --output-dir config/manifests-ocp-emulated -q  ## stomps on custom csv
-	#cd config/manager-ocp && $(KUSTOMIZE) edit set image controller=$(IMG)
 	rm -rf bundle-ocp/manifests && mkdir bundle-ocp/manifests
-	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp-emulated -o bundle-ocp/manifests/kustomize.yaml
+	if [ $(OVERRIDE_IMAGE) = true ]; then \
+		$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp-emulated | sed -e "s|containerImage: .*|containerImage: $(IMG)|g" |sed -e "s|image:.*instaslice-rhel9-operator.*|image: $(IMG)|g" | sed -e "s|value: .*instaslice-daemonset-rhel9.*|value: $(IMG_DMST)|g" > bundle-ocp/manifests/kustomize.yaml ;\
+	else \
+		$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/manifests-ocp-emulated  > bundle-ocp/manifests/kustomize.yaml ;
+	fi
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
