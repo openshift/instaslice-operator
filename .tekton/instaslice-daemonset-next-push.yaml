@@ -25,7 +25,7 @@ spec:
   - name: output-image
     value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset-next:{{revision}}
   - name: dockerfile
-    value: Dockerfile.deamonset.ocp
+    value: Dockerfile.daemonset.ocp
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.
