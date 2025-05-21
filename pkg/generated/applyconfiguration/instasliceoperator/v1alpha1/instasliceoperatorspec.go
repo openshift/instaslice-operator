@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 	v1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
+	instasliceoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -26,7 +27,7 @@ import (
 // with apply.
 type InstasliceOperatorSpecApplyConfiguration struct {
 	v1.OperatorSpecApplyConfiguration `json:",inline"`
-	EmulatedMode                      *bool `json:"emulatedMode,omitempty"`
+	EmulatedMode                      *instasliceoperatorv1alpha1.EmulatedMode `json:"emulatedMode,omitempty"`
 }
 
 // InstasliceOperatorSpecApplyConfiguration constructs a declarative configuration of the InstasliceOperatorSpec type for use with
@@ -78,7 +79,7 @@ func (b *InstasliceOperatorSpecApplyConfiguration) WithObservedConfig(value runt
 // WithEmulatedMode sets the EmulatedMode field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the EmulatedMode field is set to the value of the last call.
-func (b *InstasliceOperatorSpecApplyConfiguration) WithEmulatedMode(value bool) *InstasliceOperatorSpecApplyConfiguration {
+func (b *InstasliceOperatorSpecApplyConfiguration) WithEmulatedMode(value instasliceoperatorv1alpha1.EmulatedMode) *InstasliceOperatorSpecApplyConfiguration {
 	b.EmulatedMode = &value
 	return b
 }
