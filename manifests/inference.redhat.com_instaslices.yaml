@@ -1,0 +1,449 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.2
+  name: instaslices.inference.redhat.com
+spec:
+  group: inference.redhat.com
+  names:
+    kind: Instaslice
+    listKind: InstasliceList
+    plural: instaslices
+    singular: instaslice
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Instaslice is the Schema for the instaslices API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec specifies the GPU slice requirements by workload pods
+            properties:
+              podAllocationRequests:
+                additionalProperties:
+                  properties:
+                    podRef:
+                      description: podRef is a reference to the gated Pod requesting
+                        the allocation
+                      properties:
+                        apiVersion:
+                          description: API version of the referent.
+                          type: string
+                        fieldPath:
+                          description: |-
+                            If referring to a piece of an object instead of an entire object, this string
+                            should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                            For example, if the object reference is to a container within a pod, this would take on a value like:
+                            "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                            the event) or if no container name is specified "spec.containers[2]" (container with
+                            index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                            referencing a part of an object.
+                          type: string
+                        kind:
+                          description: |-
+                            Kind of the referent.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                          type: string
+                        name:
+                          description: |-
+                            Name of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                          type: string
+                        resourceVersion:
+                          description: |-
+                            Specific resourceVersion to which this reference is made, if any.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                          type: string
+                        uid:
+                          description: |-
+                            UID of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    profile:
+                      description: profile specifies the MIG slice profile for allocation
+                      type: string
+                    resources:
+                      description: resources specifies resource requirements for the
+                        allocation
+                      properties:
+                        claims:
+                          description: |-
+                            Claims lists the names of resources, defined in spec.resourceClaims,
+                            that are used by this container.
+
+                            This is an alpha field and requires enabling the
+                            DynamicResourceAllocation feature gate.
+
+                            This field is immutable. It can only be set for containers.
+                          items:
+                            description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                            properties:
+                              name:
+                                description: |-
+                                  Name must match the name of one entry in pod.spec.resourceClaims of
+                                  the Pod where this field is used. It makes that resource available
+                                  inside a container.
+                                type: string
+                              request:
+                                description: |-
+                                  Request is the name chosen for a request in the referenced claim.
+                                  If empty, everything from the claim is made available, otherwise
+                                  only the result of this request.
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          type: array
+                          x-kubernetes-list-map-keys:
+                          - name
+                          x-kubernetes-list-type: map
+                        limits:
+                          additionalProperties:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          description: |-
+                            Limits describes the maximum amount of compute resources allowed.
+                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                          type: object
+                        requests:
+                          additionalProperties:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          description: |-
+                            Requests describes the minimum amount of compute resources required.
+                            If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                            otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                          type: object
+                      type: object
+                  type: object
+                description: podAllocationRequests specifies the allocation requests
+                  per pod
+                type: object
+            type: object
+          status:
+            description: status provides the information about provisioned allocations
+              and health of the instaslice object
+            properties:
+              conditions:
+                description: |-
+                  conditions represent the observed state of the Instaslice object
+                  For example:
+                    conditions:
+                    - type: Ready
+                      status: "True"
+                      lastTransitionTime: "2025-01-22T12:34:56Z"
+                      reason: "GPUsAccessible"
+                      message: "All discovered GPUs are accessible and the driver is healthy."
+
+                  Or, in an error scenario (driver not responding):
+                    conditions:
+                    - type: Ready
+                      status: "False"
+                      lastTransitionTime: "2025-01-22T12:34:56Z"
+                      reason: "DriverError"
+                      message: "Could not communicate with the GPU driver on the node."
+                  kubebuilder:validation:Optional
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              nodeResources:
+                description: nodeResources specifies the discovered resources of the
+                  node
+                properties:
+                  migPlacement:
+                    additionalProperties:
+                      properties:
+                        ciEngProfileId:
+                          description: ciEngProfileId provides the compute instance
+                            engineering ID of a profile
+                          format: int32
+                          type: integer
+                        ciProfileId:
+                          description: ciProfileId provides the compute instance ID
+                            of a profile
+                          format: int32
+                          type: integer
+                        giProfileId:
+                          description: giProfileId provides the GPU instance ID of
+                            a profile
+                          format: int32
+                          type: integer
+                        placements:
+                          description: placements specify vendor profile indexes and
+                            sizes
+                          items:
+                            properties:
+                              size:
+                                description: size represents slots consumed by a profile
+                                  on GPU
+                                format: int32
+                                type: integer
+                              start:
+                                description: start represents the starting index driven
+                                  by size for a profile
+                                format: int32
+                                type: integer
+                            required:
+                            - size
+                            - start
+                            type: object
+                          type: array
+                      required:
+                      - ciProfileId
+                      - giProfileId
+                      - placements
+                      type: object
+                    description: migPlacement represents GPU instance, compute instance
+                      with placement for a profile
+                    type: object
+                  nodeGpus:
+                    description: nodeGpus represents the discovered mig enabled GPUs
+                      on the node
+                    items:
+                      properties:
+                        gpuMemory:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          description: gpuMemory represents the memory capacity of
+                            the GPU
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        gpuName:
+                          description: gpuName represents the name of the GPU
+                          type: string
+                        gpuUuid:
+                          description: gpuUuid represents the UUID of the GPU
+                          type: string
+                      required:
+                      - gpuMemory
+                      - gpuName
+                      - gpuUuid
+                      type: object
+                    type: array
+                  nodeResources:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: nodeResources represents the resource list of the
+                      node at boot time
+                    type: object
+                required:
+                - migPlacement
+                - nodeGpus
+                - nodeResources
+                type: object
+              podAllocationResults:
+                additionalProperties:
+                  properties:
+                    allocationStatus:
+                      description: allocationStatus represents the current status
+                        of the allocation
+                      properties:
+                        allocationStatusController:
+                          description: allocationStatusDaemonset represents the current
+                            status of the allocation from the Controller's perspective
+                          type: string
+                        allocationStatusDaemonset:
+                          description: allocationStatusDaemonset represents the current
+                            status of the allocation from the DaemonSet's perspective
+                          type: string
+                      type: object
+                    conditions:
+                      description: conditions provide additional information about
+                        the allocation
+                      items:
+                        description: Condition contains details for one aspect of
+                          the current state of this API Resource.
+                        properties:
+                          lastTransitionTime:
+                            description: |-
+                              lastTransitionTime is the last time the condition transitioned from one status to another.
+                              This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                            format: date-time
+                            type: string
+                          message:
+                            description: |-
+                              message is a human readable message indicating details about the transition.
+                              This may be an empty string.
+                            maxLength: 32768
+                            type: string
+                          observedGeneration:
+                            description: |-
+                              observedGeneration represents the .metadata.generation that the condition was set based upon.
+                              For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                              with respect to the current state of the instance.
+                            format: int64
+                            minimum: 0
+                            type: integer
+                          reason:
+                            description: |-
+                              reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                              Producers of specific condition types may define expected values and meanings for this field,
+                              and whether the values are considered a guaranteed API.
+                              The value should be a CamelCase string.
+                              This field may not be empty.
+                            maxLength: 1024
+                            minLength: 1
+                            pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                            type: string
+                          status:
+                            description: status of the condition, one of True, False,
+                              Unknown.
+                            enum:
+                            - "True"
+                            - "False"
+                            - Unknown
+                            type: string
+                          type:
+                            description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                            maxLength: 316
+                            pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                            type: string
+                        required:
+                        - lastTransitionTime
+                        - message
+                        - reason
+                        - status
+                        - type
+                        type: object
+                      type: array
+                      x-kubernetes-list-map-keys:
+                      - type
+                      x-kubernetes-list-type: map
+                    configMapResourceIdentifier:
+                      description: configMapResourceIdentifier represents the UUID
+                        used for creating the ConfigMap resource
+                      type: string
+                    gpuUUID:
+                      description: gpuUUID represents the UUID of the selected GPU
+                      type: string
+                    migPlacement:
+                      description: migPlacement specifies the MIG placement details
+                      properties:
+                        size:
+                          description: size represents slots consumed by a profile
+                            on GPU
+                          format: int32
+                          type: integer
+                        start:
+                          description: start represents the starting index driven
+                            by size for a profile
+                          format: int32
+                          type: integer
+                      required:
+                      - size
+                      - start
+                      type: object
+                    nodename:
+                      description: nodename represents the name of the selected node
+                      type: string
+                  required:
+                  - allocationStatus
+                  - configMapResourceIdentifier
+                  - gpuUUID
+                  - migPlacement
+                  - nodename
+                  type: object
+                description: |-
+                  PodAllocationResults specify the allocation results per pod
+                  kubebuilder:validation:Optional
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
