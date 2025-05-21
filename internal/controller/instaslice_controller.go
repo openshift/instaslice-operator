@@ -127,11 +127,12 @@ func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
-	managed := node.Labels[managedLabel] == InstasliceManagedTrue
+	instasliceKey := types.NamespacedName{Namespace: InstaSliceOperatorNamespace, Name: node.Name}
+	managed := node.Labels[ManagedLabel] == InstasliceManagedTrue
+
 	if !managed {
 		logger.Info("Node not managed by InstaSlice, cleaning up")
 		instaslice := &inferencev1alpha1.Instaslice{}
-		instasliceKey := types.NamespacedName{Namespace: InstaSliceOperatorNamespace, Name: node.Name}
 		if err := r.Get(ctx, instasliceKey, instaslice); err != nil {
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
@@ -143,8 +144,19 @@ func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 			return ctrl.Result{}, fmt.Errorf("failed to clean up resources for unmanaged node %s: %w", node.Name, err)
 		}
 		logger.Info("Cleaned up instaslice extended resources for unmanaged node")
+		return ctrl.Result{}, nil
 	}
 
+	// Do not create Instaslice CR here; rely on DaemonSet to handle CR creation.
+	logger.Info("Node is managed by instaslice, waiting for DaemonSet to reconcile CR if necessary")
+	instaslice := &inferencev1alpha1.Instaslice{}
+	if err := r.Get(ctx, instasliceKey, instaslice); err == nil {
+		logger.Info("Instaslice CR was created for managed node", "name", instaslice.Name)
+	} else if errors.IsNotFound(err) {
+		logger.Info("Instaslice CR does not yet exist for managed node, waiting for DaemonSet to create")
+	} else {
+		return ctrl.Result{}, fmt.Errorf("error checking for Instaslice CR existence: %w", err)
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -225,12 +237,18 @@ func (r *InstasliceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		node := &v1.Node{}
 		if err = r.Get(ctx, client.ObjectKey{Name: instaslice.Name}, node); err != nil {
 			log.Error(err, "error getting the node object", "name", instaslice.Name)
-			return ctrl.Result{RequeueAfter: 1 * time.Second}, err
+			return ctrl.Result{RequeueAfter: Requeue1sDelay}, err
 		}
+
+		if instaslice.Status.NodeResources.BootID == "" {
+			log.Info("Instaslice boot ID not yet populated, requeuing", "node", node.Name)
+			return ctrl.Result{RequeueAfter: Requeue5sDelay}, nil
+		}
+
 		if instaslice.Status.NodeResources.BootID != node.Status.NodeInfo.BootID {
 			err := fmt.Errorf("instaslice not in sync with the node as the boot id doesn't match")
 			log.Error(err, "instaslice's boot id not matching node's boot id", "node's boot id", node.Status.NodeInfo.BootID, "instaslice's boot id", instaslice.Status.NodeResources.BootID)
-			return ctrl.Result{RequeueAfter: 1 * time.Second}, err
+			return ctrl.Result{RequeueAfter: Requeue10sDelay}, err
 		}
 	}
 
@@ -609,6 +627,7 @@ func (r *InstasliceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return true, nil
 			}
 			log.Info("No Instaslice objects found, waiting...")
+			log.Info("If this node is expected to be managed, ensure the label '" + ManagedLabel + "' is set to '" + InstasliceManagedTrue + "'")
 			return false, nil
 		})
 		if retryErr != nil {
@@ -657,8 +676,8 @@ func (r *InstasliceReconciler) setupWithManager(mgr ctrl.Manager) error {
 			oldNode := e.ObjectOld.(*v1.Node)
 			newNode := e.ObjectNew.(*v1.Node)
 			// Trigger reconcile when instaslice managed label is added or removed
-			oldManaged := oldNode.Labels[managedLabel]
-			newManaged := newNode.Labels[managedLabel]
+			oldManaged := oldNode.Labels[ManagedLabel]
+			newManaged := newNode.Labels[ManagedLabel]
 			return oldManaged != newManaged
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
@@ -1022,6 +1041,7 @@ func (r *InstasliceReconciler) ReconcileSCC(ctx context.Context) error {
 }
 
 func (r *InstasliceReconciler) labelManagedNodes(ctx context.Context) error {
+	log := logr.FromContext(ctx)
 	var nodeList v1.NodeList
 	if err := r.List(ctx, &nodeList); err != nil {
 		return err
@@ -1032,15 +1052,16 @@ func (r *InstasliceReconciler) labelManagedNodes(ctx context.Context) error {
 			continue
 		}
 		// Add label if missing
-		if node.Labels[managedLabel] != InstasliceManagedTrue {
+		if node.Labels[ManagedLabel] != InstasliceManagedTrue {
 			patch := client.MergeFrom(node.DeepCopy())
 			if node.Labels == nil {
 				node.Labels = map[string]string{}
 			}
-			node.Labels[managedLabel] = InstasliceManagedTrue
+			node.Labels[ManagedLabel] = InstasliceManagedTrue
 			if err := r.Patch(ctx, &node, patch); err != nil {
 				return fmt.Errorf("failed to patch node %s with managed label: %w", node.Name, err)
 			}
+			log.Info("Node automatically labeled with: ", "nodeName", node.Name, "ManagedLabel", ManagedLabel)
 		}
 	}
 	return nil
