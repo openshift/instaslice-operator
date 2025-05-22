@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -41,6 +42,7 @@ import (
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
+	"github.com/openshift/instaslice-operator/internal/controller/cache"
 	"github.com/openshift/instaslice-operator/internal/controller/config"
 	"github.com/openshift/instaslice-operator/internal/controller/utils"
 	//+kubebuilder:scaffold:imports
@@ -59,6 +61,8 @@ func init() {
 }
 
 func main() {
+	klog.InitFlags(nil)
+	ctx := ctrl.SetupSignalHandler()
 	// Log info before initializing metrics exporter
 	ctrl.Log.Info("Initializing Metrics Exporter.")
 	controller.RegisterMetrics()
@@ -151,11 +155,22 @@ func main() {
 		}})
 	}
 
+	tracker, err := cache.NewResourceTracker(mgr.GetConfig())
+	if err != nil {
+		setupLog.Error(err, "unable to get resource tracker")
+		os.Exit(1)
+	}
+	if err := mgr.Add(tracker); err != nil {
+		setupLog.Error(err, "unable to add resource tracker")
+		os.Exit(1)
+	}
+
 	if err = (&controller.InstasliceReconciler{
 		Client:             mgr.GetClient(),
 		Scheme:             mgr.GetScheme(),
 		Config:             config,
 		RunningOnOpenShift: runningOnOpenShift,
+		ResourceCache:      tracker.Cache(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Instaslice")
 		os.Exit(1)
@@ -191,7 +206,7 @@ func main() {
 	// }
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
