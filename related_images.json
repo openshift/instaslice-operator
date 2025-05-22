@@ -1,0 +1,14 @@
+[
+  {
+    "name": "instaslice-daemonset-next",
+    "image": ""
+  },
+  {
+    "name": "instaslice-webhook-next",
+    "image": ""
+  },
+  {
+    "name": "instaslice-operator-next",
+    "image": ""
+  }
+]
