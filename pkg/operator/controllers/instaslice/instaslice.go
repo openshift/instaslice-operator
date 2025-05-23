@@ -12,6 +12,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+
+	rcache "github.com/openshift/instaslice-operator/internal/controller/cache"
 )
 
 type InstasliceController struct {
@@ -19,6 +21,7 @@ type InstasliceController struct {
 	instasliceClient   *clientset.Clientset
 	instasliceInformer cache.SharedInformer
 	eventRecorder      events.Recorder
+	resourceCache      *rcache.ResourceCache
 }
 
 type InstasliceControllerConfig struct {
@@ -26,6 +29,7 @@ type InstasliceControllerConfig struct {
 	OperatorClient     *clientset.Clientset
 	InstasliceInformer cache.SharedInformer
 	EventRecorder      events.Recorder
+	ResourceCache      *rcache.ResourceCache
 }
 
 func NewInstasliceController(config *InstasliceControllerConfig) factory.Controller {
@@ -34,6 +38,7 @@ func NewInstasliceController(config *InstasliceControllerConfig) factory.Control
 		instasliceClient:   config.OperatorClient,
 		instasliceInformer: config.InstasliceInformer,
 		eventRecorder:      config.EventRecorder,
+		resourceCache:      config.ResourceCache,
 	}
 
 	return factory.New().

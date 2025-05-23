@@ -18,6 +18,7 @@ import (
 	appsv1client "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/klog/v2"
 
+	cache "github.com/openshift/instaslice-operator/internal/controller/cache"
 	operatorconfigclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	operatorclientinformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
 	instaslicecontroller "github.com/openshift/instaslice-operator/pkg/operator/controllers/instaslice"
@@ -109,6 +110,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		OperatorClient:     operatorConfigClient,
 		InstasliceInformer: operatorConfigInformers.OpenShiftOperator().V1alpha1().Instaslices().Informer(),
 		EventRecorder:      cc.EventRecorder,
+		ResourceCache:      tracker.Cache(),
 	}
 	instasliceController := instaslicecontroller.NewInstasliceController(&sliceControllerConfig)
 
@@ -122,6 +124,17 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	// }
 
 	klog.Infof("Starting informers")
+	// Start the resource cache for node/pod tracking
+	klog.Infof("Starting resource tracker")
+	tracker, err := cache.NewResourceTracker(cc.ProtoKubeConfig)
+	if err != nil {
+		return err
+	}
+	go func() {
+		if err := tracker.Start(ctx); err != nil {
+			klog.Errorf("Resource tracker stopped with error: %v", err)
+		}
+	}()
 	operatorConfigInformers.Start(ctx.Done())
 	kubeInformersForNamespaces.Start(ctx.Done())
 	namespaceFilterInformer.Start(ctx.Done())
