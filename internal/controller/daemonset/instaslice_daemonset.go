@@ -6,18 +6,16 @@ import (
 	goerror "errors"
 	"fmt"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
-	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
+	inferencev1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
 	"github.com/openshift/instaslice-operator/internal/controller"
 	"github.com/openshift/instaslice-operator/internal/controller/config"
 	"github.com/openshift/instaslice-operator/internal/controller/utils"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -560,15 +558,6 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 		log.Error(err, "unable to get GPU memory")
 		return nil, err
 	}
-	nodeResourceList, err := r.classicalResourcesAndGPUMemOnNode(context.TODO(), r.NodeName, strconv.FormatFloat(totalMemoryGB, 'f', 2, 64))
-	if err != nil {
-		log.Error(err, "unable to get classical resources")
-		os.Exit(1)
-	}
-
-	instaslice.Status.NodeResources.NodeResources = nodeResourceList
-
-	log.Info("classical resources obtained are ", "cpu", nodeResourceList.Cpu().String(), "memory", nodeResourceList.Memory().String())
 	if err = r.Status().Update(customCtx, instaslice); err != nil {
 		return nil, err
 	}
@@ -651,37 +640,6 @@ func (r *InstaSliceDaemonsetReconciler) patchNodeStatusForNode(ctx context.Conte
 	return nil
 }
 
-func (r *InstaSliceDaemonsetReconciler) classicalResourcesAndGPUMemOnNode(ctx context.Context, nodeName string, totalGPUMemory string) (corev1.ResourceList, error) {
-	log := logr.FromContext(ctx)
-	node := &v1.Node{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: nodeName}, node); err != nil {
-		log.Error(err, "unable to retrieve cpu and memory resource on the node")
-	}
-
-	newResourceQuantity := resource.MustParse(totalGPUMemory + "Gi")
-	// Convert the string to ResourceName
-	resourceName := v1.ResourceName(controller.QuotaResourceName)
-	if node.Status.Capacity == nil {
-		resourceList := v1.ResourceList{
-			resourceName: newResourceQuantity,
-		}
-		node.Status.Capacity = resourceList
-	} else {
-		node.Status.Capacity[resourceName] = newResourceQuantity
-	}
-
-	if err := r.Status().Update(ctx, node); err != nil {
-		log.Error(err, "unable to patch the node with new resource")
-		return nil, err
-	}
-
-	// Allocatable = Capacity - System Reserved - Kube Reserved - eviction hard
-	resourceList := corev1.ResourceList{}
-	resourceList[corev1.ResourceCPU] = node.Status.Allocatable[v1.ResourceCPU]
-	resourceList[corev1.ResourceMemory] = node.Status.Allocatable[v1.ResourceMemory]
-
-	return resourceList, nil
-}
 
 // during init time we need to discover GPU that are MIG enabled and slices if any on them to start making allocations of the next pods.
 func (r *InstaSliceDaemonsetReconciler) discoverAvailableProfilesOnGpus(instaslice *inferencev1alpha1.Instaslice) (*inferencev1alpha1.Instaslice, nvml.Return, bool, error) {
