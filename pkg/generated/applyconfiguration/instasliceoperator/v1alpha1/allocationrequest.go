@@ -23,9 +23,8 @@ import (
 // AllocationRequestApplyConfiguration represents a declarative configuration of the AllocationRequest type for use
 // with apply.
 type AllocationRequestApplyConfiguration struct {
-	Profile   *string                  `json:"profile,omitempty"`
-	Resources *v1.ResourceRequirements `json:"resources,omitempty"`
-	PodRef    *v1.ObjectReference      `json:"podRef,omitempty"`
+	Profile *string             `json:"profile,omitempty"`
+	PodRef  *v1.ObjectReference `json:"podRef,omitempty"`
 }
 
 // AllocationRequestApplyConfiguration constructs a declarative configuration of the AllocationRequest type for use with
@@ -39,14 +38,6 @@ func AllocationRequest() *AllocationRequestApplyConfiguration {
 // If called multiple times, the Profile field is set to the value of the last call.
 func (b *AllocationRequestApplyConfiguration) WithProfile(value string) *AllocationRequestApplyConfiguration {
 	b.Profile = &value
-	return b
-}
-
-// WithResources sets the Resources field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Resources field is set to the value of the last call.
-func (b *AllocationRequestApplyConfiguration) WithResources(value v1.ResourceRequirements) *AllocationRequestApplyConfiguration {
-	b.Resources = &value
 	return b
 }
 

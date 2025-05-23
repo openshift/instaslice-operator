@@ -25,7 +25,6 @@ import (
 type InstasliceStatusApplyConfiguration struct {
 	Conditions           []v1.ConditionApplyConfiguration              `json:"conditions,omitempty"`
 	PodAllocationResults map[string]AllocationResultApplyConfiguration `json:"podAllocationResults,omitempty"`
-	NodeResources        *DiscoveredNodeResourcesApplyConfiguration    `json:"nodeResources,omitempty"`
 }
 
 // InstasliceStatusApplyConfiguration constructs a declarative configuration of the InstasliceStatus type for use with
@@ -58,13 +57,5 @@ func (b *InstasliceStatusApplyConfiguration) WithPodAllocationResults(entries ma
 	for k, v := range entries {
 		b.PodAllocationResults[k] = v
 	}
-	return b
-}
-
-// WithNodeResources sets the NodeResources field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the NodeResources field is set to the value of the last call.
-func (b *InstasliceStatusApplyConfiguration) WithNodeResources(value *DiscoveredNodeResourcesApplyConfiguration) *InstasliceStatusApplyConfiguration {
-	b.NodeResources = value
 	return b
 }

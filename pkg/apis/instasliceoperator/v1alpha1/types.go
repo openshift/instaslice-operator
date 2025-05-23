@@ -41,9 +41,6 @@ type InstasliceStatus struct {
 	// kubebuilder:validation:Optional
 	// +optional
 	PodAllocationResults map[string]AllocationResult `json:"podAllocationResults"`
-
-	// nodeResources specifies the discovered resources of the node
-	NodeResources DiscoveredNodeResources `json:"nodeResources"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

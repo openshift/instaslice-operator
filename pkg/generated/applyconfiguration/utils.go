@@ -36,10 +36,6 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &instasliceoperatorv1alpha1.AllocationResultApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("AllocationStatus"):
 		return &instasliceoperatorv1alpha1.AllocationStatusApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("DiscoveredGPU"):
-		return &instasliceoperatorv1alpha1.DiscoveredGPUApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("DiscoveredNodeResources"):
-		return &instasliceoperatorv1alpha1.DiscoveredNodeResourcesApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("Instaslice"):
 		return &instasliceoperatorv1alpha1.InstasliceApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("InstasliceOperator"):
@@ -52,8 +48,6 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &instasliceoperatorv1alpha1.InstasliceSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("InstasliceStatus"):
 		return &instasliceoperatorv1alpha1.InstasliceStatusApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("Mig"):
-		return &instasliceoperatorv1alpha1.MigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("Placement"):
 		return &instasliceoperatorv1alpha1.PlacementApplyConfiguration{}
 
