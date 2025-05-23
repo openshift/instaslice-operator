@@ -11,8 +11,10 @@ import (
 	admissionctl "sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/klog/v2"
 )
 
@@ -22,6 +24,10 @@ var (
 	scheme          = runtime.NewScheme()
 	admissionCodecs = serializer.NewCodecFactory(scheme)
 )
+
+func init() {
+	utilruntime.Must(corev1.AddToScheme(scheme))
+}
 
 // Dispatcher struct
 type Dispatcher struct {

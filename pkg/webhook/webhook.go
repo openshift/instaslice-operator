@@ -2,11 +2,16 @@ package webhook
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
+	"github.com/google/uuid"
 	admissionctl "sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
 )
 
@@ -15,6 +20,11 @@ const (
 	ReadinessEndpointURI string = "/readyz"
 	HealthzEndpointURI   string = "/healthz"
 	WebhookName          string = "instaslice-webhook"
+
+	OrgInstaslicePrefix = "instaslice.redhat.com/"
+	GateName            = OrgInstaslicePrefix + "accelerator"
+	QuotaResourceName   = OrgInstaslicePrefix + "accelerator-memory-quota"
+	NvidiaMIGPrefix     = "nvidia.com/mig-"
 )
 
 // Webhook interface
@@ -81,7 +91,42 @@ func (s *InstasliceWebhook) Authorized(request admissionctl.Request) admissionct
 
 func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 	mutatedPod := pod.DeepCopy()
-	// TODO mutate pod
+
+	if !s.hasMIGResource(mutatedPod) {
+		klog.Info("No nvidia.com/mig-* resource found, skipping mutation.")
+		return json.Marshal(mutatedPod)
+	}
+
+	s.performQuotaArithmetic(mutatedPod)
+
+	// Transform resource requests from nvidia.com/mig-* to instaslice.redhat.com/mig-*
+	s.transformResources(&mutatedPod.Spec.Containers[0].Resources)
+
+	// Add scheduling gate
+	schedulingGateName := GateName
+	found := false
+	for _, gate := range mutatedPod.Spec.SchedulingGates {
+		if gate.Name == schedulingGateName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		mutatedPod.Spec.SchedulingGates = append(mutatedPod.Spec.SchedulingGates, corev1.PodSchedulingGate{Name: schedulingGateName})
+	}
+
+	// Generate an extended resource name based on the pod name
+	uuidStr := uuid.New().String()
+
+	// Add envFrom with a unique ConfigMap name derived from the pod name
+	configMapName := uuidStr
+	// Support for only one pod workloads
+	mutatedPod.Spec.Containers[0].EnvFrom = append(mutatedPod.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
+		ConfigMapRef: &corev1.ConfigMapEnvSource{
+			LocalObjectReference: corev1.LocalObjectReference{Name: configMapName},
+		},
+	})
+
 	return json.Marshal(mutatedPod)
 }
 
@@ -99,4 +144,69 @@ func (s *InstasliceWebhook) renderPod(request admissionctl.Request) (*corev1.Pod
 	}
 
 	return pod, err
+}
+
+// hasMIGResource checks if a pod has resource requests or limits with a key that matches `nvidia.com/mig-*`
+func (s *InstasliceWebhook) hasMIGResource(pod *corev1.Pod) bool {
+	for _, container := range pod.Spec.Containers {
+		// Check resource limits
+		for resourceName := range container.Resources.Limits {
+			if strings.HasPrefix(string(resourceName), NvidiaMIGPrefix) {
+				return true
+			}
+		}
+		// Check resource requests
+		for resourceName := range container.Resources.Requests {
+			if strings.HasPrefix(string(resourceName), NvidiaMIGPrefix) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *InstasliceWebhook) performQuotaArithmetic(pod *corev1.Pod) {
+	// assumption is that workloads will have 1 container where
+	// MIG is requested.
+	// TODO instead of only iterating over regular containers,
+	// we should also consider other types of containers (such as init containers) in future
+	for _, container := range pod.Spec.Containers {
+		// dont bother checking requests section. Nvidia supports only limits
+		// if requests is added by user, it should be equal to limits.
+		for resourceName, quantity := range container.Resources.Limits {
+			resourceParts := strings.Split(strings.TrimPrefix(string(resourceName), NvidiaMIGPrefix), ".")
+
+			if len(resourceParts) == 2 {
+				// gpuPart := resourceParts[0]
+				memoryPart := resourceParts[1]
+				memoryValue, err := strconv.Atoi(strings.TrimSuffix(memoryPart, "gb"))
+				if err != nil {
+					klog.ErrorS(err, "failed to parse memory value")
+					continue
+				}
+				acceleratorMemory := memoryValue * int(quantity.Value())
+				// assume 1 container workload
+				// Convert the string to ResourceName
+				resourceName := corev1.ResourceName(QuotaResourceName)
+				pod.Spec.Containers[0].Resources.Limits[resourceName] = resource.MustParse(fmt.Sprintf("%dGi", acceleratorMemory))
+			}
+		}
+	}
+}
+
+func (s *InstasliceWebhook) transformResources(resources *corev1.ResourceRequirements) {
+	func(resourceLists ...*corev1.ResourceList) {
+		for _, resourceList := range resourceLists {
+			if *resourceList == nil {
+				*resourceList = make(corev1.ResourceList)
+			}
+			for resourceName, quantity := range *resourceList {
+				if strings.HasPrefix(string(resourceName), NvidiaMIGPrefix) {
+					newResourceName := strings.Replace(string(resourceName), NvidiaMIGPrefix, fmt.Sprintf("%smig-", OrgInstaslicePrefix), 1)
+					delete(*resourceList, resourceName)
+					(*resourceList)[corev1.ResourceName(newResourceName)] = quantity
+				}
+			}
+		}
+	}(&resources.Limits, &resources.Requests)
 }
