@@ -139,6 +139,12 @@ var _ = BeforeSuite(func() {
 		templateVars.NodeNames = []string{nodeNames[0]}
 	}
 
+	if emulated {
+		err = k8sClient.List(ctx, instasliceObjs, &client.ListOptions{Namespace: namespace})
+		Expect(err).NotTo(HaveOccurred(), "Failed to get Instaslice resource")
+		Expect(len(instasliceObjs.Items)).To(HaveLen(1))
+	}
+
 	GinkgoWriter.Printf("cri-bin: %v\n", criBin)
 	GinkgoWriter.Printf("kubectl-bin: %v\n", kubectlBin)
 	GinkgoWriter.Printf("namespace: %v\n", namespace)
@@ -146,6 +152,21 @@ var _ = BeforeSuite(func() {
 	GinkgoWriter.Printf("node names: %v\n", templateVars.NodeNames)
 	GinkgoWriter.Printf("controller-image: %v\n", controllerImage)
 	GinkgoWriter.Printf("daemonset-image: %v\n", daemonsetImage)
+})
+
+var _ = AfterSuite(func() {
+	if emulated {
+		ctx := context.TODO()
+
+		node := &corev1.Node{}
+		err := k8sClient.Get(ctx, client.ObjectKey{Name: templateVars.NodeNames[0]}, node)
+		Expect(err).NotTo(HaveOccurred(), "failed to get node")
+
+		delete(node.Labels, "nvidia.com/mig.capable")
+
+		err = k8sClient.Update(ctx, node)
+		Expect(err).NotTo(HaveOccurred(), "failed to update node after removing label")
+	}
 })
 
 // TODO: add more test cases -
@@ -248,6 +269,13 @@ var _ = Describe("controller", Ordered, func() {
 			err = k8sClient.Create(ctx, metricsPod)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create curl-metrics pod")
 			// Cleanup the metrics-pod after the test case is run
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, metricsPod)
+				if err != nil {
+					log.Printf("Error deleting the pod %+v: %+v", metricsPod, err)
+				}
+			})
+
 			DeferCleanup(func() {
 				err = k8sClient.Delete(ctx, metricsPod)
 				if err != nil {
