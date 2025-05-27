@@ -6,6 +6,10 @@
   "assigneesFromCodeOwners": true,
   "automergeStrategy": "auto",
   "automergeType": "pr",
+  "baseBranches": [
+    "main",
+    "next"
+  ],
   "commitMessagePrefix": "NO-JIRA: ",
   "ignoreTests": false,
   "rebaseLabel": "needs-rebase",
@@ -22,7 +26,10 @@
           "digest"
         ],
         "automerge": true,
-	"addLabels": ["lgtm", "approved"]
+        "addLabels": [
+          "lgtm",
+          "approved"
+        ]
       }
     ]
   },
@@ -35,7 +42,10 @@
           "*.Dockerfile"
         ],
         "automerge": true,
-	"addLabels": ["lgtm", "approved"]
+        "addLabels": [
+          "lgtm",
+          "approved"
+        ]
       }
     ]
   },
