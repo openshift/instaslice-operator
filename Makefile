@@ -78,3 +78,17 @@ verify-codegen:
 clean:
 	$(RM) -r ./_tmp
 .PHONY: clean
+
+generate-bundle:
+	operator-sdk generate bundle --input-dir deploy --version 0.1.0 --channels=stable --default-channel=stable --package instaslice-operator --output-dir=.
+.PHONY: generate-bundle
+
+BUNDLE_IMAGE ?= $(IMAGE_REGISTRY)/instaslice-operator-bundle:$(IMAGE_TAG)
+
+build-bundle-image: generate-bundle
+	podman build -f bundle.Dockerfile -t $(BUNDLE_IMAGE) .
+	podman push $(BUNDLE_IMAGE)
+.PHONY: build-bundle-image
+
+generate-all: generate generate-bundle
+.PHONY: generate-all
