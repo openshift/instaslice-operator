@@ -36,7 +36,7 @@ func Get() version.Info {
 func init() {
 	buildInfo := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "openshift_lws_operator_build_info",
+			Name: "openshift_instaslice_operator_build_info",
 			Help: "A metric with a constant '1' value labeled by major, minor, git commit & git version from which OpenShift lws-operator Operator was built.",
 		},
 		[]string{"major", "minor", "gitCommit", "gitVersion"},
