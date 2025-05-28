@@ -1062,6 +1062,13 @@ spec:
   provider:
     name: Codeflare
     url: https://github.com/openshift/instaslice-operator
+  relatedImages:
+  - image: quay.io/openshift-instaslice/instaslice-daemonset-next:latest
+    name: instaslice-daemonset-next
+  - image: quay.io/openshift-instaslice/instaslice-webhook-next:latest
+    name: instaslice-webhook-next
+  - image: quay.io/openshift-instaslice/instaslice-operator:latest
+    name: instaslice-operator-next
   version: 0.0.0
 ---
 allowPrivilegeEscalation: true
