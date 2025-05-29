@@ -1,46 +1,31 @@
 package daemonset
 
 import (
-   "context"
-   "path/filepath"
-   "strings"
+	"context"
+	"fmt"
 
-   "github.com/openshift/library-go/pkg/controller/controllercmd"
-   "github.com/openshift/instaslice-operator/pkg/deviceplugin"
+	"github.com/openshift/instaslice-operator/pkg/daemonset/device"
+	"github.com/openshift/instaslice-operator/pkg/daemonset/watcher"
+	"github.com/openshift/library-go/pkg/controller/controllercmd"
 )
 
 func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) error {
-   // define the extended resources to serve
-   resourceNames := []string{
-       "instaslice.com/1g5gb",
-       "instaslice.com/2g.10gb",
-       "instaslice.com/7g.40gb",
-   }
-   const socketDir = "/var/lib/kubelet/device-plugins"
+	// Discover MIG-enabled GPUs and populate Instaslice CR before starting plugins
+	if err := discoverMigEnabledGpuWithSlices(ctx, cc.KubeConfig); err != nil {
+		return fmt.Errorf("failed to discover MIG GPUs: %w", err)
+	}
+	// Patch node with max MIG placements capacity
+	if err := addMigCapacityToNode(ctx, cc.KubeConfig); err != nil {
+		return fmt.Errorf("failed to patch MIG capacity on node: %w", err)
+	}
+	if err := device.StartDevicePlugins(ctx); err != nil {
+		return err
+	}
 
-   for _, res := range resourceNames {
-       // start device manager
-       mgr := deviceplugin.NewManager(res)
-       go mgr.Start(ctx)
+	if err := watcher.SetupPodDeletionWatcher(ctx, cc.KubeConfig); err != nil {
+		return err
+	}
 
-       // compute socket path for this resource
-       sanitized := strings.ReplaceAll(res, "/", "_")
-       endpoint := sanitized + ".sock"
-       socketPath := filepath.Join(socketDir, endpoint)
-
-       // start gRPC server
-       srv := deviceplugin.NewServer(mgr, socketPath)
-       go func(s *deviceplugin.Server) {
-           if err := s.Start(ctx); err != nil {
-               // TODO: handle server error
-           }
-       }(srv)
-
-       // register with kubelet
-       reg := deviceplugin.NewRegistrar(socketPath, res)
-       go reg.Start(ctx)
-   }
-
-   <-ctx.Done()
-   return nil
+	<-ctx.Done()
+	return nil
 }

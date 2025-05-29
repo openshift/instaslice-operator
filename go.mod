@@ -3,6 +3,7 @@ module github.com/openshift/instaslice-operator
 go 1.23.0
 
 require (
+	github.com/NVIDIA/go-nvml v0.12.4-1
 	github.com/onsi/ginkgo/v2 v2.22.1
 	github.com/openshift/api v0.0.0-20250226153854-e8e096a21cb3
 	github.com/openshift/build-machinery-go v0.0.0-20250211133638-a00a772ae1a2
