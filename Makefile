@@ -25,6 +25,7 @@ GO_TEST_PACKAGES :=./pkg/... ./cmd/...
 GO_BUILD_FLAGS :=-tags strictfipsruntime
 
 IMAGE_REGISTRY ?= quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant
+EMULATED_MODE ?= disabled
 
 # This will call a macro called "build-image" which will generate image specific targets based on the parameters:
 # $0 - macro name
@@ -144,6 +145,8 @@ test-kind:
 	kubectl wait --for=condition=established --timeout=60s crd instasliceoperators.inference.redhat.com
 
 	@echo "=== Applying Kind core manifests ==="
+	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
+	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' deploy-kind/09_instaslice_operator.cr.yaml
 	kubectl apply \
 	  -f deploy-kind/01_namespace.yaml \
 	  -f deploy-kind/02_00_operand_clusterrole.yaml \

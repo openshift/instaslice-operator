@@ -7,4 +7,4 @@ spec:
   managementState: Managed
   logLevel: Normal
   operatorLogLevel: Normal
-  emulatedMode: "false"
+  emulatedMode: "disabled"

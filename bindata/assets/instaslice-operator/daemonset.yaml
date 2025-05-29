@@ -43,3 +43,10 @@ spec:
             value: "false"
           - name: NVIDIA_MIG_CONFIG_DEVICES
             value: "all"
+        lifecycle:
+          preStop:
+            exec:
+              command:
+                - "/bin/sh"
+                - "-c"
+                - "echo PreStop hook placeholder: waiting for GPU ops to complete; sleep 30"
