@@ -4,6 +4,7 @@ all: build
 SOURCE_GIT_TAG ?=$(shell git describe --long --tags --abbrev=7 --match 'v[0-9]*' || echo 'v1.0.0-$(SOURCE_GIT_COMMIT)')
 SOURCE_GIT_COMMIT ?=$(shell git rev-parse --short "HEAD^{commit}" 2>/dev/null)
 IMAGE_TAG ?= latest
+OPERATOR_VERSION ?= 0.1.0
 
 # OS_GIT_VERSION is populated by ART
 # If building out of the ART pipeline, fallback to SOURCE_GIT_TAG
@@ -78,3 +79,17 @@ verify-codegen:
 clean:
 	$(RM) -r ./_tmp
 .PHONY: clean
+
+generate-bundle:
+	operator-sdk generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION}
+.PHONY: generate-bundle
+
+BUNDLE_IMAGE ?= $(IMAGE_REGISTRY)/instaslice-operator-bundle:$(IMAGE_TAG)
+
+build-bundle-image: generate-bundle
+	podman build -f bundle.Dockerfile -t $(BUNDLE_IMAGE) .
+	podman push $(BUNDLE_IMAGE)
+.PHONY: build-bundle-image
+
+generate-all: generate generate-bundle
+.PHONY: generate-all

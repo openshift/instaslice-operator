@@ -10,14 +10,9 @@ LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.37.0
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
 LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v4
 
-# Labels for testing.
-LABEL operators.operatorframework.io.test.mediatype.v1=scorecard+v1
-LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
-
 # Copy files to locations specified by labels.
 COPY bundle-ocp/manifests /manifests/
 COPY bundle-ocp/metadata /metadata/
-COPY bundle-ocp/tests/scorecard /tests/scorecard/
 
 ARG NAME=instaslice-operator-bundle
 ARG DESCRIPTION="The Instaslice operator bundle."

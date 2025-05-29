@@ -2,8 +2,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    cert-manager.io/inject-ca-from: instaslice-system/instaslice-operator-serving-cert
-    controller-gen.kubebuilder.io/version: v0.16.4
+    controller-gen.kubebuilder.io/version: v0.17.2
   creationTimestamp: null
   name: instaslices.inference.redhat.com
 spec:
@@ -177,6 +176,7 @@ spec:
                       lastTransitionTime: "2025-01-22T12:34:56Z"
                       reason: "DriverError"
                       message: "Could not communicate with the GPU driver on the node."
+                  kubebuilder:validation:Optional
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -239,9 +239,6 @@ spec:
                 description: nodeResources specifies the discovered resources of the
                   node
                 properties:
-                  bootId:
-                    description: bootId represents the current boot id of the node
-                    type: string
                   migPlacement:
                     additionalProperties:
                       properties:
@@ -324,7 +321,6 @@ spec:
                       node at boot time
                     type: object
                 required:
-                - bootId
                 - migPlacement
                 - nodeGpus
                 - nodeResources
@@ -441,8 +437,9 @@ spec:
                   - migPlacement
                   - nodename
                   type: object
-                description: podAllocationResults specify the allocation results per
-                  pod
+                description: |-
+                  PodAllocationResults specify the allocation results per pod
+                  kubebuilder:validation:Optional
                 type: object
             type: object
         type: object
