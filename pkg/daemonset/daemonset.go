@@ -7,7 +7,6 @@ import (
 )
 
 func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) error {
-	// TODO remove me
 	<-ctx.Done()
 	return nil
 }
