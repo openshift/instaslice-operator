@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: instaslice-scheduler
+rules:
+- apiGroups: [""]
+  resources: ["pods/binding", "pods/status"]
+  verbs: ["create", "update"]
+- apiGroups: [""]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: instaslice-scheduler
+subjects:
+- kind: ServiceAccount
+  name: instaslice-scheduler
+  namespace: instaslice-system
+roleRef:
+  kind: ClusterRole
+  name: instaslice-scheduler
+  apiGroup: rbac.authorization.k8s.io
+

@@ -1,0 +1,83 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: instaslice-scheduler-view
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: instaslice-system
+- kind: ServiceAccount
+  name: instaslice-scheduler
+  namespace: instaslice-system
+roleRef:
+  kind: ClusterRole
+  name: view
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: instaslice-scheduler-authentication-reader
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: instaslice-system
+- kind: ServiceAccount
+  name: instaslice-scheduler
+  namespace: instaslice-system
+roleRef:
+  kind: ClusterRole
+  name: system:extension-apiserver-authentication-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: instaslice-scheduler
+  namespace: instaslice-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: instaslice-scheduler
+  namespace: instaslice-system
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get","list","watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: instaslice-scheduler
+  namespace: instaslice-system
+subjects:
+- kind: ServiceAccount
+  name: instaslice-scheduler
+  namespace: instaslice-system
+roleRef:
+  kind: Role
+  name: instaslice-scheduler
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: instaslice-scheduler-node-reader
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get","list","watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: instaslice-scheduler-node-reader-binding
+subjects:
+- kind: ServiceAccount
+  name: instaslice-scheduler
+  namespace: instaslice-system
+roleRef:
+  kind: ClusterRole
+  name: instaslice-scheduler-node-reader
+  apiGroup: rbac.authorization.k8s.io

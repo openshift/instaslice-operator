@@ -1,0 +1,33 @@
+# build stage
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.23 AS build
+
+WORKDIR /workspace
+COPY . .
+# build the instaslice-scheduler binary
+RUN GO_BUILD_PACKAGES=./cmd/instaslice-scheduler make
+
+# runtime stage
+FROM registry.access.redhat.com/ubi9/ubi-micro@sha256:955512628a9104d74f7b3b0a91db27a6bbecdd6a1975ce0f1b2658d3cd060b98
+
+WORKDIR /
+COPY --from=build /workspace/instaslice-scheduler /usr/bin
+USER 65532:65532
+
+ARG NAME=instaslice-scheduler
+ARG DESCRIPTION="The Instaslice secondary scheduler."
+
+LABEL com.redhat.component=$NAME
+LABEL description=$DESCRIPTION
+LABEL io.k8s.description=$DESCRIPTION
+LABEL io.k8s.display-name=$NAME
+LABEL name=$NAME
+LABEL summary=$DESCRIPTION
+LABEL distribution-scope=public
+LABEL release="1"
+LABEL url="https://access.redhat.com/"
+LABEL vendor="Red Hat, Inc."
+LABEL version="1"
+LABEL maintainer="Red Hat"
+
+# Licenses
+COPY LICENSE /licenses/LICENSE

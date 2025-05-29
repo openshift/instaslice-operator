@@ -72,12 +72,26 @@ regen-crd:
 	cp manifests/instaslice-operator.crd.yaml deploy/00_instaslice-operator.crd.yaml
 	cp manifests/inference.redhat.com_instaslices.yaml deploy/00_instaslices.crd.yaml
 
+.PHONY: regen-crd-kind
+regen-crd-kind:
+	@echo "Generating CRDs into deploy-kind directory"
+	go build -o _output/tools/bin/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
+	rm -f deploy-kind/00_instaslice-operator.crd.yaml
+	rm -f deploy-kind/00_instaslices.crd.yaml
+	./_output/tools/bin/controller-gen crd paths=./pkg/apis/instasliceoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./deploy-kind
+	mv deploy-kind/inference.redhat.com_instasliceoperators.yaml deploy-kind/00_instaslice-operator.crd.yaml
+	mv deploy-kind/inference.redhat.com_instaslices.yaml deploy-kind/00_instaslices.crd.yaml
+
 build-images:
 	podman build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
-	podman push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
+	podman build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/instaslice-scheduler:${IMAGE_TAG} .
 	podman build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/instaslice-daemonset:${IMAGE_TAG} .
-	podman push ${IMAGE_REGISTRY}/instaslice-daemonset:${IMAGE_TAG}
 	podman build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/instaslice-webhook:${IMAGE_TAG} .
+
+build-push-images:
+	podman push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
+	podman push ${IMAGE_REGISTRY}/instaslice-scheduler:${IMAGE_TAG}
+	podman push ${IMAGE_REGISTRY}/instaslice-daemonset:${IMAGE_TAG}
 	podman push ${IMAGE_REGISTRY}/instaslice-webhook:${IMAGE_TAG}
 
 generate: regen-crd generate-clients
@@ -95,16 +109,69 @@ clean:
 	$(RM) -r ./_tmp
 .PHONY: clean
 
-generate-bundle:
-	operator-sdk generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION}
-.PHONY: generate-bundle
+## test-kind: quick smoke-test on a Kind cluster
+.PHONY: test-kind
+test-kind:
+	@echo "=== Creating Kind cluster 'instaslice-test' ==="
+	kind create cluster --name instaslice-test
 
-BUNDLE_IMAGE ?= $(IMAGE_REGISTRY)/instaslice-operator-bundle:$(IMAGE_TAG)
+	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') nvidia.com/mig.capable=true --overwrite
 
-build-bundle-image: generate-bundle
-	podman build -f bundle.Dockerfile -t $(BUNDLE_IMAGE) .
-	podman push $(BUNDLE_IMAGE)
-.PHONY: build-bundle-image
+	# @echo "=== Building container images ==="
+	# docker build -f Dockerfile.scheduler.ocp -t instaslice-scheduler:dev .
+	# docker build -f Dockerfile.daemonset.ocp -t instaslice-daemonset:dev .
+	# docker build -f Dockerfile.ocp -t instaslice-operator:dev .
+	# docker build -f Dockerfile.webhook.ocp -t instaslice-webhook:dev .
 
-generate-all: generate generate-bundle
-.PHONY: generate-all
+	@echo "=== Loading images into Kind ==="
+	kind load docker-image instaslice-scheduler:dev --name instaslice-test
+	kind load docker-image instaslice-daemonset:dev --name instaslice-test
+	kind load docker-image instaslice-operator:dev --name instaslice-test
+	kind load docker-image instaslice-webhook:dev --name instaslice-test
+
+	@echo "=== Deploying Cert Manager ==="
+	$(MAKE) deploy-cert-manager
+	@echo "=== Generating CRDs for Kind ==="
+	$(MAKE) regen-crd-kind
+
+
+	@echo "=== Applying Kind CRDs ==="
+	kubectl apply \
+ 	-f deploy-kind/00_instaslice-operator.crd.yaml \
+ 	-f deploy-kind/00_instaslices.crd.yaml
+
+	@echo "=== Waiting for CRDs to be established ==="
+	kubectl wait --for=condition=established --timeout=60s crd instasliceoperators.inference.redhat.com
+
+	@echo "=== Applying Kind core manifests ==="
+	kubectl apply \
+	  -f deploy-kind/01_namespace.yaml \
+	  -f deploy-kind/02_00_operand_clusterrole.yaml \
+	  -f deploy-kind/02_01_operand_clusterrolebinding.yaml \
+	  -f deploy-kind/02_02_operand_role.yaml \
+	  -f deploy-kind/02_03_operand_rolebinding.yaml \
+	  -f deploy-kind/02_04_daemonset_rolebinding.yaml \
+	  -f deploy-kind/04_01_clusterrole.yaml \
+	  -f deploy-kind/04_02_clusterrolebinding.yaml \
+	  -f deploy-kind/04_serviceaccount.yaml \
+	  -f deploy-kind/05_deployment.yaml \
+	  -f deploy-kind/05_default_sa_rbac.yaml \
+	  -f deploy-kind/09_instaslice_operator.cr.yaml \
+	  -f deploy-kind/05_06_scheduler_core_rbac.yaml
+
+
+	@echo "=== Deploying instaslice-scheduler ==="
+	kubectl apply -f deploy-kind/06_scheduler_deployment.yaml
+
+	@echo "=== Deploying test pod ==="
+	kubectl apply -f deploy-kind/07_test_pod.yaml
+
+.PHONY: cleanup-kind
+cleanup-kind:
+	@echo "=== Deleting Kind cluster 'instaslice-test' ==="
+	kind delete cluster --name instaslice-test
+
+.PHONY: deploy-cert-manager
+deploy-cert-manager:
+	export KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
+                hack/deploy-cert-manager.sh

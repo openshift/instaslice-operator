@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: instaslice-scheduler
+  namespace: instaslice-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: instaslice-scheduler
+  template:
+    metadata:
+      labels:
+        app: instaslice-scheduler
+    spec:
+      serviceAccountName: instaslice-scheduler
+      containers:
+      - name: scheduler
+        image: localhost/instaslice-scheduler:dev
+        imagePullPolicy: IfNotPresent
+        command: ["instaslice-scheduler", "scheduler"]
