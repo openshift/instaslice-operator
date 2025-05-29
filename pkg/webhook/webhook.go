@@ -62,7 +62,7 @@ func (s *InstasliceWebhook) Authorized(request admissionctl.Request) admissionct
 	if err != nil {
 		klog.Error(err, "couldn't render a Pod from the incoming request")
 		ret = admissionctl.Errored(http.StatusBadRequest, err)
-		ret.UID = request.AdmissionRequest.UID
+		ret.UID = request.UID
 		return ret
 	}
 
@@ -70,12 +70,12 @@ func (s *InstasliceWebhook) Authorized(request admissionctl.Request) admissionct
 	if err != nil {
 		klog.Error(err, "could not mutate pod")
 		ret = admissionctl.Errored(http.StatusBadRequest, err)
-		ret.UID = request.AdmissionRequest.UID
+		ret.UID = request.UID
 		return ret
 	}
 
 	ret = admissionctl.PatchResponseFromRaw(request.Object.Raw, mutatePod)
-	ret.UID = request.AdmissionRequest.UID
+	ret.UID = request.UID
 	return ret
 }
 
