@@ -118,11 +118,11 @@ test-kind:
 
 	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') nvidia.com/mig.capable=true --overwrite
 
-	# @echo "=== Building container images ==="
-	# docker build -f Dockerfile.scheduler.ocp -t instaslice-scheduler:dev .
-	# docker build -f Dockerfile.daemonset.ocp -t instaslice-daemonset:dev .
-	# docker build -f Dockerfile.ocp -t instaslice-operator:dev .
-	# docker build -f Dockerfile.webhook.ocp -t instaslice-webhook:dev .
+	@echo "=== Building container images ==="
+	docker build -f Dockerfile.scheduler.ocp -t instaslice-scheduler:dev .
+	docker build -f Dockerfile.daemonset.ocp -t instaslice-daemonset:dev .
+	docker build -f Dockerfile.ocp -t instaslice-operator:dev .
+	docker build -f Dockerfile.webhook.ocp -t instaslice-webhook:dev .
 
 	@echo "=== Loading images into Kind ==="
 	kind load docker-image instaslice-scheduler:dev --name instaslice-test

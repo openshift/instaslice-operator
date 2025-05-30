@@ -19,6 +19,15 @@ func GenerateFakeCapacity(nodeName string) *instav1.Instaslice {
 			PodAllocationRequests: &map[types.UID]instav1.AllocationRequest{},
 		},
 		Status: instav1.InstasliceStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               "Ready",
+					Status:             metav1.ConditionTrue,
+					LastTransitionTime: metav1.Now(),
+					Reason:             "GPUsAccessible",
+					Message:            "All discovered GPUs are accessible and the driver is healthy.",
+				},
+			},
 			PodAllocationResults: map[string]instav1.AllocationResult{},
 			NodeResources: instav1.DiscoveredNodeResources{
 				NodeGPUs: []instav1.DiscoveredGPU{

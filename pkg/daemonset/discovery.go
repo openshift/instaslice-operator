@@ -54,16 +54,18 @@ func emulateDiscovery(ctx context.Context, config *rest.Config) error {
 	} else if err != nil {
 		return err
 	}
-	fake := utils.GenerateFakeCapacity(nodeName)
-	instaslice.Spec = fake.Spec
-	instaslice.Status = fake.Status
-	instaslice, err = instaClient.Update(ctx, instaslice, metav1.UpdateOptions{})
+ 	fake := utils.GenerateFakeCapacity(nodeName)
+ 	// Update spec only; status subresource is updated separately
+ 	instaslice.Spec = fake.Spec
+ 	updated, err := instaClient.Update(ctx, instaslice, metav1.UpdateOptions{})
 	if err != nil {
 		klog.ErrorS(err, "Failed to update instaslice spec during emulation", "node", nodeName)
 		return err
 	}
 	klog.V(2).InfoS("Updated instaslice CR spec during emulation", "node", nodeName)
-	_, err = instaClient.UpdateStatus(ctx, instaslice, metav1.UpdateOptions{})
+	// Update status subresource with full fake status
+	updated.Status = fake.Status
+	_, err = instaClient.UpdateStatus(ctx, updated, metav1.UpdateOptions{})
 	if err != nil {
 		klog.ErrorS(err, "Failed to update instaslice status during emulation", "node", nodeName)
 		return err

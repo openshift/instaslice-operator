@@ -8,5 +8,5 @@ roleRef:
   name: instaslice-operator-operand
 subjects:
   - kind: ServiceAccount
-    name: instaslice-operator-operand
+    name: instaslice-operator
     namespace: instaslice-system

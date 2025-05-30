@@ -446,15 +446,16 @@ kind delete cluster
 Users (mainly developers) can leverage running the InstaSlice operator using the emulator mode as described [here](docs/emulator.md)
 This has been tested on a single node cluster as of now.
 
-### Running e2e tests using emulated mode and kind cluster
+### Running quick smoke tests using emulator mode and Kind
 
-To run the e2e tests locally, run the following command:
+For a faster smoke-test of InstaSlice functionality on a local Kind cluster using emulator mode, set the `EMULATED_MODE` environment variable to "enabled" and run:
 
 ```console
-make test-e2e-kind-emulated ; make cleanup-test-e2e-kind-emulated
+EMULATED_MODE=enabled make test-kind
+make cleanup-kind
 ```
 
-These e2e tests would be performed by creating a `kind` cluster locally.
+This will create a Kind cluster, deploy InstaSlice in emulator mode, run a quick smoke test, and then allow you to clean up the cluster.
 
 ### InstaSlice and OperatorHub
 
