@@ -37,23 +37,23 @@ func NewDispatcher(hook Webhook) *Dispatcher {
 
 // HandleRequest http request
 func (d *Dispatcher) HandleRequest(w http.ResponseWriter, r *http.Request) {
-	klog.Info("Handling request", "request", r.RequestURI)
+   klog.InfoS("Handling webhook request", "requestURI", r.RequestURI)
 	_, err := url.Parse(r.RequestURI)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		klog.Error(err, "Couldn't parse request %s", r.RequestURI)
-		SendResponse(w, admissionctl.Errored(http.StatusBadRequest, err))
-		return
-	}
+   if err != nil {
+       w.WriteHeader(http.StatusBadRequest)
+       klog.ErrorS(err, "Failed to parse request URL", "requestURI", r.RequestURI)
+       SendResponse(w, admissionctl.Errored(http.StatusBadRequest, err))
+       return
+   }
 
 	request, _, err := ParseHTTPRequest(r)
 	// Problem parsing an AdmissionReview, so use BadRequest HTTP status code
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		klog.Error(err, "Error parsing HTTP Request Body")
-		SendResponse(w, admissionctl.Errored(http.StatusBadRequest, err))
-		return
-	}
+   if err != nil {
+       w.WriteHeader(http.StatusBadRequest)
+       klog.ErrorS(err, "Error parsing HTTP request body")
+       SendResponse(w, admissionctl.Errored(http.StatusBadRequest, err))
+       return
+   }
 
 	SendResponse(w, d.hook.Authorized(request))
 }
@@ -66,11 +66,11 @@ func SendResponse(w io.Writer, resp admissionctl.Response) {
 	}
 	responseAdmissionReview.APIVersion = admissionv1.SchemeGroupVersion.String()
 	responseAdmissionReview.Kind = "AdmissionReview"
-	err := encoder.Encode(responseAdmissionReview)
-	if err != nil {
-		klog.Error(err, "Failed to encode Response", "response", resp)
-		SendResponse(w, admissionctl.Errored(http.StatusInternalServerError, err))
-	}
+   err := encoder.Encode(responseAdmissionReview)
+   if err != nil {
+       klog.ErrorS(err, "Failed to encode response", "response", resp)
+       SendResponse(w, admissionctl.Errored(http.StatusInternalServerError, err))
+   }
 }
 
 func ParseHTTPRequest(r *http.Request) (admissionctl.Request, admissionctl.Response, error) {

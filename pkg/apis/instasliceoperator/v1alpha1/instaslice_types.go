@@ -39,13 +39,13 @@ type InstasliceOperator struct {
 type InstasliceOperatorSpec struct {
 	operatorv1.OperatorSpec `json:",inline"`
 
-   // EmulatedMode true configures the operator to not use the GPU backend
-   // +optional
-   EmulatedMode EmulatedMode `json:"emulatedMode,omitempty"`
-  
-  // NodeSelector allows additional node label filters for the daemonset pods
-  // +optional
-  NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	// EmulatedMode true configures the operator to not use the GPU backend
+	// +optional
+	EmulatedMode EmulatedMode `json:"emulatedMode,omitempty"`
+
+	// NodeSelector allows additional node label filters for the daemonset pods
+	// +optional
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }
 
 // InstasliceOperatorStatus defines the observed state of InstasliceOperator

@@ -57,8 +57,6 @@ func (c *InstasliceController) sync(ctx context.Context, syncCtx factory.SyncCon
 	return nil
 }
 
-// queueKeysRuntimeForObj is an adapter on top of queueKeysForObj to be used in
-// factory.Controller queueing functions
 func (c *InstasliceController) nameToKey(obj runtime.Object) []string {
 	metaObj, ok := obj.(metav1.ObjectMetaAccessor)
 	if !ok {

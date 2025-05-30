@@ -103,7 +103,7 @@ func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext) erro
        OperatorNamespace: operatorNamespace,
    }
    opInformerFactory.Start(ctx.Done())
-   klog.Info("Starting log level controller")
+   klog.InfoS("Starting log level controller")
    go loglevel.NewClusterOperatorLoggingController(opClient, cc.EventRecorder).Run(ctx, 1)
 
 	// Launch worker to process Pods
@@ -149,19 +149,19 @@ func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, p
 	defer queue.Done(key)
 	defer queue.Forget(key)
 
-	klog.V(4).Infof("[instaslice-scheduler] processing pod %s", key)
+   klog.V(4).InfoS("Processing pod", "key", key)
 
 	// split namespace/name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
    if err != nil {
-       klog.Errorf("invalid pod key: %v", err)
+       klog.ErrorS(err, "Invalid pod key")
 		return true
 	}
 
 	// get the Pod
 	pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
     if err != nil {
-        klog.Errorf("error getting pod %s: %v", key, err)
+        klog.ErrorS(err, "Error getting pod", "key", key)
 		return true
 	}
 	// skip already scheduled Pods
@@ -188,7 +188,7 @@ func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, p
 	// list all nodes
 	nodeList, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
     if err != nil {
-        klog.Errorf("error listing nodes: %v", err)
+        klog.ErrorS(err, "Error listing nodes")
 		return true
 	}
 
@@ -278,11 +278,11 @@ func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, p
 		break
 	}
     if selectedNode == "" {
-        klog.V(3).Infof("no fit nodes (with GPU) found for pod %s", key)
+        klog.V(3).InfoS("No fit nodes (with GPU) found for pod", "pod", key)
         return true
     }
 	// report selected GPU for Pod
-    klog.V(3).Infof("selected GPU %s for pod %s", selectedGPU, key)
+    klog.V(3).InfoS("Selected GPU for pod", "gpu", selectedGPU, "pod", key)
 
 	// bind Pod to the selected node
 	binding := &corev1.Binding{
@@ -290,10 +290,10 @@ func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, p
 		Target:     corev1.ObjectReference{Kind: "Node", Name: selectedNode},
 	}
     if err := kubeClient.CoreV1().Pods(namespace).Bind(ctx, binding, metav1.CreateOptions{}); err != nil {
-        klog.Errorf("failed to bind pod %s to node %s: %v", key, selectedNode, err)
+        klog.ErrorS(err, "Failed to bind pod to node", "pod", key, "node", selectedNode)
         return true
     }
-    klog.Infof("bound pod %s to node %s with GPU %s", key, selectedNode, selectedGPU)
+    klog.InfoS("Bound pod to node with GPU", "pod", key, "node", selectedNode, "gpu", selectedGPU)
     return true
 }
 
