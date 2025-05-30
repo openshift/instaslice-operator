@@ -4,4 +4,4 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
 - name: controller
-  newName: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:9e11b26064e62a07146fa3269198dd66439425972284d497816795f75ffb36db
+  newName: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:4e9b641b9a2c8a4955485396844233d77f0a9bc4a693b882e7d2c208e0afe35c
