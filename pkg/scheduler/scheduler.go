@@ -13,17 +13,20 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+
+	instav1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
+	instainformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
 )
 
 // RunScheduler is the entrypoint for the Instaslice secondary scheduler.
 func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext) error {
-	// 1. Create Kubernetes client
 	kubeClient, err := kubernetes.NewForConfig(cc.ProtoKubeConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create kube client: %w", err)
 	}
 
-	// 2. Set up informer factory and Pod informer with indexer
+	// Set up informer factory and Pod informer with indexer
 	// resync period: 30 minutes to reprocess all Pods and refresh cache
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, 30*time.Minute)
 	podInformer := informerFactory.Core().V1().Pods().Informer()
@@ -41,29 +44,49 @@ func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext) erro
 		return fmt.Errorf("failed to add podsByNode index: %w", err)
 	}
 
-	// 3. Create a typed workqueue with a named config (type=string keys)
+	// Create a typed workqueue with a named config (type=string keys)
 	queue := workqueue.NewTypedRateLimitingQueueWithConfig(
 		workqueue.DefaultTypedControllerRateLimiter[string](),
 		workqueue.TypedRateLimitingQueueConfig[string]{Name: "instaslice-scheduler"},
 	)
 
-	// 4. Register event handlers for Pods
+	// Register event handlers for Pods
 	podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    func(obj interface{}) { enqueuePod(obj, queue) },
 		UpdateFunc: func(old, new interface{}) { enqueuePod(new, queue) },
 		DeleteFunc: func(obj interface{}) { enqueuePod(obj, queue) },
 	})
 
-	// 5. Start informers
+	// Set up Instaslice CRD informer with indexer
+	instaClient, err := instaclient.NewForConfig(cc.ProtoKubeConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create instaslice client: %w", err)
+	}
+	instaInformerFactory := instainformers.NewSharedInformerFactory(instaClient, 30*time.Minute)
+	instaInformer := instaInformerFactory.OpenShiftOperator().V1alpha1().Instaslices().Informer()
+	if err := instaInformer.AddIndexers(cache.Indexers{
+		"instasliceByNode": func(obj interface{}) ([]string, error) {
+			is, ok := obj.(*instav1alpha1.Instaslice)
+			if !ok {
+				return nil, nil
+			}
+			return []string{is.Name}, nil
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to add instasliceByNode index: %w", err)
+	}
+	// Start informers (Pods and Instaslice)
 	informerFactory.Start(ctx.Done())
-	if !cache.WaitForCacheSync(ctx.Done(), podInformer.HasSynced) {
-		return fmt.Errorf("failed to sync pod informer")
+	instaInformerFactory.Start(ctx.Done())
+	if !cache.WaitForCacheSync(ctx.Done(), podInformer.HasSynced, instaInformer.HasSynced) {
+		return fmt.Errorf("failed to sync informers")
 	}
 
-	// 6. Launch worker to process Pods
+	// Launch worker to process Pods
 	go func() {
 		podIndexer := podInformer.GetIndexer()
-		for processNextWorkItem(ctx, kubeClient, podIndexer, queue) {
+		instIndexer := instaInformer.GetIndexer()
+		for processNextWorkItem(ctx, kubeClient, podIndexer, instIndexer, queue) {
 		}
 	}()
 
@@ -94,7 +117,7 @@ func enqueuePod(obj interface{}, queue workqueue.TypedRateLimitingInterface[stri
 }
 
 // processNextWorkItem processes items from the workqueue: fetch Pod, schedule, and bind.
-func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, podIndexer cache.Indexer, queue workqueue.TypedRateLimitingInterface[string]) bool {
+func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, podIndexer cache.Indexer, instIndexer cache.Indexer, queue workqueue.TypedRateLimitingInterface[string]) bool {
 	key, shutdown := queue.Get()
 	if shutdown {
 		return false
@@ -148,18 +171,18 @@ func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, p
 	// filter nodes based on selectors, tolerations, available resources, and GPU availability
 	var selectedNode, selectedGPU string
 	for _, node := range nodeList.Items {
-		// 1) NodeSelector
+		// NodeSelector
 		if len(pod.Spec.NodeSelector) > 0 {
 			sel := labels.SelectorFromSet(pod.Spec.NodeSelector)
 			if !sel.Matches(labels.Set(node.Labels)) {
 				continue
 			}
 		}
-		// 2) Taints/Tolerations
+		// Taints/Tolerations
 		if !podToleratesTaints(pod, node.Spec.Taints) {
 			continue
 		}
-		// 3) Compute current usage on node from local cache
+		// Compute current usage on node from local cache
 		objs, err := podIndexer.ByIndex("podsByNode", node.Name)
 		if err != nil {
 			continue
@@ -202,22 +225,31 @@ func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, p
 		if availSto < reqStorage {
 			continue
 		}
-		// GPU selection stub: hard-coded list of UUIDs
-		gpuUUIDs := []string{
-			"GPU-1785aa6b-6edf-f58e-2e29-f6ccd30f306f",
-			"GPU-11111111-2222-3333-4444-555555555555",
+		// retrieve Instaslice CR for this node to get GPU information
+		instObjs, err := instIndexer.ByIndex("instasliceByNode", node.Name)
+		if err != nil {
+			continue
+		}
+		if len(instObjs) == 0 {
+			continue
+		}
+		instObj, ok := instObjs[0].(*instav1alpha1.Instaslice)
+		if !ok {
+			continue
+		}
+		// extract GPU UUIDs from Instaslice status
+		var gpuUUIDs []string
+		for _, gpu := range instObj.Status.NodeResources.NodeGPUs {
+			gpuUUIDs = append(gpuUUIDs, gpu.GPUUUID)
 		}
 		selectedGPU = ""
 		for _, uuid := range gpuUUIDs {
-			// TODO: apply real GPU capacity filter here
 			selectedGPU = uuid
 			break
 		}
 		if selectedGPU == "" {
-			// no GPU available on this node, try next
 			continue
 		}
-		// node passes all filters including GPU availability
 		selectedNode = node.Name
 		break
 	}
