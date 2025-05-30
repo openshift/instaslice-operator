@@ -11,7 +11,7 @@ import (
 	nvml "github.com/NVIDIA/go-nvml/pkg/nvml"
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
 	versioned "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
-	corev1 "k8s.io/api/core/v1"
+	utils "github.com/openshift/instaslice-operator/test/utils"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,10 +52,13 @@ func emulateDiscovery(ctx context.Context, config *rest.Config) error {
 	} else if err != nil {
 		return err
 	}
-	// TODO: populate fake NodeGPUs, MigPlacement, NodeResources fields
-	instaslice.Status.NodeResources.NodeGPUs = []instav1.DiscoveredGPU{}
-	instaslice.Status.NodeResources.MigPlacement = make(map[string]instav1.Mig)
-	instaslice.Status.NodeResources.NodeResources = make(corev1.ResourceList)
+	fake := utils.GenerateFakeCapacity(nodeName)
+	instaslice.Spec = fake.Spec
+	instaslice.Status = fake.Status
+	instaslice, err = instaClient.Update(ctx, instaslice, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
 	_, err = instaClient.UpdateStatus(ctx, instaslice, metav1.UpdateOptions{})
 	return err
 }
@@ -218,59 +221,60 @@ func discoverMigEnabledGpuWithSlices(ctx context.Context, config *rest.Config) e
 	if err := patchNodeStatusForNode(ctx, kubeClient, nodeName, int(totalMem)); err != nil {
 		return err
 	}
-   fmt.Printf("Discovered MIG-enabled GPUs on node %s: %v\n", nodeName, discovered)
-   return nil
+	fmt.Printf("Discovered MIG-enabled GPUs on node %s: %v\n", nodeName, discovered)
+	return nil
 }
+
 // addMigCapacityToNode patches node.status.capacity for each MIG profile.
 func addMigCapacityToNode(ctx context.Context, config *rest.Config) error {
-   nodeName := os.Getenv("NODE_NAME")
-   cs, err := versioned.NewForConfig(config)
-   if err != nil {
-       return err
-   }
-   instaClient := cs.OpenShiftOperatorV1alpha1().Instaslices(instasliceNamespace)
-   instaslice, err := instaClient.Get(ctx, nodeName, metav1.GetOptions{})
-   if err != nil {
-       return err
-   }
-   // Compute counts per MIG profile
-   profileCounts := make(map[string]int)
-   for profile, mig := range instaslice.Status.NodeResources.MigPlacement {
-       cnt := 0
-       for _, p := range mig.Placements {
-           if p.Size > 0 {
-               cnt++
-           }
-       }
-       profileCounts[profile] = cnt
-   }
-   numGPUs := len(instaslice.Status.NodeResources.NodeGPUs)
-   // Build JSON patches
-   patches := []map[string]interface{}{}
-   for profile, cnt := range profileCounts {
-       total := cnt * numGPUs
-       resName := "instaslice.redhat.com/mig-" + profile
-       patches = append(patches, map[string]interface{}{
-           "op":    "replace",
-           "path":  "/status/capacity/" + strings.ReplaceAll(resName, "/", "~1"),
-           "value": fmt.Sprintf("%d", total),
-       })
-   }
-   if len(patches) == 0 {
-       return nil
-   }
-   patchData, err := json.Marshal(patches)
-   if err != nil {
-       return fmt.Errorf("failed to marshal MIG capacity patch: %v", err)
-   }
-   kubeClient, err := kubernetes.NewForConfig(config)
-   if err != nil {
-       return err
-   }
-   _, err = kubeClient.CoreV1().Nodes().Patch(ctx, nodeName, types.JSONPatchType, patchData, metav1.PatchOptions{}, "status")
-   if err != nil {
-       return fmt.Errorf("failed to patch node MIG capacity: %v", err)
-   }
-   fmt.Printf("Patched node %s MIG capacity: %v\n", nodeName, profileCounts)
-   return nil
+	nodeName := os.Getenv("NODE_NAME")
+	cs, err := versioned.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	instaClient := cs.OpenShiftOperatorV1alpha1().Instaslices(instasliceNamespace)
+	instaslice, err := instaClient.Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	// Compute counts per MIG profile
+	profileCounts := make(map[string]int)
+	for profile, mig := range instaslice.Status.NodeResources.MigPlacement {
+		cnt := 0
+		for _, p := range mig.Placements {
+			if p.Size > 0 {
+				cnt++
+			}
+		}
+		profileCounts[profile] = cnt
+	}
+	numGPUs := len(instaslice.Status.NodeResources.NodeGPUs)
+	// Build JSON patches
+	patches := []map[string]interface{}{}
+	for profile, cnt := range profileCounts {
+		total := cnt * numGPUs
+		resName := "instaslice.redhat.com/mig-" + profile
+		patches = append(patches, map[string]interface{}{
+			"op":    "replace",
+			"path":  "/status/capacity/" + strings.ReplaceAll(resName, "/", "~1"),
+			"value": fmt.Sprintf("%d", total),
+		})
+	}
+	if len(patches) == 0 {
+		return nil
+	}
+	patchData, err := json.Marshal(patches)
+	if err != nil {
+		return fmt.Errorf("failed to marshal MIG capacity patch: %v", err)
+	}
+	kubeClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	_, err = kubeClient.CoreV1().Nodes().Patch(ctx, nodeName, types.JSONPatchType, patchData, metav1.PatchOptions{}, "status")
+	if err != nil {
+		return fmt.Errorf("failed to patch node MIG capacity: %v", err)
+	}
+	fmt.Printf("Patched node %s MIG capacity: %v\n", nodeName, profileCounts)
+	return nil
 }
