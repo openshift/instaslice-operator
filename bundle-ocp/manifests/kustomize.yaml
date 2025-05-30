@@ -1004,7 +1004,7 @@ kind: SecurityContextConstraints
 metadata:
   name: instaslice-operator-scc
   namespace: instaslice-system
-readOnlyRootFilesystem: false
+readOnlyRootFilesystem: true
 runAsUser:
   type: RunAsAny
 seLinuxContext:
