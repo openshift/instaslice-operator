@@ -63,6 +63,12 @@ spec:
                   should manage the component
                 pattern: ^(Managed|Unmanaged|Force|Removed)$
                 type: string
+              nodeSelector:
+                additionalProperties:
+                  type: string
+                description: NodeSelector allows additional node label filters for
+                  the daemonset pods
+                type: object
               observedConfig:
                 description: |-
                   observedConfig holds a sparse config that controller has observed from the cluster state.  It exists in spec because

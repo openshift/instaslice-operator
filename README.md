@@ -83,6 +83,25 @@ This can be configured in your controller Deployment. When enabled:
 - Nodes with `nvidia.com/mig.capable=true` will automatically be labeled as managed.
 - Disabled by default to preserve admin control.
 
+### Custom DaemonSet NodeSelector
+
+In addition to node labeling, you can restrict where the Instaslice daemonset runs by setting the `nodeSelector` field in your InstasliceOperator CR. These labels are merged with the default `nvidia.com/mig.capable=true` filter. For example:
+
+```yaml
+apiVersion: inference.redhat.com/v1alpha1
+kind: InstasliceOperator
+metadata:
+  name: cluster
+  namespace: instaslice-system
+spec:
+  managementState: Managed
+  logLevel: Normal
+  operatorLogLevel: Normal
+  emulatedMode: "false"
+  nodeSelector:
+    instasliceNodes: "true"
+```
+
 ### Running a sample workload
 Please note that running a sample workload requires availability of compatible GPUs (nvidia A100, H100, H200) on the worker nodes.
 

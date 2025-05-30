@@ -265,6 +265,13 @@ func (in *InstasliceOperatorList) DeepCopyObject() runtime.Object {
 func (in *InstasliceOperatorSpec) DeepCopyInto(out *InstasliceOperatorSpec) {
 	*out = *in
 	in.OperatorSpec.DeepCopyInto(&out.OperatorSpec)
+	if in.NodeSelector != nil {
+		in, out := &in.NodeSelector, &out.NodeSelector
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	return
 }
 

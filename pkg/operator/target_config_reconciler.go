@@ -59,6 +59,7 @@ type TargetConfigReconciler struct {
 	targetDaemonsetImage       string
 	targetWebhookImage         string
 	emulatedMode               slicev1alpha1.EmulatedMode
+	nodeSelector               map[string]string
 }
 
 func NewTargetConfigReconciler(
@@ -131,6 +132,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	}
 
 	c.emulatedMode = sliceOperator.Spec.EmulatedMode
+	c.nodeSelector = sliceOperator.Spec.NodeSelector
 
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "inference.redhat.com/v1alpha1",
@@ -249,6 +251,15 @@ func (c *TargetConfigReconciler) manageDaemonset(ctx context.Context, ownerRefer
 	required.Namespace = c.namespace
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
+	}
+	// Merge user-specified nodeSelector labels (if any)
+	if len(c.nodeSelector) > 0 {
+		if required.Spec.Template.Spec.NodeSelector == nil {
+			required.Spec.Template.Spec.NodeSelector = make(map[string]string)
+		}
+		for k, v := range c.nodeSelector {
+			required.Spec.Template.Spec.NodeSelector[k] = v
+		}
 	}
 	for i := range required.Spec.Template.Spec.Containers {
 		if c.targetDaemonsetImage != "" {

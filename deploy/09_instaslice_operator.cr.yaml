@@ -8,3 +8,6 @@ spec:
   logLevel: Normal
   operatorLogLevel: Normal
   emulatedMode: "false"
+  # Optional: additional nodeSelector filters for daemonset pods
+  nodeSelector:
+    instasliceNodes: "true"
