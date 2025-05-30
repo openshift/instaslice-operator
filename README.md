@@ -9,10 +9,10 @@ Partitionable accelerators provided by vendors need partition to be created at n
 InstaSlice will help if
 
 
- - user does not know all the accelerators partitions needed a priori on every node on the cluster
- - user partition requirements change at the workload level rather than the node level
- - user does not want to learn or use new API to request accelerators  slices
- - user prefers to use stable device plugins APIs for creating partitions
+- user does not know all the accelerators partitions needed a priori on every node on the cluster
+- user partition requirements change at the workload level rather than the node level
+- user does not want to learn or use new API to request accelerators  slices
+- user prefers to use stable device plugins APIs for creating partitions
 
 # Features overview
 
@@ -39,6 +39,16 @@ InstaSlice will help if
 
 Before proceeding with the operator installation, please ensure that all prerequisites are met, as any omissions may lead to unpredictable performance.
 
+### Deploy `instaslice-operator` from a custom code
+- Ensure the operators in the **Prerequisites** section are installed
+- Clone your fork/repository and checkout to the desired branch
+- Run the `ocp-deploy` make target along with the custom `IMG` and `IMG_DMST` variables set so as to build and push the images to an authorized registry from which the images can be pulled
+-
+``` bash
+git clone https://github.com/<your-fork>/instaslice-operator.git
+git checkout <desired-branch>
+IMG_TAG=custom; IMG=quay.io/<user>/instaslice-controller:$IMG_TAG CATALOG_IMG=quay.io/<user>/instaslice-catalog:$IMG_TAG  IMG_DMST=quay.io/<user>/instaslice-daemonset:$IMG_TAG BUNDLE_IMG=quay.io/<user>/instaslice-bundle:$IMG_TAG  make ocp-deploy
+```
 ### Installation of the Developer Preview
 
 After the installation of prerequisites, please follow these steps to install the operator.
@@ -123,7 +133,7 @@ Download and run a [sample pod](https://raw.githubusercontent.com/openshift/inst
   sudo nvidia-ctk config --set accept-nvidia-visible-devices-as-volume-mounts=true --in-place
   ```
 
-  This sets `accept-nvidia-visible-devices-as-volume-mounts=true` in the `/etc/nvidia-container-runtime/config.toml` file.
+This sets `accept-nvidia-visible-devices-as-volume-mounts=true` in the `/etc/nvidia-container-runtime/config.toml` file.
 
 ### Enable MIG on the GPU
 
