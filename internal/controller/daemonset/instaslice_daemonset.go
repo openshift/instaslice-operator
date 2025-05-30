@@ -18,6 +18,7 @@ import (
 	"github.com/openshift/instaslice-operator/internal/controller/utils"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -124,8 +125,26 @@ func (r *InstaSliceDaemonsetReconciler) Reconcile(ctx context.Context, req ctrl.
 
 	var instaslice inferencev1alpha1.Instaslice
 	if err := r.Get(ctx, nsName, &instaslice); err != nil {
+		if apierrors.IsNotFound(err) {
+			var node v1.Node
+			if err := r.Get(ctx, client.ObjectKey{Name: r.NodeName}, &node); err != nil {
+				log.Error(err, "error fetching node for missing Instaslice")
+				return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, nil
+			}
+			if _, ok := node.Labels[controller.ManagedLabel]; !ok {
+				log.Info("Node is not labeled managed, skipping Instaslice discovery", "node", r.NodeName)
+				return ctrl.Result{}, nil
+			}
+			log.Info("Instaslice CR missing for managed node, invoking discovery", "node", r.NodeName)
+			if err := r.discoverMigEnabledGpuWithSlices(); err != nil {
+				log.Error(err, "failed to repopulate Instaslice CR after recreation")
+				return ctrl.Result{Requeue: true}, err
+			}
+			return ctrl.Result{Requeue: true}, nil
+		}
+
 		log.Error(err, "Error getting Instaslice", "name", r.NodeName)
-		return ctrl.Result{RequeueAfter: controller.Requeue1sDelay}, err
+		return ctrl.Result{RequeueAfter: controller.Requeue5sDelay}, err
 	}
 	// get the node object to watch out for any related events
 	var node v1.Node
@@ -404,9 +423,9 @@ func (r *InstaSliceDaemonsetReconciler) cleanUpCiAndGi(ctx context.Context, allo
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	var err error
 	restConfig := mgr.GetConfig()
 
-	var err error
 	r.kubeClient, err = kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		return err
@@ -415,9 +434,9 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 		return err
 	}
 
+	// Init InstaSlice CR if node is labeled, after manager is elected
 	// Init InstaSlice obj as the first thing when cache is loaded.
 	// RunnableFunc is added to the manager.
-	// This function waits for the manager to be elected (<-mgr.Elected()) and then runs InstaSlice init code.
 	mgrAddErr := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
 		log := logr.FromContext(ctx)
 		<-mgr.Elected() // Wait for the manager to be elected
@@ -426,11 +445,28 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 			Name:      r.NodeName,
 			Namespace: controller.InstaSliceOperatorNamespace,
 		}
-		err := r.Get(ctx, typeNamespacedName, &instaslice)
+		err := r.Get(ctx, types.NamespacedName{Name: r.NodeName, Namespace: controller.InstaSliceOperatorNamespace}, &instaslice)
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				log.Info("Instaslice CR not found on startup, skipping patch until created by Reconcile()")
+				return nil
+			}
 			log.Error(err, "Unable to fetch Instaslice for node", "nodeName", r.NodeName)
+			return err
 		}
 
+		var node v1.Node
+		if err := r.Get(ctx, client.ObjectKey{Name: r.NodeName}, &node); err != nil {
+			log.Error(err, "error fetching node before discovery")
+			return err
+		}
+
+		if _, ok := node.Labels[controller.ManagedLabel]; !ok {
+			log.Info("Node is not labeled managed, skipping discovery and patching", "node", r.NodeName)
+			return nil
+		}
+
+		log.Info("Node is managed, running discovery on init", "node", r.NodeName)
 		if r.Config.EmulatorModeEnable {
 			fakeCapacity := utils.GenerateFakeCapacity(r.NodeName)
 			err := r.Create(ctx, fakeCapacity)
@@ -480,12 +516,11 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 			}
 		} else {
 			if instaslice.Status.NodeResources.NodeGPUs == nil { // TODO - use those conditions!
-				if _, e := r.discoverMigEnabledGpuWithSlices(); e != nil {
+				if e := r.discoverMigEnabledGpuWithSlices(); e != nil {
 					log.Error(e, "Error discovering MIG GPUs on node init")
 				}
 			}
 		}
-
 		if err := r.Get(ctx, typeNamespacedName, &instaslice); err != nil {
 			log.Error(err, "Unable to fetch Instaslice after discovery", "nodeName", r.NodeName)
 			return err
@@ -507,7 +542,6 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 				return err
 			}
 		}
-
 		return nil
 	}))
 	if mgrAddErr != nil {
@@ -537,7 +571,7 @@ func CalculateTotalMemoryGB(nodeGPUs []inferencev1alpha1.DiscoveredGPU) (float64
 }
 
 // This function discovers MIG devices as the plugin comes up. this is run exactly once.
-func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]string, error) {
+func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() error {
 	log := logr.FromContext(context.TODO())
 
 	instaslice := &inferencev1alpha1.Instaslice{}
@@ -547,28 +581,28 @@ func (r *InstaSliceDaemonsetReconciler) discoverMigEnabledGpuWithSlices() ([]str
 	customCtx := context.TODO()
 	errToCreate := r.Create(customCtx, instaslice)
 	if errToCreate != nil {
-		return nil, errToCreate
+		return errToCreate
 	}
 	instaslice, _, _, err := r.discoverAvailableProfilesOnGpus(instaslice)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	totalMemoryGB, err := CalculateTotalMemoryGB(instaslice.Status.NodeResources.NodeGPUs)
 	if err != nil {
 		log.Error(err, "unable to get GPU memory")
-		return nil, err
+		return err
 	}
 
 	if err = r.Status().Update(customCtx, instaslice); err != nil {
-		return nil, err
+		return err
 	}
 
 	// Patch the node capacity to reflect the total GPU memory
 	if err := r.patchNodeStatusForNode(customCtx, r.NodeName, int(totalMemoryGB)); err != nil {
-		return nil, err
+		return err
 	}
 
-	return discoveredGpusOnHost, nil
+	return nil
 }
 
 func (r *InstaSliceDaemonsetReconciler) addMigCapacityToNode(ctx context.Context, instaslice *inferencev1alpha1.Instaslice) error {

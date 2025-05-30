@@ -20,7 +20,7 @@ import "time"
 
 const (
 	OrgInstaslicePrefix              = "instaslice.redhat.com/"
-	managedLabel                     = OrgInstaslicePrefix + "managed"
+	ManagedLabel                     = OrgInstaslicePrefix + "managed"
 	GateName                         = OrgInstaslicePrefix + "accelerator"
 	FinalizerName                    = GateName
 	QuotaResourceName                = OrgInstaslicePrefix + "accelerator-memory-quota"
@@ -43,5 +43,6 @@ const (
 
 	Requeue1sDelay  = 1 * time.Second
 	Requeue2sDelay  = 2 * time.Second
-	requeue10sDelay = 10 * time.Second
+	Requeue5sDelay  = 5 * time.Second
+	Requeue10sDelay = 10 * time.Second
 )
