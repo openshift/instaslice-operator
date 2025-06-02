@@ -119,10 +119,10 @@ test-kind:
 	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') nvidia.com/mig.capable=true --overwrite
 
 	@echo "=== Building container images ==="
-	docker build -f Dockerfile.scheduler.ocp -t instaslice-scheduler:dev .
-	docker build -f Dockerfile.daemonset.ocp -t instaslice-daemonset:dev .
-	docker build -f Dockerfile.ocp -t instaslice-operator:dev .
-	docker build -f Dockerfile.webhook.ocp -t instaslice-webhook:dev .
+	# docker build -f Dockerfile.scheduler.ocp -t instaslice-scheduler:dev .
+	# docker build -f Dockerfile.daemonset.ocp -t instaslice-daemonset:dev .
+	# docker build -f Dockerfile.ocp -t instaslice-operator:dev .
+	# docker build -f Dockerfile.webhook.ocp -t instaslice-webhook:dev .
 
 	@echo "=== Loading images into Kind ==="
 	kind load docker-image instaslice-scheduler:dev --name instaslice-test
@@ -147,20 +147,7 @@ test-kind:
 	@echo "=== Applying Kind core manifests ==="
 	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
 	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' deploy-kind/09_instaslice_operator.cr.yaml
-	kubectl apply \
-	  -f deploy-kind/01_namespace.yaml \
-	  -f deploy-kind/02_00_operand_clusterrole.yaml \
-	  -f deploy-kind/02_01_operand_clusterrolebinding.yaml \
-	  -f deploy-kind/02_02_operand_role.yaml \
-	  -f deploy-kind/02_03_operand_rolebinding.yaml \
-	  -f deploy-kind/02_04_daemonset_rolebinding.yaml \
-	  -f deploy-kind/04_01_clusterrole.yaml \
-	  -f deploy-kind/04_02_clusterrolebinding.yaml \
-	  -f deploy-kind/04_serviceaccount.yaml \
-	  -f deploy-kind/05_deployment.yaml \
-	  -f deploy-kind/05_default_sa_rbac.yaml \
-	  -f deploy-kind/09_instaslice_operator.cr.yaml \
-	  -f deploy-kind/05_06_scheduler_core_rbac.yaml
+	kubectl apply -f deploy-kind/01_namespace.yaml -f deploy-kind/operand_rbac.yaml -f deploy-kind/daemonset_rbac.yaml -f deploy-kind/controller_rbac.yaml -f deploy-kind/05_deployment.yaml -f deploy-kind/09_instaslice_operator.cr.yaml -f deploy-kind/scheduler_rbac.yaml
 
 
 	@echo "=== Deploying instaslice-scheduler ==="
