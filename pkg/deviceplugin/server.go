@@ -9,6 +9,10 @@ import (
 	"google.golang.org/grpc"
 	"k8s.io/klog/v2"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
+
+	"tags.cncf.io/container-device-interface/pkg/cdi"
+	// UUID generator for unique spec filenames
+	utiluuid "k8s.io/apimachinery/pkg/util/uuid"
 )
 
 var _ pluginapi.DevicePluginServer = (*Server)(nil)
@@ -25,6 +29,11 @@ func NewServer(mgr *Manager, socketPath string) *Server {
 
 func (s *Server) Start(ctx context.Context) error {
 	klog.InfoS("Starting device plugin server", "socket", s.SocketPath)
+	// configure CDI cache to write specs to /etc/cdi only (persistent across reboots)
+	if err := cdi.Configure(cdi.WithSpecDirs(cdi.DefaultDynamicDir)); err != nil {
+		klog.ErrorS(err, "failed to configure CDI spec directories")
+		return fmt.Errorf("failed to configure CDI spec directories: %w", err)
+	}
 	// remove existing socket file, if any
 	if err := os.Remove(s.SocketPath); err != nil {
 		if os.IsNotExist(err) {
@@ -101,13 +110,26 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 	resp := &pluginapi.AllocateResponse{
 		ContainerResponses: make([]*pluginapi.ContainerAllocateResponse, count),
 	}
-	for i := 0; i < count; i++ {
+
+	for i := range count {
 		resp.ContainerResponses[i] = &pluginapi.ContainerAllocateResponse{}
+
+		id := utiluuid.NewUUID()
+		cdiDevices, err := WriteCDISpecForResource(s.Manager.ResourceName, string(id))
+		if err != nil {
+			return nil, err
+		}
+		resp.ContainerResponses[i].CDIDevices = cdiDevices
+		resp.ContainerResponses[i].Envs = map[string]string{
+			"NVIDIA_VISIBLE_DEVICES": "test",
+			"CUDA_VISIBLE_DEVICES":   "test",
+		}
+
 	}
+
 	return resp, nil
 }
 
 func (s *Server) PreStartContainer(ctx context.Context, req *pluginapi.PreStartContainerRequest) (*pluginapi.PreStartContainerResponse, error) {
-	resp := &pluginapi.PreStartContainerResponse{}
-	return resp, nil
+	return &pluginapi.PreStartContainerResponse{}, nil
 }

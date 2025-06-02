@@ -26,6 +26,10 @@ spec:
         hostPath:
           path: /var/lib/kubelet/device-plugins
           type: DirectoryOrCreate
+      - name: cdi-dir
+        hostPath:
+          path: /var/run/cdi
+          type: DirectoryOrCreate
       containers:
       - name: instaslice-daemonset
         securityContext:
@@ -42,6 +46,8 @@ spec:
         volumeMounts:
           - name: device-plugins
             mountPath: /var/lib/kubelet/device-plugins
+          - name: cdi-dir
+            mountPath: /var/run/cdi
         env:
           - name: NODE_NAME
             valueFrom:
