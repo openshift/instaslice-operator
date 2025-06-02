@@ -1,26 +1,26 @@
 package scheduler
 
 import (
-   "context"
-   "fmt"
-   "time"
+	"context"
+	"fmt"
+	"time"
 
-   "github.com/openshift/library-go/pkg/controller/controllercmd"
-   corev1 "k8s.io/api/core/v1"
-   metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-   "k8s.io/apimachinery/pkg/labels"
-   "k8s.io/client-go/informers"
-   "k8s.io/client-go/kubernetes"
-   "k8s.io/client-go/tools/cache"
-   "k8s.io/client-go/util/workqueue"
+	"github.com/openshift/library-go/pkg/controller/controllercmd"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 
-   instav1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
-   instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
-   instainformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
+	instav1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
+	instainformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
 
-   "github.com/openshift/instaslice-operator/pkg/operator/operatorclient"
-   "github.com/openshift/library-go/pkg/operator/loglevel"
-   "k8s.io/klog/v2"
+	"github.com/openshift/instaslice-operator/pkg/operator/operatorclient"
+	"github.com/openshift/library-go/pkg/operator/loglevel"
+	"k8s.io/klog/v2"
 )
 
 // RunScheduler is the entrypoint for the Instaslice secondary scheduler.
@@ -82,29 +82,29 @@ func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext) erro
 	// Start informers (Pods and Instaslice)
 	informerFactory.Start(ctx.Done())
 	instaInformerFactory.Start(ctx.Done())
-   if !cache.WaitForCacheSync(ctx.Done(), podInformer.HasSynced, instaInformer.HasSynced) {
-       return fmt.Errorf("failed to sync informers")
-   }
-   // Set up operator config informers for dynamic log level
-   opClientset, err := instaclient.NewForConfig(cc.KubeConfig)
-   if err != nil {
-       return fmt.Errorf("failed to create instaslice operator client: %w", err)
-   }
-   operatorNamespace := cc.OperatorNamespace
-   if operatorNamespace == "openshift-config-managed" {
-       operatorNamespace = "instaslice-system"
-   }
-   opInformerFactory := instainformers.NewSharedInformerFactory(opClientset, 10*time.Minute)
-   opClient := &operatorclient.InstasliceOperatorSetClient{
-       Ctx:               ctx,
-       SharedInformer:    opInformerFactory.OpenShiftOperator().V1alpha1().InstasliceOperators().Informer(),
-       Lister:            opInformerFactory.OpenShiftOperator().V1alpha1().InstasliceOperators().Lister(),
-       OperatorClient:    opClientset.OpenShiftOperatorV1alpha1(),
-       OperatorNamespace: operatorNamespace,
-   }
-   opInformerFactory.Start(ctx.Done())
-   klog.InfoS("Starting log level controller")
-   go loglevel.NewClusterOperatorLoggingController(opClient, cc.EventRecorder).Run(ctx, 1)
+	if !cache.WaitForCacheSync(ctx.Done(), podInformer.HasSynced, instaInformer.HasSynced) {
+		return fmt.Errorf("failed to sync informers")
+	}
+	// Set up operator config informers for dynamic log level
+	opClientset, err := instaclient.NewForConfig(cc.KubeConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create instaslice operator client: %w", err)
+	}
+	operatorNamespace := cc.OperatorNamespace
+	if operatorNamespace == "openshift-config-managed" {
+		operatorNamespace = "instaslice-system"
+	}
+	opInformerFactory := instainformers.NewSharedInformerFactory(opClientset, 10*time.Minute)
+	opClient := &operatorclient.InstasliceOperatorSetClient{
+		Ctx:               ctx,
+		SharedInformer:    opInformerFactory.OpenShiftOperator().V1alpha1().InstasliceOperators().Informer(),
+		Lister:            opInformerFactory.OpenShiftOperator().V1alpha1().InstasliceOperators().Lister(),
+		OperatorClient:    opClientset.OpenShiftOperatorV1alpha1(),
+		OperatorNamespace: operatorNamespace,
+	}
+	opInformerFactory.Start(ctx.Done())
+	klog.InfoS("Starting log level controller")
+	go loglevel.NewClusterOperatorLoggingController(opClient, cc.EventRecorder).Run(ctx, 1)
 
 	// Launch worker to process Pods
 	go func() {
@@ -122,6 +122,7 @@ func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext) erro
 func enqueuePod(obj interface{}, queue workqueue.TypedRateLimitingInterface[string]) {
 	var key string
 	var err error
+
 	// handle DeleteFinalStateUnknown
 	if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
 		obj = tombstone.Obj
@@ -133,8 +134,10 @@ func enqueuePod(obj interface{}, queue workqueue.TypedRateLimitingInterface[stri
 	if pod.Spec.SchedulerName != "instaslice-scheduler" {
 		return
 	}
+	klog.InfoS("pod to consider ", "pod", pod.Name)
 	key, err = cache.MetaNamespaceKeyFunc(pod)
 	if err != nil {
+		klog.ErrorS(err, "Invalid pod key for enqueuePod", "pod", pod.Name)
 		return
 	}
 	queue.Add(key)
@@ -149,19 +152,20 @@ func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, p
 	defer queue.Done(key)
 	defer queue.Forget(key)
 
-   klog.V(4).InfoS("Processing pod", "key", key)
+	// klog.V(4).InfoS("Processing pod", "key", key)
+	klog.InfoS("Processing pod", "key", key)
 
 	// split namespace/name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-   if err != nil {
-       klog.ErrorS(err, "Invalid pod key")
+	if err != nil {
+		klog.ErrorS(err, "Invalid pod key")
 		return true
 	}
 
 	// get the Pod
 	pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
-    if err != nil {
-        klog.ErrorS(err, "Error getting pod", "key", key)
+	if err != nil {
+		klog.ErrorS(err, "Error getting pod", "key", key)
 		return true
 	}
 	// skip already scheduled Pods
@@ -187,8 +191,8 @@ func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, p
 
 	// list all nodes
 	nodeList, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-    if err != nil {
-        klog.ErrorS(err, "Error listing nodes")
+	if err != nil {
+		klog.ErrorS(err, "Error listing nodes")
 		return true
 	}
 
@@ -277,24 +281,24 @@ func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, p
 		selectedNode = node.Name
 		break
 	}
-    if selectedNode == "" {
-        klog.V(3).InfoS("No fit nodes (with GPU) found for pod", "pod", key)
-        return true
-    }
+	if selectedNode == "" {
+		klog.V(3).InfoS("No fit nodes (with GPU) found for pod", "pod", key)
+		return true
+	}
 	// report selected GPU for Pod
-    klog.V(3).InfoS("Selected GPU for pod", "gpu", selectedGPU, "pod", key)
+	klog.V(3).InfoS("Selected GPU for pod", "gpu", selectedGPU, "pod", key)
 
 	// bind Pod to the selected node
 	binding := &corev1.Binding{
 		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
 		Target:     corev1.ObjectReference{Kind: "Node", Name: selectedNode},
 	}
-    if err := kubeClient.CoreV1().Pods(namespace).Bind(ctx, binding, metav1.CreateOptions{}); err != nil {
-        klog.ErrorS(err, "Failed to bind pod to node", "pod", key, "node", selectedNode)
-        return true
-    }
-    klog.InfoS("Bound pod to node with GPU", "pod", key, "node", selectedNode, "gpu", selectedGPU)
-    return true
+	if err := kubeClient.CoreV1().Pods(namespace).Bind(ctx, binding, metav1.CreateOptions{}); err != nil {
+		klog.ErrorS(err, "Failed to bind pod to node", "pod", key, "node", selectedNode)
+		return true
+	}
+	klog.InfoS("Bound pod to node with GPU", "pod", key, "node", selectedNode, "gpu", selectedGPU)
+	return true
 }
 
 // podToleratesTaints checks if a Pod tolerates all NoSchedule taints of a node.

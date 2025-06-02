@@ -120,7 +120,7 @@ test-kind:
 
 	@echo "=== Building container images ==="
 	# docker build -f Dockerfile.scheduler.ocp -t instaslice-scheduler:dev .
-	# docker build -f Dockerfile.daemonset.ocp -t instaslice-daemonset:dev .
+	docker build -f Dockerfile.daemonset.ocp -t instaslice-daemonset:dev .
 	# docker build -f Dockerfile.ocp -t instaslice-operator:dev .
 	# docker build -f Dockerfile.webhook.ocp -t instaslice-webhook:dev .
 
@@ -153,6 +153,7 @@ test-kind:
 	@echo "=== Deploying instaslice-scheduler ==="
 	kubectl apply -f deploy-kind/06_scheduler_deployment.yaml
 
+	sleep 5
 	@echo "=== Deploying test pod ==="
 	kubectl apply -f deploy-kind/07_test_pod.yaml
 
