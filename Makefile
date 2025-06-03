@@ -83,6 +83,16 @@ regen-crd-kind:
 	mv deploy-kind/inference.redhat.com_instasliceoperators.yaml deploy-kind/00_instaslice-operator.crd.yaml
 	mv deploy-kind/inference.redhat.com_instaslices.yaml deploy-kind/00_instaslices.crd.yaml
 
+.PHONY: regen-crd-k8s
+regen-crd-k8s:
+	@echo "Generating CRDs into deploy-k8s directory"
+	go build -o _output/tools/bin/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
+	rm -f deploy-k8s/00_instaslice-operator.crd.yaml
+	rm -f deploy-k8s/00_instaslices.crd.yaml
+	./_output/tools/bin/controller-gen crd paths=./pkg/apis/instasliceoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./deploy-k8s
+	mv deploy-k8s/inference.redhat.com_instasliceoperators.yaml deploy-k8s/00_instaslice-operator.crd.yaml
+	mv deploy-k8s/inference.redhat.com_instaslices.yaml deploy-k8s/00_instaslices.crd.yaml
+
 build-images:
 	podman build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
 	podman build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/instaslice-scheduler:${IMAGE_TAG} .
@@ -119,10 +129,10 @@ test-kind:
 	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') nvidia.com/mig.capable=true --overwrite
 
 	@echo "=== Building container images ==="
-	# docker build -f Dockerfile.scheduler.ocp -t instaslice-scheduler:dev .
+	docker build -f Dockerfile.scheduler.ocp -t instaslice-scheduler:dev .
 	docker build -f Dockerfile.daemonset.ocp -t instaslice-daemonset:dev .
-	# docker build -f Dockerfile.ocp -t instaslice-operator:dev .
-	# docker build -f Dockerfile.webhook.ocp -t instaslice-webhook:dev .
+	docker build -f Dockerfile.ocp -t instaslice-operator:dev .
+	docker build -f Dockerfile.webhook.ocp -t instaslice-webhook:dev .
 
 	@echo "=== Loading images into Kind ==="
 	kind load docker-image instaslice-scheduler:dev --name instaslice-test
@@ -161,6 +171,55 @@ test-kind:
 cleanup-kind:
 	@echo "=== Deleting Kind cluster 'instaslice-test' ==="
 	kind delete cluster --name instaslice-test
+
+## test-k8s: quick test on local k8s cluster
+.PHONY: test-k8s
+test-k8s:
+	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') nvidia.com/mig.capable=true --overwrite
+
+	@echo "=== Building container images ==="
+	docker build -f Dockerfile.scheduler.ocp -t localhost:5000/instaslice-scheduler:dev .
+	docker build -f Dockerfile.daemonset.ocp -t localhost:5000/instaslice-daemonset:dev .
+	docker build -f Dockerfile.ocp -t localhost:5000/instaslice-operator:dev .
+	docker build -f Dockerfile.webhook.ocp -t localhost:5000/instaslice-webhook:dev .
+
+	@echo "=== Pushing images into local registry ==="
+	docker push localhost:5000/instaslice-scheduler:dev
+	docker push localhost:5000/instaslice-daemonset:dev
+	docker push localhost:5000/instaslice-operator:dev
+	docker push localhost:5000/instaslice-webhook:dev
+
+	@echo "=== Deploying Cert Manager ==="
+	$(MAKE) deploy-cert-manager
+	@echo "=== Generating CRDs for K8s ==="
+	$(MAKE) regen-crd-k8s
+
+
+	@echo "=== Applying K8s CRDs ==="
+	kubectl apply \
+ 	-f deploy-k8s/00_instaslice-operator.crd.yaml \
+ 	-f deploy-k8s/00_instaslices.crd.yaml
+
+	@echo "=== Waiting for CRDs to be established ==="
+	kubectl wait --for=condition=established --timeout=60s crd instasliceoperators.inference.redhat.com
+
+	@echo "=== Applying K8s core manifests ==="
+	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
+	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' deploy-k8s/09_instaslice_operator.cr.yaml
+	kubectl apply -f deploy-k8s/01_namespace.yaml -f deploy-k8s/operand_rbac.yaml -f deploy-k8s/daemonset_rbac.yaml -f deploy-k8s/controller_rbac.yaml -f deploy-k8s/05_deployment.yaml -f deploy-k8s/09_instaslice_operator.cr.yaml -f deploy-k8s/scheduler_rbac.yaml
+
+
+	@echo "=== Deploying instaslice-scheduler ==="
+	kubectl apply -f deploy-k8s/06_scheduler_deployment.yaml
+
+	sleep 5
+	@echo "=== Deploying test pod ==="
+	kubectl apply -f deploy-k8s/07_test_pod.yaml
+
+.PHONY: cleanup-k8s
+cleanup-k8s:
+	@echo "=== Deleting K8s resources ==="
+	kubectl delete -f deploy-k8s/01_namespace.yaml -f deploy-k8s/operand_rbac.yaml -f deploy-k8s/daemonset_rbac.yaml -f deploy-k8s/controller_rbac.yaml -f deploy-k8s/05_deployment.yaml -f deploy-k8s/09_instaslice_operator.cr.yaml -f deploy-k8s/scheduler_rbac.yaml
 
 .PHONY: deploy-cert-manager
 deploy-cert-manager:
