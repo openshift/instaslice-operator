@@ -54,10 +54,10 @@ func emulateDiscovery(ctx context.Context, config *rest.Config) error {
 	} else if err != nil {
 		return err
 	}
- 	fake := utils.GenerateFakeCapacity(nodeName)
- 	// Update spec only; status subresource is updated separately
- 	instaslice.Spec = fake.Spec
- 	updated, err := instaClient.Update(ctx, instaslice, metav1.UpdateOptions{})
+	fake := utils.GenerateFakeCapacity(nodeName)
+	// Update spec only; status subresource is updated separately
+	instaslice.Spec = fake.Spec
+	updated, err := instaClient.Update(ctx, instaslice, metav1.UpdateOptions{})
 	if err != nil {
 		klog.ErrorS(err, "Failed to update instaslice spec during emulation", "node", nodeName)
 		return err
@@ -251,10 +251,10 @@ func discoverMigEnabledGpuWithSlices(ctx context.Context, config *rest.Config) e
 	}
 
 	// Compute total memory and update status
-	totalMem, err := CalculateTotalMemoryGB(instaslice.Status.NodeResources.NodeGPUs)
-	if err != nil {
-		return err
-	}
+	// totalMem, err := CalculateTotalMemoryGB(instaslice.Status.NodeResources.NodeGPUs)
+	// if err != nil {
+	// 	return err
+	// }
 	// Populate NodeResources.NodeResources with node allocatable
 	kubeClient, err := kubernetes.NewForConfig(config)
 	if err != nil {
@@ -272,9 +272,9 @@ func discoverMigEnabledGpuWithSlices(ctx context.Context, config *rest.Config) e
 	}
 
 	// Patch node capacity
-	if err := patchNodeStatusForNode(ctx, kubeClient, nodeName, int(totalMem)); err != nil {
-		return err
-	}
+	// if err := patchNodeStatusForNode(ctx, kubeClient, nodeName, int(totalMem)); err != nil {
+	// 	return err
+	// }
 	klog.InfoS("Discovered MIG-enabled GPUs on node", "node", nodeName, "uuids", discovered)
 	return nil
 }

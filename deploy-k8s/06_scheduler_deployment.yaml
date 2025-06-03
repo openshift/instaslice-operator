@@ -17,5 +17,5 @@ spec:
       containers:
       - name: scheduler
         image: localhost:5000/instaslice-scheduler:dev
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         command: ["instaslice-scheduler", "scheduler"]

@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 
 	"google.golang.org/grpc"
 	"k8s.io/klog/v2"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 
 	"tags.cncf.io/container-device-interface/pkg/cdi"
+	parser "tags.cncf.io/container-device-interface/pkg/parser"
+	cdispec "tags.cncf.io/container-device-interface/specs-go"
+
 	// UUID generator for unique spec filenames
 	utiluuid "k8s.io/apimachinery/pkg/util/uuid"
 )
@@ -34,6 +38,7 @@ func (s *Server) Start(ctx context.Context) error {
 		klog.ErrorS(err, "failed to configure CDI spec directories")
 		return fmt.Errorf("failed to configure CDI spec directories: %w", err)
 	}
+
 	// remove existing socket file, if any
 	if err := os.Remove(s.SocketPath); err != nil {
 		if os.IsNotExist(err) {
@@ -115,16 +120,12 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 		resp.ContainerResponses[i] = &pluginapi.ContainerAllocateResponse{}
 
 		id := utiluuid.NewUUID()
-		cdiDevices, err := WriteCDISpecForResource(s.Manager.ResourceName, string(id))
+
+		cdiDevices, err := s.writeCDISpecForResource(s.Manager.ResourceName, string(id))
 		if err != nil {
 			return nil, err
 		}
 		resp.ContainerResponses[i].CDIDevices = cdiDevices
-		resp.ContainerResponses[i].Envs = map[string]string{
-			"NVIDIA_VISIBLE_DEVICES": "test",
-			"CUDA_VISIBLE_DEVICES":   "test",
-		}
-
 	}
 
 	return resp, nil
@@ -132,4 +133,63 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 
 func (s *Server) PreStartContainer(ctx context.Context, req *pluginapi.PreStartContainerRequest) (*pluginapi.PreStartContainerResponse, error) {
 	return &pluginapi.PreStartContainerResponse{}, nil
+}
+
+// BuildCDIDevices builds a CDI spec and returns the spec object, spec name, spec path, and the corresponding CDIDevices slice.
+func (s *Server) buildCDIDevices(kind, sanitizedClass, id string) (*cdispec.Spec, string, string, []*pluginapi.CDIDevice) {
+	specNameBase := fmt.Sprintf("%s_%s", sanitizedClass, id)
+	specName := specNameBase + ".cdi.json"
+	specPath := filepath.Join(cdi.DefaultDynamicDir, specName)
+
+	specObj := &cdispec.Spec{
+		Version: cdispec.CurrentVersion,
+		Kind:    kind,
+		Devices: []cdispec.Device{
+			{
+				Name: "dev0",
+				ContainerEdits: cdispec.ContainerEdits{
+					Env: []string{"ABCD=test"},
+					Hooks: []*cdispec.Hook{
+						{
+							HookName: "poststop",
+							Path:     "/bin/rm",
+							Args:     []string{"-f", specPath},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	cdiDevices := make([]*pluginapi.CDIDevice, len(specObj.Devices))
+	for j, dev := range specObj.Devices {
+		cdiDevices[j] = &pluginapi.CDIDevice{
+			Name: fmt.Sprintf("%s=%s", kind, dev.Name),
+		}
+	}
+	return specObj, specName, specPath, cdiDevices
+}
+
+// WriteCDISpecForResource parses the given resource name, generates a CDI spec and writes it to cache.
+// It returns the CDIDevices slice and environment variables to set for the container.
+func (s *Server) writeCDISpecForResource(resourceName string, id string) ([]*pluginapi.CDIDevice, error) {
+	vendor, class := parser.ParseQualifier(resourceName)
+	sanitizedClass := class
+	if err := parser.ValidateClassName(sanitizedClass); err != nil {
+		sanitizedClass = "c" + sanitizedClass
+	}
+	kind := sanitizedClass
+	if vendor != "" {
+		kind = vendor + "/" + sanitizedClass
+	}
+
+	cdi.GetDefaultCache().GetDevice("aaa")
+	specObj, specName, _, cdiDevices := s.buildCDIDevices(kind, sanitizedClass, id)
+	if err := cdi.GetDefaultCache().WriteSpec(specObj, specName); err != nil {
+		klog.ErrorS(err, "failed to write CDI spec", "name", specName)
+		return nil, fmt.Errorf("failed to write CDI spec %q: %w", specName, err)
+	}
+	klog.InfoS("wrote CDI spec", "name", specName)
+
+	return cdiDevices, nil
 }

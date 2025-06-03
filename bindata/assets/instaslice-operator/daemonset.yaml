@@ -39,6 +39,7 @@ spec:
           capabilities:
             drop: [ "ALL" ]
         image: quay.io/ryan.phillips/instaslice-daemonset
+        imagePullPolicy: Always
         command:
           - /usr/bin/instaslice-daemonset
         args:

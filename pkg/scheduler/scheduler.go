@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
@@ -23,6 +24,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// TODO - Replace all of this with scheduler plugins
+
 // RunScheduler is the entrypoint for the Instaslice secondary scheduler.
 func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext) error {
 	kubeClient, err := kubernetes.NewForConfig(cc.ProtoKubeConfig)
@@ -34,6 +37,8 @@ func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext) erro
 	// resync period: 30 minutes to reprocess all Pods and refresh cache
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, 30*time.Minute)
 	podInformer := informerFactory.Core().V1().Pods().Informer()
+	podLister := informerFactory.Core().V1().Pods().Lister()
+	nodeInformer := informerFactory.Core().V1().Nodes().Informer()
 
 	// index pods by .Spec.NodeName for usage lookup
 	if err := podInformer.AddIndexers(cache.Indexers{
@@ -60,6 +65,12 @@ func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext) erro
 		UpdateFunc: func(old, new interface{}) { enqueuePod(new, queue) },
 		DeleteFunc: func(obj interface{}) { enqueuePod(obj, queue) },
 	})
+	// Trigger reschedule on Node changes
+	nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj interface{}) { enqueuePodsForScheduling(podLister, queue) },
+		UpdateFunc: func(old, new interface{}) { enqueuePodsForScheduling(podLister, queue) },
+		DeleteFunc: func(obj interface{}) { enqueuePodsForScheduling(podLister, queue) },
+	})
 
 	// Set up Instaslice CRD informer with indexer
 	instaClient, err := instaclient.NewForConfig(cc.ProtoKubeConfig)
@@ -79,10 +90,16 @@ func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext) erro
 	}); err != nil {
 		return fmt.Errorf("failed to add instasliceByNode index: %w", err)
 	}
-	// Start informers (Pods and Instaslice)
+	// Trigger reschedule on Instaslice CR changes (GPU availability)
+	instaInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj interface{}) { enqueuePodsForScheduling(podLister, queue) },
+		UpdateFunc: func(old, new interface{}) { enqueuePodsForScheduling(podLister, queue) },
+		DeleteFunc: func(obj interface{}) { enqueuePodsForScheduling(podLister, queue) },
+	})
+	// Start informers (Pods, Nodes, and Instaslice)
 	informerFactory.Start(ctx.Done())
 	instaInformerFactory.Start(ctx.Done())
-	if !cache.WaitForCacheSync(ctx.Done(), podInformer.HasSynced, instaInformer.HasSynced) {
+	if !cache.WaitForCacheSync(ctx.Done(), podInformer.HasSynced, instaInformer.HasSynced, nodeInformer.HasSynced) {
 		return fmt.Errorf("failed to sync informers")
 	}
 	// Set up operator config informers for dynamic log level
@@ -103,14 +120,15 @@ func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext) erro
 		OperatorNamespace: operatorNamespace,
 	}
 	opInformerFactory.Start(ctx.Done())
-	klog.InfoS("Starting log level controller")
+	klog.InfoS("Starting log level controller 222")
 	go loglevel.NewClusterOperatorLoggingController(opClient, cc.EventRecorder).Run(ctx, 1)
 
 	// Launch worker to process Pods
+	nodeLister := informerFactory.Core().V1().Nodes().Lister()
 	go func() {
 		podIndexer := podInformer.GetIndexer()
 		instIndexer := instaInformer.GetIndexer()
-		for processNextWorkItem(ctx, kubeClient, podIndexer, instIndexer, queue) {
+		for processNextWorkItem(ctx, kubeClient, nodeLister, podIndexer, instIndexer, queue) {
 		}
 	}()
 
@@ -143,17 +161,36 @@ func enqueuePod(obj interface{}, queue workqueue.TypedRateLimitingInterface[stri
 	queue.Add(key)
 }
 
+// enqueuePodsForScheduling enqueues all unscheduled pods that use our scheduler.
+func enqueuePodsForScheduling(podLister corev1listers.PodLister, queue workqueue.TypedRateLimitingInterface[string]) {
+	pods, err := podLister.List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "Error listing pods for scheduling")
+		return
+	}
+	for _, pod := range pods {
+		if pod.Spec.SchedulerName != "instaslice-scheduler" || pod.Spec.NodeName != "" {
+			continue
+		}
+		key, err := cache.MetaNamespaceKeyFunc(pod)
+		if err != nil {
+			klog.ErrorS(err, "Invalid pod key for enqueuePodsForScheduling", "pod", pod.Name)
+			continue
+		}
+		queue.Add(key)
+	}
+}
+
 // processNextWorkItem processes items from the workqueue: fetch Pod, schedule, and bind.
-func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, podIndexer cache.Indexer, instIndexer cache.Indexer, queue workqueue.TypedRateLimitingInterface[string]) bool {
+func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, nodeLister corev1listers.NodeLister, podIndexer cache.Indexer, instIndexer cache.Indexer, queue workqueue.TypedRateLimitingInterface[string]) bool {
 	key, shutdown := queue.Get()
 	if shutdown {
 		return false
 	}
 	defer queue.Done(key)
-	defer queue.Forget(key)
 
 	// klog.V(4).InfoS("Processing pod", "key", key)
-	klog.InfoS("Processing pod", "key", key)
+	klog.InfoS("Processing pod222", "key", key)
 
 	// split namespace/name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
@@ -189,16 +226,17 @@ func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, p
 		}
 	}
 
-	// list all nodes
-	nodeList, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	// list all nodes from cache instead of direct API call
+	nodeList, err := nodeLister.List(labels.Everything())
 	if err != nil {
-		klog.ErrorS(err, "Error listing nodes")
+		klog.ErrorS(err, "Error listing nodes from cache")
+		queue.AddRateLimited(key)
 		return true
 	}
 
 	// filter nodes based on selectors, tolerations, available resources, and GPU availability
 	var selectedNode, selectedGPU string
-	for _, node := range nodeList.Items {
+	for _, node := range nodeList {
 		// NodeSelector
 		if len(pod.Spec.NodeSelector) > 0 {
 			sel := labels.SelectorFromSet(pod.Spec.NodeSelector)
@@ -283,6 +321,7 @@ func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, p
 	}
 	if selectedNode == "" {
 		klog.V(3).InfoS("No fit nodes (with GPU) found for pod", "pod", key)
+		queue.AddRateLimited(key)
 		return true
 	}
 	// report selected GPU for Pod
@@ -295,9 +334,11 @@ func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, p
 	}
 	if err := kubeClient.CoreV1().Pods(namespace).Bind(ctx, binding, metav1.CreateOptions{}); err != nil {
 		klog.ErrorS(err, "Failed to bind pod to node", "pod", key, "node", selectedNode)
+		queue.AddRateLimited(key)
 		return true
 	}
 	klog.InfoS("Bound pod to node with GPU", "pod", key, "node", selectedNode, "gpu", selectedGPU)
+	queue.Forget(key)
 	return true
 }
 

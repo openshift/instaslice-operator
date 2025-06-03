@@ -25,11 +25,11 @@ func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) erro
 	klog.InfoS("MIG GPU discovery completed")
 	// Patch node with max MIG placements capacity
 	// Patch node with max MIG placements capacity
-	if err := addMigCapacityToNode(ctx, cc.KubeConfig); err != nil {
-		klog.ErrorS(err, "Failed to patch MIG capacity on node")
-		return fmt.Errorf("failed to patch MIG capacity on node: %w", err)
-	}
-	klog.InfoS("Node MIG capacity patch completed")
+	// if err := addMigCapacityToNode(ctx, cc.KubeConfig); err != nil {
+	// 	klog.ErrorS(err, "Failed to patch MIG capacity on node")
+	// 	return fmt.Errorf("failed to patch MIG capacity on node: %w", err)
+	// }
+	// klog.InfoS("Node MIG capacity patch completed")
 	// Start device plugins
 	if err := device.StartDevicePlugins(ctx); err != nil {
 		klog.ErrorS(err, "Failed to start device plugins")

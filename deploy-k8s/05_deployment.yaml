@@ -44,7 +44,7 @@ spec:
             - /usr/bin/instaslice-operator
           args:
             - "operator"
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           env:
             - name: OPERATOR_NAME
               value: "instaslice-operator"
