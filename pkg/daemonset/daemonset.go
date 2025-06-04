@@ -31,7 +31,7 @@ func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) erro
 	// }
 	// klog.InfoS("Node MIG capacity patch completed")
 	// Start device plugins
-	if err := device.StartDevicePlugins(ctx); err != nil {
+	if err := device.StartDevicePlugins(ctx, cc.KubeConfig); err != nil {
 		klog.ErrorS(err, "Failed to start device plugins")
 		return err
 	}

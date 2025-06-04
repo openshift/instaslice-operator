@@ -11,6 +11,10 @@ import (
 	"k8s.io/klog/v2"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 
+	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
+
 	"tags.cncf.io/container-device-interface/pkg/cdi"
 	parser "tags.cncf.io/container-device-interface/pkg/parser"
 	cdispec "tags.cncf.io/container-device-interface/specs-go"
@@ -23,12 +27,19 @@ var _ pluginapi.DevicePluginServer = (*Server)(nil)
 
 type Server struct {
 	pluginapi.UnimplementedDevicePluginServer
-	Manager    *Manager
-	SocketPath string
+	Manager          *Manager
+	SocketPath       string
+	InstasliceClient instaclient.Interface
+	NodeName         string
 }
 
-func NewServer(mgr *Manager, socketPath string) *Server {
-	return &Server{Manager: mgr, SocketPath: socketPath}
+func NewServer(mgr *Manager, socketPath string, kubeConfig *rest.Config) (*Server, error) {
+	client, err := instaclient.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create instaslice client: %w", err)
+	}
+	nodeName := os.Getenv("NODE_NAME")
+	return &Server{Manager: mgr, SocketPath: socketPath, InstasliceClient: client, NodeName: nodeName}, nil
 }
 
 func (s *Server) Start(ctx context.Context) error {
@@ -116,11 +127,22 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 		ContainerResponses: make([]*pluginapi.ContainerAllocateResponse, count),
 	}
 
+	// Retrieve the allocation results for this node
+	const instasliceNamespace = "instaslice-system"
+	instObj, err := s.InstasliceClient.OpenShiftOperatorV1alpha1().Instaslices(instasliceNamespace).Get(ctx, s.NodeName, metav1.GetOptions{})
+	if err != nil {
+		klog.ErrorS(err, "failed to fetch instaslice object", "node", s.NodeName)
+		return nil, fmt.Errorf("failed to get instaslice %q: %w", s.NodeName, err)
+	}
+	klog.InfoS("Fetched Instaslice for Allocate", "allocation result", instObj.Status.PodAllocationResults)
+
 	for i := range count {
 		resp.ContainerResponses[i] = &pluginapi.ContainerAllocateResponse{}
 
 		id := utiluuid.NewUUID()
 
+		// TODO: use allocation result from instObj.Status.PodAllocationResults to construct CDI devices
+		_ = instObj
 		cdiDevices, err := s.writeCDISpecForResource(s.Manager.ResourceName, string(id))
 		if err != nil {
 			return nil, err
