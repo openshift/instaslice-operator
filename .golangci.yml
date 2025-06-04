@@ -9,13 +9,6 @@ issues:
   # restore some of the defaults
   # (fill in the rest as needed)
   exclude-rules:
-    - path: "api/*"
-      linters:
-        - lll
-    - path: "internal/*"
-      linters:
-        - dupl
-        - lll
     - path: "test/e2e/*"
       linters:
         - dupl
