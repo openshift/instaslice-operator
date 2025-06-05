@@ -1,4 +1,4 @@
-package deviceplugin
+package deviceplugins
 
 import (
 	"context"
@@ -163,6 +163,7 @@ func (s *Server) buildCDIDevices(kind, sanitizedClass, id string) (*cdispec.Spec
 	specName := specNameBase + ".cdi.json"
 	specPath := filepath.Join(cdi.DefaultDynamicDir, specName)
 
+	// TODO - Do we need to create a CDI spec for each device Allocate request? can we not use a single spec for all devices of the same kind?
 	specObj := &cdispec.Spec{
 		Version: cdispec.CurrentVersion,
 		Kind:    kind,

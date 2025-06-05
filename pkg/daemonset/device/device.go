@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
-	"github.com/openshift/instaslice-operator/pkg/deviceplugin"
+	"github.com/openshift/instaslice-operator/pkg/daemonset/deviceplugins"
 	versioned "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
@@ -70,13 +70,13 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 	const socketDir = "/var/lib/kubelet/device-plugins"
 
 	for _, res := range resourceNames {
-		mgr := deviceplugin.NewManager(res)
+		mgr := deviceplugins.NewManager(res)
 
 		sanitized := strings.ReplaceAll(res, "/", "_")
 		endpoint := sanitized + ".sock"
 		socketPath := filepath.Join(socketDir, endpoint)
 
-		srv, err := deviceplugin.NewServer(mgr, socketPath, kubeConfig)
+		srv, err := deviceplugins.NewServer(mgr, socketPath, kubeConfig)
 		if err != nil {
 			return fmt.Errorf("failed to create device plugin server for resource %q: %w", res, err)
 		}
@@ -84,7 +84,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 			return fmt.Errorf("device plugin server for resource %q failed: %w", res, err)
 		}
 
-		reg := deviceplugin.NewRegistrar(socketPath, res)
+		reg := deviceplugins.NewRegistrar(socketPath, res)
 		go reg.Start(ctx)
 	}
 	return nil
