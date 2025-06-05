@@ -30,6 +30,16 @@ roleRef:
   name: system:extension-apiserver-authentication-reader
   apiGroup: rbac.authorization.k8s.io
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:extension-apiserver-authentication-reader
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["extension-apiserver-authentication"]
+    verbs: ["get"]
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -89,10 +99,13 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["pods/binding", "pods/status"]
-    verbs: ["create", "update"]
+    verbs: ["create", "update", "patch"]
   - apiGroups: [""]
     resources: ["pods", "nodes"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: ["", "events.k8s.io"]
+    resources: ["events"]
+    verbs: ["create", "patch", "update"]
   - apiGroups: ["inference.redhat.com"]
     resources:
       - "instaslices"
@@ -105,6 +118,17 @@ rules:
       - "watch"
       - "update"
       - "patch"
+  - apiGroups: ["storage.k8s.io"]
+    resources:
+      - csinodes
+      - csidrivers
+      - csistoragecapacities
+      - storageclasses
+      - volumeattachments
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

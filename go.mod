@@ -4,6 +4,7 @@ go 1.23.0
 
 require (
 	github.com/NVIDIA/go-nvml v0.12.4-1
+	github.com/fsnotify/fsnotify v1.7.0
 	github.com/onsi/ginkgo/v2 v2.22.1
 	github.com/openshift/api v0.0.0-20250226153854-e8e096a21cb3
 	github.com/openshift/build-machinery-go v0.0.0-20250211133638-a00a772ae1a2
@@ -12,24 +13,29 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/spf13/cobra v1.9.1
 	google.golang.org/grpc v1.68.1
-	k8s.io/api v0.32.3
+	k8s.io/api v0.32.5
 	k8s.io/apiextensions-apiserver v0.32.3
-	k8s.io/apimachinery v0.32.3
-	k8s.io/client-go v0.32.3
-	k8s.io/code-generator v0.32.3
+	k8s.io/apimachinery v0.32.5
+	k8s.io/client-go v0.32.5
+	k8s.io/code-generator v0.32.5
+	k8s.io/component-base v0.32.5
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/kubelet v0.32.3
+	k8s.io/kubelet v0.32.5
+	k8s.io/kubernetes v1.32.5
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
-	sigs.k8s.io/controller-runtime v0.20.3
+	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/controller-tools v0.17.2
+	sigs.k8s.io/scheduler-plugins v0.32.5-devel
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0
 	tags.cncf.io/container-device-interface v0.8.1
+	tags.cncf.io/container-device-interface/specs-go v0.8.0
 )
 
 replace github.com/google/cel-go => github.com/google/cel-go v0.22.0
 
 require (
 	cel.dev/expr v0.19.1 // indirect
+	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a // indirect
@@ -40,11 +46,11 @@ require (
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/distribution/reference v0.6.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/fgprof v0.9.4 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -71,10 +77,12 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/moby/term v0.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/opencontainers/runtime-spec v1.1.0 // indirect
+	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/opencontainers/runtime-spec v1.2.0 // indirect
 	github.com/opencontainers/runtime-tools v0.9.1-0.20221107090550-2e043c6bd626 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pkg/profile v1.7.0 // indirect
@@ -122,16 +130,20 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiserver v0.32.3 // indirect
-	k8s.io/component-base v0.32.3 // indirect
-	k8s.io/gengo/v2 v2.0.0-20240911193312-2b36238f13e9 // indirect
-	k8s.io/kms v0.32.3 // indirect
+	k8s.io/apiserver v0.32.5 // indirect
+	k8s.io/cloud-provider v0.32.5 // indirect
+	k8s.io/component-helpers v0.32.5 // indirect
+	k8s.io/controller-manager v0.32.5 // indirect
+	k8s.io/csi-translation-lib v0.32.5 // indirect
+	k8s.io/dynamic-resource-allocation v0.32.5 // indirect
+	k8s.io/gengo/v2 v2.0.0-20250207200755-1244d31929d7 // indirect
+	k8s.io/kms v0.32.5 // indirect
 	k8s.io/kube-aggregator v0.32.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff // indirect
+	k8s.io/kube-scheduler v0.32.5 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.2 // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
-	tags.cncf.io/container-device-interface/specs-go v0.8.0 // indirect
 )

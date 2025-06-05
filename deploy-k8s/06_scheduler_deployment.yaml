@@ -18,4 +18,13 @@ spec:
       - name: scheduler
         image: localhost:5000/instaslice-scheduler:dev
         imagePullPolicy: Always
-        command: ["instaslice-scheduler", "scheduler"]
+        command: ["instaslice-scheduler"]
+        args:
+        - "--config=/etc/instaslice-scheduler/config.yaml"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/instaslice-scheduler
+      volumes:
+      - name: config
+        configMap:
+          name: instaslice-scheduler-config

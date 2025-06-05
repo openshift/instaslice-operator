@@ -1,0 +1,254 @@
+package gpu
+
+import (
+	"context"
+	"os"
+	"regexp"
+	"strings"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
+	"k8s.io/kubernetes/pkg/scheduler/framework"
+
+	instav1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
+	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+)
+
+const Name = "InstasliceGPU"
+
+// Plugin implements a scheduler PreBind extension for GPU allocation.
+type Plugin struct {
+	handle      framework.Handle
+	instaClient instaclient.Interface
+	namespace   string
+}
+
+// Args holds the scheduler plugin configuration.
+type Args struct {
+	Namespace string `json:"namespace,omitempty"`
+}
+
+var _ framework.PreBindPlugin = &Plugin{}
+
+// Name returns the plugin name.
+func (p *Plugin) Name() string { return Name }
+
+// New initializes a new plugin and returns it.
+func New(ctx context.Context, args runtime.Object, handle framework.Handle) (framework.Plugin, error) {
+	restCfg := rest.CopyConfig(handle.KubeConfig())
+	restCfg.AcceptContentTypes = "application/json"
+	restCfg.ContentType = "application/json"
+	instaClient, err := instaclient.NewForConfig(restCfg)
+	if err != nil {
+		return nil, err
+	}
+	cfg := Args{}
+	if args != nil {
+		if err := frameworkruntime.DecodeInto(args, &cfg); err != nil {
+			return nil, err
+		}
+	}
+	ns := cfg.Namespace
+	if ns == "" {
+		ns = os.Getenv("INSTASLICE_NAMESPACE")
+		if ns == "" {
+			ns = "instaslice-system"
+		}
+	}
+	return &Plugin{handle: handle, instaClient: instaClient, namespace: ns}, nil
+}
+
+// PreBind selects a GPU and updates the Instaslice object for the chosen node.
+func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) *framework.Status {
+	instObj, err := p.instaClient.OpenShiftOperatorV1alpha1().Instaslices(p.namespace).Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		return framework.AsStatus(err)
+	}
+	var selectedGPU string
+	var allocRequest *instav1alpha1.AllocationRequest
+	var allocResult *instav1alpha1.AllocationResult
+	for _, gpu := range instObj.Status.NodeResources.NodeGPUs {
+		gpuAllocated := gpuAllocatedSlices(instObj, gpu.GPUUUID)
+		profileName := extractProfileName(pod.Spec.Containers[0].Resources.Limits)
+		newStart := getStartIndexFromAllocationResults(instObj, profileName, gpuAllocated)
+		if newStart == int32(9) {
+			continue
+		}
+		size, discoveredGiprofile, Ciprofileid, Ciengprofileid := extractGpuProfile(instObj, profileName)
+		allocRequest, allocResult = SetAllocationDetails(
+			profileName,
+			newStart,
+			size,
+			pod.GetUID(),
+			types.NodeName(instObj.GetName()),
+			instav1alpha1.AllocationStatus{AllocationStatusController: string(instav1alpha1.AllocationStatusCreating)},
+			discoveredGiprofile,
+			Ciprofileid,
+			Ciengprofileid,
+			pod.GetNamespace(),
+			pod.GetName(),
+			gpu.GPUUUID,
+			types.UID(pod.GetUID()),
+		)
+		if instObj.Spec.PodAllocationRequests == nil {
+			m := make(map[types.UID]instav1alpha1.AllocationRequest)
+			instObj.Spec.PodAllocationRequests = &m
+		}
+		(*instObj.Spec.PodAllocationRequests)[pod.GetUID()] = *allocRequest
+		selectedGPU = gpu.GPUUUID
+		break
+	}
+	if selectedGPU == "" {
+		return framework.NewStatus(framework.Unschedulable, "no GPU available")
+	}
+	updatedObj, err := p.instaClient.OpenShiftOperatorV1alpha1().Instaslices(instObj.Namespace).Update(ctx, instObj, metav1.UpdateOptions{})
+	if err != nil {
+		return framework.AsStatus(err)
+	}
+	if updatedObj.Status.PodAllocationResults == nil {
+		updatedObj.Status.PodAllocationResults = make(map[string]instav1alpha1.AllocationResult)
+	}
+	updatedObj.Status.PodAllocationResults[string(pod.GetUID())] = *allocResult
+	if _, err := p.instaClient.OpenShiftOperatorV1alpha1().Instaslices(instObj.Namespace).UpdateStatus(ctx, updatedObj, metav1.UpdateOptions{}); err != nil {
+		return framework.AsStatus(err)
+	}
+	klog.InfoS("instaslice GPU selected ", "pod", klog.KObj(pod), "node", nodeName, "gpu", selectedGPU)
+	return nil
+}
+
+// The helper functions below are mostly moved from the legacy scheduler.
+
+func extractProfileName(limits corev1.ResourceList) string {
+	profileName := ""
+	for k := range limits {
+		if strings.Contains(k.String(), "mig-") {
+			re := regexp.MustCompile(`(\d+g\.\d+gb)`)
+			match := re.FindStringSubmatch(k.String())
+			if len(match) > 1 {
+				profileName = match[1]
+			}
+		}
+	}
+	return profileName
+}
+
+func SetAllocationDetails(profileName string, newStart, size int32, podUUID types.UID, nodename types.NodeName,
+	allocationStatus instav1alpha1.AllocationStatus, discoveredGiprofile int32, Ciprofileid int32, Ciengprofileid int32,
+	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID) (*instav1alpha1.AllocationRequest, *instav1alpha1.AllocationResult) {
+	return &instav1alpha1.AllocationRequest{
+			Profile: profileName,
+			PodRef: corev1.ObjectReference{
+				Kind:      "Pod",
+				Namespace: namespace,
+				Name:      podName,
+				UID:       podUUID,
+			},
+		}, &instav1alpha1.AllocationResult{
+			MigPlacement: instav1alpha1.Placement{
+				Size:  size,
+				Start: newStart,
+			},
+			GPUUUID:                     gpuUuid,
+			Nodename:                    nodename,
+			AllocationStatus:            allocationStatus,
+			ConfigMapResourceIdentifier: resourceIdentifier,
+			Conditions:                  []metav1.Condition{},
+		}
+}
+
+func extractGpuProfile(instaslice *instav1alpha1.Instaslice, profileName string) (int32, int32, int32, int32) {
+	var size int32
+	var discoveredGiprofile int32
+	var Ciprofileid int32
+	var Ciengprofileid int32
+	for profName, placement := range instaslice.Status.NodeResources.MigPlacement {
+		if profName == profileName {
+			for _, aPlacement := range placement.Placements {
+				size = aPlacement.Size
+				discoveredGiprofile = placement.GIProfileID
+				Ciprofileid = placement.CIProfileID
+				Ciengprofileid = placement.CIEngProfileID
+				break
+			}
+		}
+	}
+	return size, discoveredGiprofile, Ciprofileid, Ciengprofileid
+}
+
+func getStartIndexFromAllocationResults(instaslice *instav1alpha1.Instaslice, profileName string, gpuAllocatedIndex [8]int32) int32 {
+	allAllocated := true
+	for _, allocated := range gpuAllocatedIndex {
+		if allocated != 1 {
+			allAllocated = false
+			break
+		}
+	}
+	if allAllocated {
+		return int32(9)
+	}
+	var neededContinousSlot int32
+	var possiblePlacements []int32
+	for profile, placement := range instaslice.Status.NodeResources.MigPlacement {
+		if profile == profileName {
+			neededContinousSlot = placement.Placements[0].Size
+			for _, placement := range placement.Placements {
+				possiblePlacements = append(possiblePlacements, placement.Start)
+			}
+			break
+		}
+	}
+	var newStart = int32(9)
+	for _, value := range possiblePlacements {
+		if gpuAllocatedIndex[value] == 0 {
+			if neededContinousSlot == 1 {
+				newStart = value
+				break
+			}
+			if neededContinousSlot == 2 {
+				if value+neededContinousSlot <= int32(len(gpuAllocatedIndex)) {
+					if gpuAllocatedIndex[value] == 0 && gpuAllocatedIndex[value+1] == 0 {
+						newStart = value
+						break
+					}
+				}
+			}
+			if neededContinousSlot == 4 {
+				if value+neededContinousSlot <= int32(len(gpuAllocatedIndex)) {
+					if gpuAllocatedIndex[value] == 0 && gpuAllocatedIndex[value+1] == 0 && gpuAllocatedIndex[value+2] == 0 && gpuAllocatedIndex[value+3] == 0 {
+						newStart = value
+						break
+					}
+				}
+			}
+			if neededContinousSlot == 8 {
+				if value+neededContinousSlot <= int32(len(gpuAllocatedIndex)) {
+					if gpuAllocatedIndex[value] == 0 && gpuAllocatedIndex[value+1] == 0 &&
+						gpuAllocatedIndex[value+2] == 0 && gpuAllocatedIndex[value+3] == 0 &&
+						gpuAllocatedIndex[value+4] == 0 && gpuAllocatedIndex[value+5] == 0 &&
+						gpuAllocatedIndex[value+6] == 0 && gpuAllocatedIndex[value+7] == 0 {
+						newStart = value
+					}
+				}
+			}
+		}
+	}
+	return newStart
+}
+
+func gpuAllocatedSlices(instObj *instav1alpha1.Instaslice, gpuUUID string) [8]int32 {
+	var gpuAllocatedIndex [8]int32
+	for i := range gpuAllocatedIndex {
+		gpuAllocatedIndex[i] = 0
+	}
+	for _, allocResult := range instObj.Status.PodAllocationResults {
+		for i := 0; i < int(allocResult.MigPlacement.Size); i++ {
+			gpuAllocatedIndex[int(allocResult.MigPlacement.Start)+i] = 1
+		}
+	}
+	return gpuAllocatedIndex
+}

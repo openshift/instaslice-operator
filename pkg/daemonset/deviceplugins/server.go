@@ -37,7 +37,10 @@ type Server struct {
 }
 
 func NewServer(mgr *Manager, socketPath string, kubeConfig *rest.Config, emulatedMode instav1.EmulatedMode) (*Server, error) {
-	client, err := instaclient.NewForConfig(kubeConfig)
+	cfg := rest.CopyConfig(kubeConfig)
+	cfg.AcceptContentTypes = "application/json"
+	cfg.ContentType = "application/json"
+	client, err := instaclient.NewForConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create instaslice client: %w", err)
 	}

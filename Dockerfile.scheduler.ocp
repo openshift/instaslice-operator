@@ -4,6 +4,7 @@ FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.23 AS bui
 WORKDIR /workspace
 COPY . .
 # build the instaslice-scheduler binary
+ENV GOFLAGS=-mod=mod
 RUN GO_BUILD_PACKAGES=./cmd/instaslice-scheduler make
 
 # runtime stage

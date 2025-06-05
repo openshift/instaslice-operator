@@ -1,6 +1,10 @@
 # cel.dev/expr v0.19.1
 ## explicit; go 1.21.1
 cel.dev/expr
+# github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161
+## explicit; go 1.16
+github.com/Azure/go-ansiterm
+github.com/Azure/go-ansiterm/winterm
 # github.com/NVIDIA/go-nvml v0.12.4-1
 ## explicit; go 1.20
 github.com/NVIDIA/go-nvml/pkg/dl
@@ -36,6 +40,9 @@ github.com/coreos/go-systemd/v22/journal
 # github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 ## explicit
 github.com/davecgh/go-spew/spew
+# github.com/distribution/reference v0.6.0
+## explicit; go 1.20
+github.com/distribution/reference
 # github.com/emicklei/go-restful/v3 v3.11.0
 ## explicit; go 1.13
 github.com/emicklei/go-restful/v3
@@ -124,6 +131,7 @@ github.com/google/gnostic-models/openapiv3
 # github.com/google/go-cmp v0.7.0
 ## explicit; go 1.21
 github.com/google/go-cmp/cmp
+github.com/google/go-cmp/cmp/cmpopts
 github.com/google/go-cmp/cmp/internal/diff
 github.com/google/go-cmp/cmp/internal/flags
 github.com/google/go-cmp/cmp/internal/function
@@ -169,6 +177,10 @@ github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.20
 ## explicit; go 1.15
 github.com/mattn/go-isatty
+# github.com/moby/term v0.5.0
+## explicit; go 1.18
+github.com/moby/term
+github.com/moby/term/windows
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 ## explicit
 github.com/modern-go/concurrent
@@ -200,7 +212,10 @@ github.com/onsi/ginkgo/v2/internal/parallel_support
 github.com/onsi/ginkgo/v2/internal/testingtproxy
 github.com/onsi/ginkgo/v2/reporters
 github.com/onsi/ginkgo/v2/types
-# github.com/opencontainers/runtime-spec v1.1.0
+# github.com/opencontainers/go-digest v1.0.0
+## explicit; go 1.13
+github.com/opencontainers/go-digest
+# github.com/opencontainers/runtime-spec v1.2.0
 ## explicit
 github.com/opencontainers/runtime-spec/specs-go
 # github.com/opencontainers/runtime-tools v0.9.1-0.20221107090550-2e043c6bd626
@@ -703,7 +718,7 @@ gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
-# k8s.io/api v0.32.3
+# k8s.io/api v0.32.5
 ## explicit; go 1.23.0
 k8s.io/api/admission/v1
 k8s.io/api/admission/v1beta1
@@ -775,7 +790,8 @@ k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/scheme
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1beta1
-# k8s.io/apimachinery v0.32.3
+k8s.io/apiextensions-apiserver/pkg/features
+# k8s.io/apimachinery v0.32.5
 ## explicit; go 1.23.0
 k8s.io/apimachinery/pkg/api/equality
 k8s.io/apimachinery/pkg/api/errors
@@ -840,7 +856,7 @@ k8s.io/apimachinery/pkg/version
 k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/reflect
-# k8s.io/apiserver v0.32.3
+# k8s.io/apiserver v0.32.5
 ## explicit; go 1.23.0
 k8s.io/apiserver/pkg/admission
 k8s.io/apiserver/pkg/admission/configuration
@@ -995,7 +1011,7 @@ k8s.io/apiserver/plugin/pkg/audit/webhook
 k8s.io/apiserver/plugin/pkg/authenticator/token/webhook
 k8s.io/apiserver/plugin/pkg/authorizer/webhook
 k8s.io/apiserver/plugin/pkg/authorizer/webhook/metrics
-# k8s.io/client-go v0.32.3
+# k8s.io/client-go v0.32.5
 ## explicit; go 1.23.0
 k8s.io/client-go/applyconfigurations
 k8s.io/client-go/applyconfigurations/admissionregistration/v1
@@ -1331,7 +1347,22 @@ k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/retry
 k8s.io/client-go/util/watchlist
 k8s.io/client-go/util/workqueue
-# k8s.io/code-generator v0.32.3
+# k8s.io/cloud-provider v0.32.5
+## explicit; go 1.23.0
+k8s.io/cloud-provider
+k8s.io/cloud-provider/app/config
+k8s.io/cloud-provider/config
+k8s.io/cloud-provider/config/install
+k8s.io/cloud-provider/config/v1alpha1
+k8s.io/cloud-provider/controllers/node/config
+k8s.io/cloud-provider/controllers/node/config/v1alpha1
+k8s.io/cloud-provider/controllers/service/config
+k8s.io/cloud-provider/controllers/service/config/v1alpha1
+k8s.io/cloud-provider/names
+k8s.io/cloud-provider/options
+k8s.io/cloud-provider/volume
+k8s.io/cloud-provider/volume/helpers
+# k8s.io/code-generator v0.32.5
 ## explicit; go 1.23.0
 k8s.io/code-generator
 k8s.io/code-generator/cmd/applyconfiguration-gen
@@ -1367,9 +1398,16 @@ k8s.io/code-generator/cmd/register-gen/generators
 k8s.io/code-generator/pkg/namer
 k8s.io/code-generator/pkg/util
 k8s.io/code-generator/third_party/forked/golang/reflect
-# k8s.io/component-base v0.32.3
+# k8s.io/component-base v0.32.5
 ## explicit; go 1.23.0
+k8s.io/component-base/cli
 k8s.io/component-base/cli/flag
+k8s.io/component-base/cli/globalflag
+k8s.io/component-base/config
+k8s.io/component-base/config/options
+k8s.io/component-base/config/v1alpha1
+k8s.io/component-base/config/validation
+k8s.io/component-base/configz
 k8s.io/component-base/featuregate
 k8s.io/component-base/logs
 k8s.io/component-base/logs/api/v1
@@ -1383,14 +1421,49 @@ k8s.io/component-base/metrics/prometheus/clientgo/leaderelection
 k8s.io/component-base/metrics/prometheus/feature
 k8s.io/component-base/metrics/prometheus/restclient
 k8s.io/component-base/metrics/prometheus/slis
+k8s.io/component-base/metrics/prometheus/version
 k8s.io/component-base/metrics/prometheus/workqueue
 k8s.io/component-base/metrics/prometheusextension
 k8s.io/component-base/metrics/testutil
+k8s.io/component-base/term
 k8s.io/component-base/tracing
 k8s.io/component-base/tracing/api/v1
 k8s.io/component-base/version
+k8s.io/component-base/version/verflag
+k8s.io/component-base/zpages/features
 k8s.io/component-base/zpages/flagz
-# k8s.io/gengo/v2 v2.0.0-20240911193312-2b36238f13e9
+# k8s.io/component-helpers v0.32.5
+## explicit; go 1.23.0
+k8s.io/component-helpers/node/topology
+k8s.io/component-helpers/node/util/sysctl
+k8s.io/component-helpers/resource
+k8s.io/component-helpers/scheduling/corev1
+k8s.io/component-helpers/scheduling/corev1/nodeaffinity
+k8s.io/component-helpers/storage/ephemeral
+k8s.io/component-helpers/storage/volume
+# k8s.io/controller-manager v0.32.5
+## explicit; go 1.23.0
+k8s.io/controller-manager/config
+k8s.io/controller-manager/config/v1
+k8s.io/controller-manager/config/v1alpha1
+k8s.io/controller-manager/config/v1beta1
+k8s.io/controller-manager/options
+k8s.io/controller-manager/pkg/clientbuilder
+k8s.io/controller-manager/pkg/features
+k8s.io/controller-manager/pkg/features/register
+k8s.io/controller-manager/pkg/leadermigration/config
+k8s.io/controller-manager/pkg/leadermigration/options
+# k8s.io/csi-translation-lib v0.32.5
+## explicit; go 1.23.0
+k8s.io/csi-translation-lib
+k8s.io/csi-translation-lib/plugins
+# k8s.io/dynamic-resource-allocation v0.32.5
+## explicit; go 1.23.0
+k8s.io/dynamic-resource-allocation/api
+k8s.io/dynamic-resource-allocation/cel
+k8s.io/dynamic-resource-allocation/resourceclaim
+k8s.io/dynamic-resource-allocation/structured
+# k8s.io/gengo/v2 v2.0.0-20250207200755-1244d31929d7
 ## explicit; go 1.20
 k8s.io/gengo/v2
 k8s.io/gengo/v2/generator
@@ -1408,7 +1481,7 @@ k8s.io/klog/v2/internal/severity
 k8s.io/klog/v2/internal/sloghandler
 k8s.io/klog/v2/internal/verbosity
 k8s.io/klog/v2/textlogger
-# k8s.io/kms v0.32.3
+# k8s.io/kms v0.32.5
 ## explicit; go 1.23.0
 k8s.io/kms/apis/v1beta1
 k8s.io/kms/apis/v2
@@ -1448,9 +1521,80 @@ k8s.io/kube-openapi/pkg/validation/errors
 k8s.io/kube-openapi/pkg/validation/spec
 k8s.io/kube-openapi/pkg/validation/strfmt
 k8s.io/kube-openapi/pkg/validation/strfmt/bson
-# k8s.io/kubelet v0.32.3
+# k8s.io/kube-scheduler v0.32.5
 ## explicit; go 1.23.0
+k8s.io/kube-scheduler/config/v1
+k8s.io/kube-scheduler/extender/v1
+# k8s.io/kubelet v0.32.5
+## explicit; go 1.23.0
+k8s.io/kubelet/pkg/apis
 k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1
+# k8s.io/kubernetes v1.32.5
+## explicit; go 1.23.0
+k8s.io/kubernetes/cmd/kube-scheduler/app
+k8s.io/kubernetes/cmd/kube-scheduler/app/config
+k8s.io/kubernetes/cmd/kube-scheduler/app/options
+k8s.io/kubernetes/pkg/api/service
+k8s.io/kubernetes/pkg/api/v1/pod
+k8s.io/kubernetes/pkg/api/v1/service
+k8s.io/kubernetes/pkg/apis/apps
+k8s.io/kubernetes/pkg/apis/autoscaling
+k8s.io/kubernetes/pkg/apis/core
+k8s.io/kubernetes/pkg/apis/core/helper
+k8s.io/kubernetes/pkg/apis/core/helper/qos
+k8s.io/kubernetes/pkg/apis/core/pods
+k8s.io/kubernetes/pkg/apis/core/v1
+k8s.io/kubernetes/pkg/apis/core/v1/helper
+k8s.io/kubernetes/pkg/apis/core/validation
+k8s.io/kubernetes/pkg/capabilities
+k8s.io/kubernetes/pkg/cluster/ports
+k8s.io/kubernetes/pkg/features
+k8s.io/kubernetes/pkg/fieldpath
+k8s.io/kubernetes/pkg/scheduler
+k8s.io/kubernetes/pkg/scheduler/apis/config
+k8s.io/kubernetes/pkg/scheduler/apis/config/latest
+k8s.io/kubernetes/pkg/scheduler/apis/config/scheme
+k8s.io/kubernetes/pkg/scheduler/apis/config/v1
+k8s.io/kubernetes/pkg/scheduler/apis/config/validation
+k8s.io/kubernetes/pkg/scheduler/backend/cache
+k8s.io/kubernetes/pkg/scheduler/backend/cache/debugger
+k8s.io/kubernetes/pkg/scheduler/backend/heap
+k8s.io/kubernetes/pkg/scheduler/backend/queue
+k8s.io/kubernetes/pkg/scheduler/framework
+k8s.io/kubernetes/pkg/scheduler/framework/parallelize
+k8s.io/kubernetes/pkg/scheduler/framework/plugins
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/defaultbinder
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/defaultpreemption
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/dynamicresources
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/feature
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/helper
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/imagelocality
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/interpodaffinity
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/names
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodeaffinity
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodename
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodeports
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/noderesources
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodeunschedulable
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodevolumelimits
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/podtopologyspread
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/queuesort
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/schedulinggates
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/tainttoleration
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/volumebinding
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/volumebinding/metrics
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/volumerestrictions
+k8s.io/kubernetes/pkg/scheduler/framework/plugins/volumezone
+k8s.io/kubernetes/pkg/scheduler/framework/preemption
+k8s.io/kubernetes/pkg/scheduler/framework/runtime
+k8s.io/kubernetes/pkg/scheduler/metrics
+k8s.io/kubernetes/pkg/scheduler/metrics/resources
+k8s.io/kubernetes/pkg/scheduler/profile
+k8s.io/kubernetes/pkg/scheduler/util
+k8s.io/kubernetes/pkg/scheduler/util/assumecache
+k8s.io/kubernetes/pkg/scheduler/util/queue
+k8s.io/kubernetes/pkg/util/parsers
+k8s.io/kubernetes/pkg/util/slice
 # k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 ## explicit; go 1.18
 k8s.io/utils/buffer
@@ -1458,6 +1602,7 @@ k8s.io/utils/clock
 k8s.io/utils/clock/testing
 k8s.io/utils/internal/third_party/forked/golang/golang-lru
 k8s.io/utils/internal/third_party/forked/golang/net
+k8s.io/utils/keymutex
 k8s.io/utils/lru
 k8s.io/utils/net
 k8s.io/utils/path
@@ -1470,7 +1615,7 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/common/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/proto/client
-# sigs.k8s.io/controller-runtime v0.20.3
+# sigs.k8s.io/controller-runtime v0.20.4
 ## explicit; go 1.23.0
 sigs.k8s.io/controller-runtime/pkg/log
 sigs.k8s.io/controller-runtime/pkg/metrics
@@ -1507,6 +1652,11 @@ sigs.k8s.io/kube-storage-version-migrator/pkg/clients/clientset/typed/migration/
 ## explicit; go 1.18
 sigs.k8s.io/randfill
 sigs.k8s.io/randfill/bytesource
+# sigs.k8s.io/scheduler-plugins v0.32.5-devel
+## explicit; go 1.23.0
+sigs.k8s.io/scheduler-plugins/apis/config
+sigs.k8s.io/scheduler-plugins/apis/config/scheme
+sigs.k8s.io/scheduler-plugins/apis/config/v1
 # sigs.k8s.io/structured-merge-diff/v4 v4.6.0
 ## explicit; go 1.13
 sigs.k8s.io/structured-merge-diff/v4/fieldpath

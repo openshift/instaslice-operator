@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	corev1listers "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
@@ -77,7 +78,10 @@ func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext) erro
 
 	// Set up Instaslice CRD informer with indexer
 
-	instaClient, err := instaclient.NewForConfig(cc.KubeConfig)
+	cfg := rest.CopyConfig(cc.KubeConfig)
+	cfg.AcceptContentTypes = "application/json"
+	cfg.ContentType = "application/json"
+	instaClient, err := instaclient.NewForConfig(cfg)
 
 	if err != nil {
 		return fmt.Errorf("failed to create instaslice client: %w", err)
@@ -108,7 +112,10 @@ func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext) erro
 		return fmt.Errorf("failed to sync informers")
 	}
 	// Set up operator config informers for dynamic log level
-	opClientset, err := instaclient.NewForConfig(cc.KubeConfig)
+	opCfg := rest.CopyConfig(cc.KubeConfig)
+	opCfg.AcceptContentTypes = "application/json"
+	opCfg.ContentType = "application/json"
+	opClientset, err := instaclient.NewForConfig(opCfg)
 	if err != nil {
 		return fmt.Errorf("failed to create instaslice operator client: %w", err)
 	}
@@ -125,7 +132,7 @@ func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext) erro
 		OperatorNamespace: operatorNamespace,
 	}
 	opInformerFactory.Start(ctx.Done())
-	klog.InfoS("Starting log level controller 222")
+	klog.InfoS("Starting log level controller")
 	go loglevel.NewClusterOperatorLoggingController(opClient, cc.EventRecorder).Run(ctx, 1)
 
 	// Launch worker to process Pods
@@ -195,7 +202,7 @@ func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, n
 	defer queue.Done(key)
 
 	// klog.V(4).InfoS("Processing pod", "key", key)
-	klog.InfoS("Processing pod333-77-11", "key", key)
+	klog.V(4).InfoS("Processing pod", "key", key)
 
 	// split namespace/name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)

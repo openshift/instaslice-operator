@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: instaslice-scheduler-config
+  namespace: instaslice-system
+data:
+  config.yaml: |
+    apiVersion: kubescheduler.config.k8s.io/v1
+    kind: KubeSchedulerConfiguration
+    leaderElection:
+      leaderElect: false
+    clientConnection:
+      acceptContentTypes: application/json
+      contentType: application/json
+    profiles:
+    - schedulerName: instaslice-scheduler
+      plugins:
+        multiPoint:
+          enabled:
+          - name: InstasliceGPU
+      pluginConfig:
+      - name: InstasliceGPU
+        args:
+          namespace: instaslice-system
