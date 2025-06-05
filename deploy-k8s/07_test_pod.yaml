@@ -6,7 +6,7 @@ spec:
   schedulerName: instaslice-scheduler
   containers:
   - name: busy
-    image: busybox
+    image: quay.io/prometheus/busybox 
     command: ["sh","-c","sleep 3600"]
     resources:
       limits:

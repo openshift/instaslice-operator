@@ -317,29 +317,20 @@ func processNextWorkItem(ctx context.Context, kubeClient kubernetes.Interface, n
 		var allocRequest *instav1alpha1.AllocationRequest
 		var allocResult *instav1alpha1.AllocationResult
 		for _, uuid := range gpuUUIDs {
-
-			klog.InfoS("Processing pod333-11", "uuid", uuid)
-
 			// This is very ugly, TODO - move this to a dedicated scheduler plugin
 			gpuAllocatedIndex := gpuAllocatedSlices(instObj, uuid)
-			klog.InfoS("Processing pod333-11", "uuid", uuid)
 
 			// TODO - iterate over all containers
 			profileName := extractProfileName(pod.Spec.Containers[0].Resources.Limits)
-			klog.InfoS("Processing pod333-22", "profileName", profileName)
 
 			newStart := getStartIndexFromAllocationResults(instObj, profileName, gpuAllocatedIndex)
-			klog.InfoS("Processing pod333-33", "newStart", newStart)
 
 			// For example, a newStart of 9 is considered invalid.
 			notValidIndex := int32(9)
 			if newStart == notValidIndex {
-				klog.InfoS("Processing pod333-44", "notValidIndex", notValidIndex)
 				// Move to next GPU if the index is not valid.
 				continue
 			}
-
-			klog.InfoS("Processing pod333-55", "notValidIndex", notValidIndex)
 
 			size, discoveredGiprofile, Ciprofileid, Ciengprofileid := extractGpuProfile(instObj, profileName)
 

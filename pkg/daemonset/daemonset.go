@@ -17,12 +17,6 @@ import (
 
 func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) error {
 	klog.InfoS("RunDaemonset started")
-	// Discover MIG-enabled GPUs and populate Instaslice CR before starting plugins
-	if err := discoverMigEnabledGpuWithSlices(ctx, cc.KubeConfig); err != nil {
-		klog.ErrorS(err, "Failed to discover MIG-enabled GPUs")
-		return fmt.Errorf("failed to discover MIG GPUs: %w", err)
-	}
-	klog.InfoS("MIG GPU discovery completed")
 	// Patch node with max MIG placements capacity
 	// Patch node with max MIG placements capacity
 	// if err := addMigCapacityToNode(ctx, cc.KubeConfig); err != nil {
