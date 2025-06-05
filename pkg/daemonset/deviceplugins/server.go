@@ -21,6 +21,8 @@ import (
 
 	// UUID generator for unique spec filenames
 	utiluuid "k8s.io/apimachinery/pkg/util/uuid"
+
+	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
 )
 
 var _ pluginapi.DevicePluginServer = (*Server)(nil)
@@ -31,15 +33,16 @@ type Server struct {
 	SocketPath       string
 	InstasliceClient instaclient.Interface
 	NodeName         string
+	EmulatedMode     instav1.EmulatedMode
 }
 
-func NewServer(mgr *Manager, socketPath string, kubeConfig *rest.Config) (*Server, error) {
+func NewServer(mgr *Manager, socketPath string, kubeConfig *rest.Config, emulatedMode instav1.EmulatedMode) (*Server, error) {
 	client, err := instaclient.NewForConfig(kubeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create instaslice client: %w", err)
 	}
 	nodeName := os.Getenv("NODE_NAME")
-	return &Server{Manager: mgr, SocketPath: socketPath, InstasliceClient: client, NodeName: nodeName}, nil
+	return &Server{Manager: mgr, SocketPath: socketPath, InstasliceClient: client, NodeName: nodeName, EmulatedMode: emulatedMode}, nil
 }
 
 func (s *Server) Start(ctx context.Context) error {
@@ -121,7 +124,7 @@ func (s *Server) ListAndWatch(req *pluginapi.Empty, stream pluginapi.DevicePlugi
 }
 
 func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
-	klog.InfoS("Received Allocate request", "containerRequests", req.GetContainerRequests())
+	klog.InfoS("Received Allocate request", "containerRequests", req.GetContainerRequests(), "emulatedMode", s.EmulatedMode)
 	count := len(req.GetContainerRequests())
 	resp := &pluginapi.AllocateResponse{
 		ContainerResponses: make([]*pluginapi.ContainerAllocateResponse, count),

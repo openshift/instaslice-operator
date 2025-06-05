@@ -76,7 +76,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 		endpoint := sanitized + ".sock"
 		socketPath := filepath.Join(socketDir, endpoint)
 
-		srv, err := deviceplugins.NewServer(mgr, socketPath, kubeConfig)
+		srv, err := deviceplugins.NewServer(mgr, socketPath, kubeConfig, emulatedMode)
 		if err != nil {
 			return fmt.Errorf("failed to create device plugin server for resource %q: %w", res, err)
 		}
