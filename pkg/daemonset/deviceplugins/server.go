@@ -160,11 +160,19 @@ func (s *Server) PreStartContainer(ctx context.Context, req *pluginapi.PreStartC
 	return &pluginapi.PreStartContainerResponse{}, nil
 }
 
-// BuildCDIDevices builds a CDI spec and returns the spec object, spec name, spec path, and the corresponding CDIDevices slice.
-func (s *Server) buildCDIDevices(kind, sanitizedClass, id string) (*cdispec.Spec, string, string, []*pluginapi.CDIDevice) {
+// BuildCDIDevices builds a CDI spec and returns the spec object, spec name,
+// spec path, and the corresponding CDIDevice slice. This helper is exported so
+// that other packages (and tests) can generate CDI specs in a consistent way.
+func BuildCDIDevices(kind, sanitizedClass, id string) (*cdispec.Spec, string, string, []*pluginapi.CDIDevice) {
 	specNameBase := fmt.Sprintf("%s_%s", sanitizedClass, id)
 	specName := specNameBase + ".cdi.json"
-	specPath := filepath.Join(cdi.DefaultDynamicDir, specName)
+
+	dynamicDir := cdi.DefaultDynamicDir
+	dirs := cdi.GetDefaultCache().GetSpecDirectories()
+	if len(dirs) > 0 {
+		dynamicDir = dirs[len(dirs)-1]
+	}
+	specPath := filepath.Join(dynamicDir, specName)
 
 	// TODO - Do we need to create a CDI spec for each device Allocate request? can we not use a single spec for all devices of the same kind?
 	specObj := &cdispec.Spec{
@@ -196,9 +204,10 @@ func (s *Server) buildCDIDevices(kind, sanitizedClass, id string) (*cdispec.Spec
 	return specObj, specName, specPath, cdiDevices
 }
 
-// WriteCDISpecForResource parses the given resource name, generates a CDI spec and writes it to cache.
-// It returns the CDIDevices slice and environment variables to set for the container.
-func (s *Server) writeCDISpecForResource(resourceName string, id string) ([]*pluginapi.CDIDevice, error) {
+// WriteCDISpecForResource parses the given resource name, generates a CDI spec
+// using BuildCDIDevices and writes it to the CDI cache. It returns the path to
+// the written spec along with the generated CDIDevices.
+func WriteCDISpecForResource(resourceName string, id string) (string, []*pluginapi.CDIDevice, error) {
 	vendor, class := parser.ParseQualifier(resourceName)
 	sanitizedClass := class
 	if err := parser.ValidateClassName(sanitizedClass); err != nil {
@@ -209,13 +218,20 @@ func (s *Server) writeCDISpecForResource(resourceName string, id string) ([]*plu
 		kind = vendor + "/" + sanitizedClass
 	}
 
-	cdi.GetDefaultCache().GetDevice("aaa")
-	specObj, specName, _, cdiDevices := s.buildCDIDevices(kind, sanitizedClass, id)
+	specObj, specName, specPath, cdiDevices := BuildCDIDevices(kind, sanitizedClass, id)
 	if err := cdi.GetDefaultCache().WriteSpec(specObj, specName); err != nil {
 		klog.ErrorS(err, "failed to write CDI spec", "name", specName)
-		return nil, fmt.Errorf("failed to write CDI spec %q: %w", specName, err)
+		return "", nil, fmt.Errorf("failed to write CDI spec %q: %w", specName, err)
 	}
 	klog.InfoS("wrote CDI spec", "name", specName)
 
-	return cdiDevices, nil
+	return specPath, cdiDevices, nil
+}
+
+// writeCDISpecForResource is kept for backwards compatibility with older code.
+// It simply calls the exported WriteCDISpecForResource function and discards the
+// returned spec path.
+func (s *Server) writeCDISpecForResource(resourceName string, id string) ([]*pluginapi.CDIDevice, error) {
+	_, devices, err := WriteCDISpecForResource(resourceName, id)
+	return devices, err
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/loglevel"
 	"k8s.io/klog/v2"
+	"tags.cncf.io/container-device-interface/pkg/cdi"
 )
 
 func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) error {
@@ -31,12 +32,13 @@ func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) erro
 	}
 	klog.InfoS("Device plugins started")
 
-	// Setup pod deletion watcher
-	if err := watcher.SetupPodDeletionWatcher(ctx, cc.KubeConfig); err != nil {
-		klog.ErrorS(err, "Failed to setup pod deletion watcher")
+	// Setup CDI spec watcher
+	cdiCache := watcher.NewCDICache()
+	if err := watcher.SetupCDIDeletionWatcher(ctx, cdi.DefaultDynamicDir, cdiCache); err != nil {
+		klog.ErrorS(err, "Failed to setup CDI watcher")
 		return err
 	}
-	klog.InfoS("Pod deletion watcher setup completed")
+	klog.InfoS("CDI watcher setup completed")
 
 	// Set up operator config informers for dynamic log level
 	opClientset, err := instaclient.NewForConfig(cc.KubeConfig)
