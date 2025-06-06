@@ -224,4 +224,9 @@ cleanup-k8s:
 .PHONY: deploy-cert-manager
 deploy-cert-manager:
 	export KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
-                hack/deploy-cert-manager.sh
+		hack/deploy-cert-manager.sh
+
+.PHONY: test-e2e
+test-e2e:
+	@echo "=== Running e2e tests ==="
+	GOFLAGS=-mod=mod go test ./test/e2e -v -count=1
