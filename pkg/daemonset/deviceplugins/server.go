@@ -102,15 +102,29 @@ func (s *Server) GetDevicePluginOptions(ctx context.Context, req *pluginapi.Empt
 // ListAndWatch streams the list of devices, sending initial list and subsequent updates.
 func (s *Server) ListAndWatch(req *pluginapi.Empty, stream pluginapi.DevicePlugin_ListAndWatchServer) error {
 	klog.InfoS("ListAndWatch started", "resource", s.Manager.ResourceName)
-	// send initial device list
-	select {
-	case devs := <-s.Manager.Updates():
-		if err := stream.Send(&pluginapi.ListAndWatchResponse{Devices: devs}); err != nil {
-			return fmt.Errorf("failed to send initial device list: %w", err)
-		}
-	case <-stream.Context().Done():
-		return nil
+
+	// Refresh the CDI cache to make sure we see all specs on disk.
+	if err := cdi.Refresh(); err != nil {
+		klog.ErrorS(err, "failed to refresh CDI cache")
 	}
+
+	// build initial device list from existing CDI spec files
+	var initDevices []*pluginapi.Device
+	cache := cdi.GetDefaultCache()
+	for _, vendor := range cache.ListVendors() {
+		klog.V(4).InfoS("Enumerating CDI specs", "vendor", vendor)
+		for _, spec := range cache.GetVendorSpecs(vendor) {
+			id := filepath.Base(spec.GetPath())
+			klog.V(4).InfoS("Adding device from spec", "path", spec.GetPath(), "id", id)
+			initDevices = append(initDevices, &pluginapi.Device{ID: id, Health: pluginapi.Healthy})
+		}
+	}
+
+	// send initial device list
+	if err := stream.Send(&pluginapi.ListAndWatchResponse{Devices: initDevices}); err != nil {
+		return fmt.Errorf("failed to send initial device list: %w", err)
+	}
+
 	// stream updates
 	for {
 		select {

@@ -2,16 +2,132 @@ package deviceplugins
 
 import (
 	"context"
-	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+	"time"
+
+	"google.golang.org/grpc/metadata"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
+	"tags.cncf.io/container-device-interface/pkg/cdi"
+
+	"os"
 
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
 	fakeclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/fake"
 	utils "github.com/openshift/instaslice-operator/test/utils"
-	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
-	"tags.cncf.io/container-device-interface/pkg/cdi"
 )
+
+// fakeListWatchServer implements pluginapi.DevicePlugin_ListAndWatchServer.
+// It captures sent responses for inspection.
+type fakeListWatchServer struct {
+	ctx context.Context
+	ch  chan *pluginapi.ListAndWatchResponse
+}
+
+func newFakeListWatchServer(ctx context.Context) *fakeListWatchServer {
+	return &fakeListWatchServer{ctx: ctx, ch: make(chan *pluginapi.ListAndWatchResponse, 10)}
+}
+
+func (f *fakeListWatchServer) Send(resp *pluginapi.ListAndWatchResponse) error {
+	f.ch <- resp
+	return nil
+}
+
+func (f *fakeListWatchServer) Context() context.Context { return f.ctx }
+
+func (f *fakeListWatchServer) SendMsg(m interface{}) error {
+	if r, ok := m.(*pluginapi.ListAndWatchResponse); ok {
+		f.ch <- r
+	}
+	return nil
+}
+func (f *fakeListWatchServer) RecvMsg(interface{}) error    { return nil }
+func (f *fakeListWatchServer) SetHeader(metadata.MD) error  { return nil }
+func (f *fakeListWatchServer) SendHeader(metadata.MD) error { return nil }
+func (f *fakeListWatchServer) SetTrailer(metadata.MD)       {}
+
+func TestListAndWatchInitialSpecs(t *testing.T) {
+	dir := t.TempDir()
+	if err := cdi.Configure(cdi.WithSpecDirs(dir), cdi.WithAutoRefresh(false)); err != nil {
+		t.Fatalf("failed to configure cdi: %v", err)
+	}
+
+	specPath, _, err := WriteCDISpecForResource("vendor/class", "id1")
+	if err != nil {
+		t.Fatalf("failed to write spec: %v", err)
+	}
+
+	mgr := NewManager("vendor/class")
+	srv := &Server{Manager: mgr}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stream := newFakeListWatchServer(ctx)
+	done := make(chan error, 1)
+	go func() { done <- srv.ListAndWatch(&pluginapi.Empty{}, stream) }()
+
+	var resp *pluginapi.ListAndWatchResponse
+	select {
+	case resp = <-stream.ch:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for initial response")
+	}
+
+	expectedID := filepath.Base(specPath)
+	if len(resp.Devices) != 1 || resp.Devices[0].ID != expectedID || resp.Devices[0].Health != pluginapi.Healthy {
+		t.Fatalf("unexpected initial devices: %+v", resp.Devices)
+	}
+
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("ListAndWatch returned error: %v", err)
+	}
+}
+
+func TestListAndWatchForwardsUpdates(t *testing.T) {
+	dir := t.TempDir()
+	if err := cdi.Configure(cdi.WithSpecDirs(dir), cdi.WithAutoRefresh(false)); err != nil {
+		t.Fatalf("failed to configure cdi: %v", err)
+	}
+
+	mgr := NewManager("vendor/class")
+	srv := &Server{Manager: mgr}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stream := newFakeListWatchServer(ctx)
+
+	done := make(chan error, 1)
+	go func() { done <- srv.ListAndWatch(&pluginapi.Empty{}, stream) }()
+
+	// Read initial (empty) response
+	select {
+	case <-stream.ch:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for initial response")
+	}
+
+	update := []*pluginapi.Device{{ID: "foo", Health: pluginapi.Healthy}}
+	mgr.updates <- update
+
+	var resp *pluginapi.ListAndWatchResponse
+	select {
+	case resp = <-stream.ch:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for update")
+	}
+
+	if !reflect.DeepEqual(resp.Devices, update) {
+		t.Fatalf("unexpected update: %+v", resp.Devices)
+	}
+
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("ListAndWatch returned error: %v", err)
+	}
+}
 
 func TestAllocateEmulated(t *testing.T) {
 	nodeName := "test-node"
