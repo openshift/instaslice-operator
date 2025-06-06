@@ -5,7 +5,7 @@ WORKDIR /workspace
 COPY . .
 RUN GO_BUILD_PACKAGES=./cmd/instaslice-webhook make
 
-FROM docker.io/alpine:3.21
+FROM docker.io/alpine:3.22
 RUN apk upgrade --no-cache
 RUN apk add tzdata make
 WORKDIR /

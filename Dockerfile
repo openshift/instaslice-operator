@@ -6,7 +6,7 @@ RUN apk upgrade --no-cache
 RUN apk add tzdata make git
 RUN GO_BUILD_PACKAGES=./cmd/instaslice-operator make
 
-FROM docker.io/alpine:3.21
+FROM docker.io/alpine:3.22
 RUN apk upgrade --no-cache
 RUN apk add tzdata
 WORKDIR /
