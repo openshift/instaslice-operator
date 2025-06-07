@@ -6,12 +6,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
 	"github.com/openshift/instaslice-operator/pkg/daemonset/deviceplugins"
 	versioned "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
+	instainformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 )
 
@@ -59,6 +62,41 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 		return fmt.Errorf("failed to discover MIG GPUs: %w", err)
 	}
 	klog.InfoS("MIG GPU discovery completed")
+
+	// Setup informer to watch Allocation resources. We index allocations by
+	// the target node name to easily query allocations for this node.
+	allocInformerFactory := instainformers.NewSharedInformerFactoryWithOptions(
+		csOp, 10*time.Minute, instainformers.WithNamespace(instasliceNamespace))
+	allocInformer := allocInformerFactory.OpenShiftOperator().V1alpha1().Allocations().Informer()
+
+	// Index allocations by nodename for quick lookup.
+	err = allocInformer.AddIndexers(cache.Indexers{
+		"nodename": func(obj interface{}) ([]string, error) {
+			a, ok := obj.(*instav1.Allocation)
+			if !ok {
+				return []string{}, nil
+			}
+			return []string{string(a.Spec.Nodename)}, nil
+		},
+	})
+	if err != nil {
+		klog.ErrorS(err, "Failed to add indexer to Allocation informer")
+		return err
+	}
+
+	allocInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			a, ok := obj.(*instav1.Allocation)
+			if !ok {
+				return
+			}
+			// Perform a simple action on Allocation creation. For now we just log it.
+			klog.InfoS("Allocation created", "name", a.Name, "node", a.Spec.Nodename, "Spec", a.Spec)
+		},
+	})
+
+	// Start the informer in a separate goroutine.
+	allocInformerFactory.Start(ctx.Done())
 	// define the extended resources to serve
 	// TODO : load these from the instaslice CR
 	resourceNames := []string{

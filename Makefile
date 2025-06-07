@@ -178,13 +178,13 @@ test-k8s:
 	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') nvidia.com/mig.capable=true --overwrite
 
 	@echo "=== Building container images ==="
-	# docker build -f Dockerfile.scheduler.ocp -t localhost:5000/instaslice-scheduler:dev .
+	docker build -f Dockerfile.scheduler.ocp -t localhost:5000/instaslice-scheduler:dev .
 	docker build -f Dockerfile.daemonset.ocp -t localhost:5000/instaslice-daemonset:dev .
 	# docker build -f Dockerfile.ocp -t localhost:5000/instaslice-operator:dev .
 	# docker build -f Dockerfile.webhook.ocp -t localhost:5000/instaslice-webhook:dev .
 
 	@echo "=== Pushing images into local registry ==="
-	# docker push localhost:5000/instaslice-scheduler:dev
+	docker push localhost:5000/instaslice-scheduler:dev
 	docker push localhost:5000/instaslice-daemonset:dev
 	# docker push localhost:5000/instaslice-operator:dev
 	# docker push localhost:5000/instaslice-webhook:dev
