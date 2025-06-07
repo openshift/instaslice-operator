@@ -65,7 +65,7 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 
 // PreBind selects a GPU and updates the Instaslice object for the chosen node.
 func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) *framework.Status {
-	instObj, err := p.instaClient.OpenShiftOperatorV1alpha1().Instaslices(p.namespace).Get(ctx, nodeName, metav1.GetOptions{})
+	instObj, err := p.instaClient.OpenShiftOperatorV1alpha1().Instaslices("instaslice-system").Get(ctx, nodeName, metav1.GetOptions{})
 	if err != nil {
 		return framework.AsStatus(err)
 	}
@@ -100,7 +100,7 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 	if selectedGPU == "" {
 		return framework.NewStatus(framework.Unschedulable, "no GPU available")
 	}
-	if _, err := p.instaClient.OpenShiftOperatorV1alpha1().Allocations(pod.Namespace).Create(ctx, alloc, metav1.CreateOptions{}); err != nil {
+	if _, err := p.instaClient.OpenShiftOperatorV1alpha1().Allocations("instaslice-system").Create(ctx, alloc, metav1.CreateOptions{}); err != nil {
 		return framework.AsStatus(err)
 	}
 	klog.InfoS("instaslice GPU selected ", "pod", klog.KObj(pod), "node", nodeName, "gpu", selectedGPU)
@@ -129,7 +129,7 @@ func SetAllocationDetails(profileName string, newStart, size int32, podUUID type
 	return &instav1alpha1.Allocation{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      string(podUUID),
-			Namespace: namespace,
+			Namespace: "instaslice-system",
 		},
 		Spec: instav1alpha1.AllocationSpec{
 			Profile: profileName,

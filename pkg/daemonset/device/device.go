@@ -29,7 +29,6 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 		klog.ErrorS(err, "NODE_NAME environment variable is required")
 		return err
 	}
-	// If emulation is enabled in the InstasliceOperator CR, use fake discovery
 	csOp, err := versioned.NewForConfig(kubeConfig)
 	if err != nil {
 		klog.ErrorS(err, "Failed to create operator client", "node", nodeName)
@@ -97,6 +96,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 
 	// Start the informer in a separate goroutine.
 	allocInformerFactory.Start(ctx.Done())
+
 	// define the extended resources to serve
 	// TODO : load these from the instaslice CR
 	resourceNames := []string{
