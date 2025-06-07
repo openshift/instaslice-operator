@@ -16,6 +16,14 @@ limitations under the License.
 
 package v1alpha1
 
+// AllocationListerExpansion allows custom methods to be added to
+// AllocationLister.
+type AllocationListerExpansion interface{}
+
+// AllocationNamespaceListerExpansion allows custom methods to be added to
+// AllocationNamespaceLister.
+type AllocationNamespaceListerExpansion interface{}
+
 // InstasliceListerExpansion allows custom methods to be added to
 // InstasliceLister.
 type InstasliceListerExpansion interface{}

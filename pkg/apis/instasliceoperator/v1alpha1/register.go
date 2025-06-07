@@ -31,6 +31,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&Instaslice{},
 		&InstasliceList{},
+		&Allocation{},
+		&AllocationList{},
 		&InstasliceOperator{},
 		&InstasliceOperatorList{},
 	)
