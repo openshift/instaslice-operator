@@ -50,23 +50,15 @@ func TestPreBindAllocatesGPU(t *testing.T) {
 		t.Fatalf("unexpected status: %v", st)
 	}
 
-	updated, err := client.OpenShiftOperatorV1alpha1().Instaslices(inst.Namespace).Get(ctx, "node1", metav1.GetOptions{})
+	allocs, err := client.OpenShiftOperatorV1alpha1().Allocations(pod.Namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		t.Fatalf("failed to get instaslice: %v", err)
+		t.Fatalf("failed to list allocations: %v", err)
 	}
-
-	if updated.Spec.PodAllocationRequests == nil || len(*updated.Spec.PodAllocationRequests) != 1 {
-		t.Fatalf("expected one allocation request, got %v", updated.Spec.PodAllocationRequests)
+	if len(allocs.Items) != 1 {
+		t.Fatalf("expected one allocation, got %d", len(allocs.Items))
 	}
-	if _, ok := (*updated.Spec.PodAllocationRequests)[pod.UID]; !ok {
-		t.Fatalf("allocation request for pod not found")
-	}
-	if updated.Status.PodAllocationResults == nil || len(updated.Status.PodAllocationResults) != 1 {
-		t.Fatalf("expected one allocation result, got %v", updated.Status.PodAllocationResults)
-	}
-	res := updated.Status.PodAllocationResults[string(pod.UID)]
-	if res.GPUUUID == "" {
-		t.Fatalf("allocation result not populated")
+	if allocs.Items[0].Spec.GPUUUID == "" {
+		t.Fatalf("allocation not populated")
 	}
 }
 
@@ -90,6 +82,13 @@ func TestPreBindUnschedulable(t *testing.T) {
 	if st == nil || st.Code() != framework.Unschedulable {
 		t.Fatalf("expected unschedulable status, got %v", st)
 	}
+	allocs, err := client.OpenShiftOperatorV1alpha1().Allocations(pod.Namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("failed to list allocations: %v", err)
+	}
+	if len(allocs.Items) != 0 {
+		t.Fatalf("expected no allocations, got %d", len(allocs.Items))
+	}
 }
 
 func TestPreBindInstasliceNotFound(t *testing.T) {
@@ -101,5 +100,12 @@ func TestPreBindInstasliceNotFound(t *testing.T) {
 	st := p.PreBind(ctx, framework.NewCycleState(), pod, "node1")
 	if st == nil || st.Code() != framework.Error {
 		t.Fatalf("expected error status when instaslice missing, got %v", st)
+	}
+	allocs, err := client.OpenShiftOperatorV1alpha1().Allocations(pod.Namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("failed to list allocations: %v", err)
+	}
+	if len(allocs.Items) != 0 {
+		t.Fatalf("expected no allocations, got %d", len(allocs.Items))
 	}
 }

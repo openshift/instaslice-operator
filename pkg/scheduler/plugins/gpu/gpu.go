@@ -70,8 +70,7 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 		return framework.AsStatus(err)
 	}
 	var selectedGPU string
-	var allocRequest *instav1alpha1.AllocationRequest
-	var allocResult *instav1alpha1.AllocationResult
+	var alloc *instav1alpha1.Allocation
 	for _, gpu := range instObj.Status.NodeResources.NodeGPUs {
 		gpuAllocated := gpuAllocatedSlices(instObj, gpu.GPUUUID)
 		profileName := extractProfileName(pod.Spec.Containers[0].Resources.Limits)
@@ -80,7 +79,7 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 			continue
 		}
 		size, discoveredGiprofile, Ciprofileid, Ciengprofileid := extractGpuProfile(instObj, profileName)
-		allocRequest, allocResult = SetAllocationDetails(
+		alloc = SetAllocationDetails(
 			profileName,
 			newStart,
 			size,
@@ -95,26 +94,13 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 			gpu.GPUUUID,
 			types.UID(pod.GetUID()),
 		)
-		if instObj.Spec.PodAllocationRequests == nil {
-			m := make(map[types.UID]instav1alpha1.AllocationRequest)
-			instObj.Spec.PodAllocationRequests = &m
-		}
-		(*instObj.Spec.PodAllocationRequests)[pod.GetUID()] = *allocRequest
 		selectedGPU = gpu.GPUUUID
 		break
 	}
 	if selectedGPU == "" {
 		return framework.NewStatus(framework.Unschedulable, "no GPU available")
 	}
-	updatedObj, err := p.instaClient.OpenShiftOperatorV1alpha1().Instaslices(instObj.Namespace).Update(ctx, instObj, metav1.UpdateOptions{})
-	if err != nil {
-		return framework.AsStatus(err)
-	}
-	if updatedObj.Status.PodAllocationResults == nil {
-		updatedObj.Status.PodAllocationResults = make(map[string]instav1alpha1.AllocationResult)
-	}
-	updatedObj.Status.PodAllocationResults[string(pod.GetUID())] = *allocResult
-	if _, err := p.instaClient.OpenShiftOperatorV1alpha1().Instaslices(instObj.Namespace).UpdateStatus(ctx, updatedObj, metav1.UpdateOptions{}); err != nil {
+	if _, err := p.instaClient.OpenShiftOperatorV1alpha1().Allocations(pod.Namespace).Create(ctx, alloc, metav1.CreateOptions{}); err != nil {
 		return framework.AsStatus(err)
 	}
 	klog.InfoS("instaslice GPU selected ", "pod", klog.KObj(pod), "node", nodeName, "gpu", selectedGPU)
@@ -139,8 +125,13 @@ func extractProfileName(limits corev1.ResourceList) string {
 
 func SetAllocationDetails(profileName string, newStart, size int32, podUUID types.UID, nodename types.NodeName,
 	allocationStatus instav1alpha1.AllocationStatus, discoveredGiprofile int32, Ciprofileid int32, Ciengprofileid int32,
-	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID) (*instav1alpha1.AllocationRequest, *instav1alpha1.AllocationResult) {
-	return &instav1alpha1.AllocationRequest{
+	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID) *instav1alpha1.Allocation {
+	return &instav1alpha1.Allocation{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      string(podUUID),
+			Namespace: namespace,
+		},
+		Spec: instav1alpha1.AllocationSpec{
 			Profile: profileName,
 			PodRef: corev1.ObjectReference{
 				Kind:      "Pod",
@@ -148,17 +139,15 @@ func SetAllocationDetails(profileName string, newStart, size int32, podUUID type
 				Name:      podName,
 				UID:       podUUID,
 			},
-		}, &instav1alpha1.AllocationResult{
 			MigPlacement: instav1alpha1.Placement{
 				Size:  size,
 				Start: newStart,
 			},
-			GPUUUID:                     gpuUuid,
-			Nodename:                    nodename,
-			AllocationStatus:            allocationStatus,
-			ConfigMapResourceIdentifier: resourceIdentifier,
-			Conditions:                  []metav1.Condition{},
-		}
+			GPUUUID:  gpuUuid,
+			Nodename: nodename,
+		},
+		Status: allocationStatus,
+	}
 }
 
 func extractGpuProfile(instaslice *instav1alpha1.Instaslice, profileName string) (int32, int32, int32, int32) {
