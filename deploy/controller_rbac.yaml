@@ -18,6 +18,9 @@ rules:
       - instasliceoperators
       - instasliceoperators/status
       - instasliceoperators/finalizers
+      - allocations
+      - allocations/status
+      - allocations/finalizers
     verbs:
       - create
       - delete

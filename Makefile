@@ -157,7 +157,7 @@ test-kind:
 	@echo "=== Applying Kind core manifests ==="
 	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
 	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' deploy-kind/09_instaslice_operator.cr.yaml
-	kubectl apply -f deploy-kind/01_namespace.yaml -f deploy-kind/operand_rbac.yaml -f deploy-kind/daemonset_rbac.yaml -f deploy-kind/controller_rbac.yaml -f deploy-kind/05_deployment.yaml -f deploy-kind/09_instaslice_operator.cr.yaml -f deploy-kind/scheduler_rbac.yaml
+	kubectl apply -f deploy-kind/
 
 
 	@echo "=== Deploying instaslice-scheduler ==="
@@ -180,14 +180,14 @@ test-k8s:
 	@echo "=== Building container images ==="
 	docker build -f Dockerfile.scheduler.ocp -t localhost:5000/instaslice-scheduler:dev .
 	docker build -f Dockerfile.daemonset.ocp -t localhost:5000/instaslice-daemonset:dev .
-	# docker build -f Dockerfile.ocp -t localhost:5000/instaslice-operator:dev .
-	# docker build -f Dockerfile.webhook.ocp -t localhost:5000/instaslice-webhook:dev .
+	docker build -f Dockerfile.ocp -t localhost:5000/instaslice-operator:dev .
+	docker build -f Dockerfile.webhook.ocp -t localhost:5000/instaslice-webhook:dev .
 
 	@echo "=== Pushing images into local registry ==="
 	docker push localhost:5000/instaslice-scheduler:dev
 	docker push localhost:5000/instaslice-daemonset:dev
-	# docker push localhost:5000/instaslice-operator:dev
-	# docker push localhost:5000/instaslice-webhook:dev
+	docker push localhost:5000/instaslice-operator:dev
+	docker push localhost:5000/instaslice-webhook:dev
 
 	@echo "=== Deploying Cert Manager ==="
 	$(MAKE) deploy-cert-manager
@@ -206,7 +206,7 @@ test-k8s:
 	@echo "=== Applying K8s core manifests ==="
 	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
 	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' deploy-k8s/09_instaslice_operator.cr.yaml
-	kubectl apply -f deploy-k8s/01_namespace.yaml -f deploy-k8s/operand_rbac.yaml -f deploy-k8s/daemonset_rbac.yaml -f deploy-k8s/controller_rbac.yaml -f deploy-k8s/05_deployment.yaml -f deploy-k8s/09_instaslice_operator.cr.yaml -f deploy-k8s/scheduler_rbac.yaml -f deploy-k8s/05_scheduler_config.yaml
+	kubectl apply -f deploy-k8s/
 
 
 	@echo "=== Deploying instaslice-scheduler ==="
@@ -219,7 +219,7 @@ test-k8s:
 .PHONY: cleanup-k8s
 cleanup-k8s:
 	@echo "=== Deleting K8s resources ==="
-	kubectl delete -f deploy-k8s/01_namespace.yaml -f deploy-k8s/operand_rbac.yaml -f deploy-k8s/daemonset_rbac.yaml -f deploy-k8s/controller_rbac.yaml -f deploy-k8s/05_deployment.yaml -f deploy-k8s/09_instaslice_operator.cr.yaml -f deploy-k8s/scheduler_rbac.yaml -f deploy-k8s/05_scheduler_config.yaml
+	kubectl delete -f deploy-k8s/
 
 .PHONY: deploy-cert-manager
 deploy-cert-manager:

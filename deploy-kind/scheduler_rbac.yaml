@@ -112,12 +112,17 @@ rules:
       - "instaslices/status"
       - "instasliceoperators"
       - "instasliceoperators/status"
+      - "allocations"
+      - "allocations/status"
+      - "allocations/finalizers"
     verbs:
       - "get"
       - "list"
       - "watch"
       - "update"
       - "patch"
+      - "create"
+      - "delete"
   - apiGroups: ["storage.k8s.io"]
     resources:
       - csinodes
