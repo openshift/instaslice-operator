@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/openshift/instaslice-operator/pkg/daemonset/device"
+	deviceplugins "github.com/openshift/instaslice-operator/pkg/daemonset/deviceplugins"
 	"github.com/openshift/instaslice-operator/pkg/daemonset/watcher"
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	instainformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
@@ -27,7 +27,7 @@ func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) erro
 	// }
 	// klog.InfoS("Node MIG capacity patch completed")
 	// Start device plugins
-	if err := device.StartDevicePlugins(ctx, cc.KubeConfig); err != nil {
+	if err := deviceplugins.StartDevicePlugins(ctx, cc.KubeConfig); err != nil {
 		klog.ErrorS(err, "Failed to start device plugins")
 		return err
 	}
