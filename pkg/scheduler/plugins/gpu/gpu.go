@@ -2,20 +2,24 @@ package gpu
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
 	instav1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
+	instainformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
 	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
 )
 
@@ -60,6 +64,53 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 			ns = "instaslice-system"
 		}
 	}
+
+	informerFactory := instainformers.NewSharedInformerFactoryWithOptions(
+		instaClient, 10*time.Minute,
+		instainformers.WithNamespace(ns),
+	)
+	allocInformer := informerFactory.
+		OpenShiftOperator().
+		V1alpha1().
+		Allocations().
+		Informer()
+
+	// Register a single “node-gpu” composite indexer:
+	err = allocInformer.AddIndexers(cache.Indexers{
+		"node-gpu": func(obj interface{}) ([]string, error) {
+			a, ok := obj.(*instav1alpha1.Allocation)
+			if !ok {
+				return nil, nil
+			}
+			// composite key: "<nodename>/<gpuuuid>"
+			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.GPUUUID)
+			return []string{key}, nil
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// indexer usage
+	// indexer := allocInformer.GetIndexer()
+
+	// nodeName := "node-42"
+	// gpuUUID := "abc123"
+	// compositeKey := fmt.Sprintf("%s/%s", nodeName, gpuUUID)
+
+	// objs, err := indexer.ByIndex("node-gpu", compositeKey)
+	// if err != nil {
+	// 	// handle error
+	// }
+
+	// for _, obj := range objs {
+	// 	alloc := obj.(*instav1alpha1.Allocation)
+	// 	fmt.Printf("Found Allocation %s on node %s for GPU %s\n",
+	// 		alloc.Name, alloc.Spec.Nodename, alloc.Spec.GPUUUID)
+	// }
+
+	informerFactory.Start(ctx.Done())
+
 	return &Plugin{handle: handle, instaClient: instaClient, namespace: ns}, nil
 }
 
