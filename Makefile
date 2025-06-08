@@ -172,42 +172,54 @@ cleanup-kind:
 	@echo "=== Deleting Kind cluster 'instaslice-test' ==="
 	kind delete cluster --name instaslice-test
 
-## test-k8s: quick test on local k8s cluster
+
+.PHONY: build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
+
+build-push-scheduler:
+	# docker build -f Dockerfile.scheduler.ocp -t localhost:5000/instaslice-scheduler:dev .
+	# docker push localhost:5000/instaslice-scheduler:dev
+
+build-push-daemonset:
+	# docker build -f Dockerfile.daemonset.ocp -t localhost:5000/instaslice-daemonset:dev .
+	# docker push localhost:5000/instaslice-daemonset:dev
+
+build-push-operator:
+	# docker build -f Dockerfile.ocp -t localhost:5000/instaslice-operator:dev .
+	# docker push localhost:5000/instaslice-operator:dev
+
+build-push-webhook:
+	# docker build -f Dockerfile.webhook.ocp -t localhost:5000/instaslice-webhook:dev .
+	# docker push localhost:5000/instaslice-webhook:dev
+
 .PHONY: test-k8s
 test-k8s:
-	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') nvidia.com/mig.capable=true --overwrite
+	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') \
+		nvidia.com/mig.capable=true --overwrite
 
-	@echo "=== Building container images ==="
-	docker build -f Dockerfile.scheduler.ocp -t localhost:5000/instaslice-scheduler:dev .
-	docker build -f Dockerfile.daemonset.ocp -t localhost:5000/instaslice-daemonset:dev .
-	docker build -f Dockerfile.ocp -t localhost:5000/instaslice-operator:dev .
-	docker build -f Dockerfile.webhook.ocp -t localhost:5000/instaslice-webhook:dev .
+	@echo "=== Building and pushing images in parallel ==="
+	$(MAKE) -j16 build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
 
-	@echo "=== Pushing images into local registry ==="
-	docker push localhost:5000/instaslice-scheduler:dev
-	docker push localhost:5000/instaslice-daemonset:dev
-	docker push localhost:5000/instaslice-operator:dev
-	docker push localhost:5000/instaslice-webhook:dev
+	@echo "=== All images built & pushed ==="
 
 	@echo "=== Deploying Cert Manager ==="
 	$(MAKE) deploy-cert-manager
+
 	@echo "=== Generating CRDs for K8s ==="
 	$(MAKE) regen-crd-k8s
 
-
 	@echo "=== Applying K8s CRDs ==="
-	kubectl apply \
- 	-f deploy-k8s/00_instaslice-operator.crd.yaml \
- 	-f deploy-k8s/00_instaslices.crd.yaml
+	kubectl apply -f deploy-k8s/00_instaslice-operator.crd.yaml \
+	              -f deploy-k8s/00_instaslices.crd.yaml
 
 	@echo "=== Waiting for CRDs to be established ==="
-	kubectl wait --for=condition=established --timeout=60s crd instasliceoperators.inference.redhat.com
+	kubectl wait --for=condition=established --timeout=60s \
+	             crd instasliceoperators.inference.redhat.com
 
 	@echo "=== Applying K8s core manifests ==="
 	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
-	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' deploy-k8s/09_instaslice_operator.cr.yaml
+	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' \
+	      deploy-k8s/09_instaslice_operator.cr.yaml
 	kubectl apply -f deploy-k8s/
-
 
 	@echo "=== Deploying instaslice-scheduler ==="
 	kubectl apply -f deploy-k8s/06_scheduler_deployment.yaml
