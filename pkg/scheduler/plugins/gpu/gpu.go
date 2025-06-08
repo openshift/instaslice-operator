@@ -20,6 +20,7 @@ import (
 	instav1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	instainformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
+	instalisters "github.com/openshift/instaslice-operator/pkg/generated/listers/instasliceoperator/v1alpha1"
 	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
 )
 
@@ -27,9 +28,10 @@ const Name = "InstasliceGPU"
 
 // Plugin implements a scheduler PreBind extension for GPU allocation.
 type Plugin struct {
-	handle      framework.Handle
-	instaClient instaclient.Interface
-	namespace   string
+	handle           framework.Handle
+	instaClient      instaclient.Interface
+	namespace        string
+	instasliceLister instalisters.InstasliceLister
 }
 
 // Args holds the scheduler plugin configuration.
@@ -75,6 +77,13 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 		Allocations().
 		Informer()
 
+	instasliceInformer := informerFactory.
+		OpenShiftOperator().
+		V1alpha1().
+		Instaslices()
+	instasliceInf := instasliceInformer.Informer()
+	instasliceLister := instasliceInformer.Lister()
+
 	// Register a single “node-gpu” composite indexer:
 	err = allocInformer.AddIndexers(cache.Indexers{
 		"node-gpu": func(obj interface{}) ([]string, error) {
@@ -110,13 +119,21 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 	// }
 
 	informerFactory.Start(ctx.Done())
+	if ok := cache.WaitForCacheSync(ctx.Done(), allocInformer.HasSynced, instasliceInf.HasSynced); !ok {
+		return nil, fmt.Errorf("failed to sync caches")
+	}
 
-	return &Plugin{handle: handle, instaClient: instaClient, namespace: ns}, nil
+	return &Plugin{
+		handle:           handle,
+		instaClient:      instaClient,
+		namespace:        ns,
+		instasliceLister: instasliceLister,
+	}, nil
 }
 
 // PreBind selects a GPU and updates the Instaslice object for the chosen node.
 func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) *framework.Status {
-	instObj, err := p.instaClient.OpenShiftOperatorV1alpha1().Instaslices("instaslice-system").Get(ctx, nodeName, metav1.GetOptions{})
+	instObj, err := p.instasliceLister.Instaslices(p.namespace).Get(nodeName)
 	if err != nil {
 		return framework.AsStatus(err)
 	}
