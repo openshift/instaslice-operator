@@ -1,7 +1,7 @@
 [
   {
     "name": "instaslice-daemonset-next",
-    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset-next@sha256:9792de307ec8d24feaebde12501e5b61a60921419f85f25f632b352188c0a691"
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset-next@sha256:d0ec52fb901779f4ec17b5e3a38d8ae781ba6c4231ec0675d87acfd3f92db712"
   },
   {
     "name": "instaslice-webhook-next",
