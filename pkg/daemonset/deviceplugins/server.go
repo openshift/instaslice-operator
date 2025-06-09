@@ -2,6 +2,7 @@ package deviceplugins
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -39,6 +40,8 @@ type Server struct {
 	EmulatedMode     instav1.EmulatedMode
 	allocMutex       sync.Mutex
 }
+
+const allocationAnnotationKey = "instaslice.com/allocation"
 
 func NewServer(mgr *Manager, socketPath string, kubeConfig *rest.Config, emulatedMode instav1.EmulatedMode) (*Server, error) {
 	cfg := rest.CopyConfig(kubeConfig)
@@ -151,20 +154,29 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 		ContainerResponses: make([]*pluginapi.ContainerAllocateResponse, count),
 	}
 
-	if allocations, err := s.getAllocationsByNodeGPU(s.NodeName, s.Manager.ResourceName, count); err != nil {
+	allocations, err := s.getAllocationsByNodeGPU(s.NodeName, s.Manager.ResourceName, count)
+	if err != nil {
 		klog.ErrorS(err, "failed to get allocations", "node", s.NodeName, "profile", s.Manager.ResourceName)
 	} else {
 		klog.InfoS("Fetched allocations for Allocate", "count", len(allocations), "node", s.NodeName, "profile", s.Manager.ResourceName)
-		klog.InfoS("Allocations IIIIII", "allocations", allocations)
+		klog.V(5).InfoS("Allocations", "allocations", allocations)
 	}
 
-	for i := range count {
+	for i := 0; i < count; i++ {
 		resp.ContainerResponses[i] = &pluginapi.ContainerAllocateResponse{}
 
 		id := utiluuid.NewUUID()
 
-		// TODO: use allocation results to construct CDI devices
-		cdiDevices, err := s.writeCDISpecForResource(s.Manager.ResourceName, string(id))
+		var annotations map[string]string
+		if i < len(allocations) {
+			if data, err := json.Marshal(allocations[i]); err == nil {
+				annotations = map[string]string{allocationAnnotationKey: string(data)}
+			} else {
+				klog.ErrorS(err, "failed to marshal allocation")
+			}
+		}
+
+		_, cdiDevices, err := WriteCDISpecForResource(s.Manager.ResourceName, string(id), annotations)
 		if err != nil {
 			return nil, err
 		}
@@ -230,7 +242,7 @@ func (s *Server) getAllocationsByNodeGPU(nodeName, profileName string, count int
 // BuildCDIDevices builds a CDI spec and returns the spec object, spec name,
 // spec path, and the corresponding CDIDevice slice. This helper is exported so
 // that other packages (and tests) can generate CDI specs in a consistent way.
-func BuildCDIDevices(kind, sanitizedClass, id string) (*cdispec.Spec, string, string, []*pluginapi.CDIDevice) {
+func BuildCDIDevices(kind, sanitizedClass, id string, annotations map[string]string) (*cdispec.Spec, string, string, []*pluginapi.CDIDevice) {
 	specNameBase := fmt.Sprintf("%s_%s", sanitizedClass, id)
 	specName := specNameBase + ".cdi.json"
 
@@ -247,7 +259,8 @@ func BuildCDIDevices(kind, sanitizedClass, id string) (*cdispec.Spec, string, st
 		Kind:    kind,
 		Devices: []cdispec.Device{
 			{
-				Name: "dev0",
+				Name:        "dev0",
+				Annotations: annotations,
 				ContainerEdits: cdispec.ContainerEdits{
 					Env: []string{"ABCD=test"},
 					Hooks: []*cdispec.Hook{
@@ -274,7 +287,7 @@ func BuildCDIDevices(kind, sanitizedClass, id string) (*cdispec.Spec, string, st
 // WriteCDISpecForResource parses the given resource name, generates a CDI spec
 // using BuildCDIDevices and writes it to the CDI cache. It returns the path to
 // the written spec along with the generated CDIDevices.
-func WriteCDISpecForResource(resourceName string, id string) (string, []*pluginapi.CDIDevice, error) {
+func WriteCDISpecForResource(resourceName string, id string, annotations map[string]string) (string, []*pluginapi.CDIDevice, error) {
 	vendor, class := parser.ParseQualifier(resourceName)
 	sanitizedClass := class
 	if err := parser.ValidateClassName(sanitizedClass); err != nil {
@@ -285,7 +298,7 @@ func WriteCDISpecForResource(resourceName string, id string) (string, []*plugina
 		kind = vendor + "/" + sanitizedClass
 	}
 
-	specObj, specName, specPath, cdiDevices := BuildCDIDevices(kind, sanitizedClass, id)
+	specObj, specName, specPath, cdiDevices := BuildCDIDevices(kind, sanitizedClass, id, annotations)
 	if err := cdi.GetDefaultCache().WriteSpec(specObj, specName); err != nil {
 		klog.ErrorS(err, "failed to write CDI spec", "name", specName)
 		return "", nil, fmt.Errorf("failed to write CDI spec %q: %w", specName, err)
@@ -299,6 +312,6 @@ func WriteCDISpecForResource(resourceName string, id string) (string, []*plugina
 // It simply calls the exported WriteCDISpecForResource function and discards the
 // returned spec path.
 func (s *Server) writeCDISpecForResource(resourceName string, id string) ([]*pluginapi.CDIDevice, error) {
-	_, devices, err := WriteCDISpecForResource(resourceName, id)
+	_, devices, err := WriteCDISpecForResource(resourceName, id, nil)
 	return devices, err
 }

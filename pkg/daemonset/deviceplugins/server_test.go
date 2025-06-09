@@ -57,7 +57,7 @@ func TestListAndWatchInitialSpecs(t *testing.T) {
 		t.Fatalf("failed to configure cdi: %v", err)
 	}
 
-	specPath, _, err := WriteCDISpecForResource("vendor/class", "id1")
+	specPath, _, err := WriteCDISpecForResource("vendor/class", "id1", nil)
 	if err != nil {
 		t.Fatalf("failed to write spec: %v", err)
 	}
