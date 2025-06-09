@@ -6,7 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
 	versioned "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
@@ -15,6 +18,11 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+)
+
+var (
+	allocationIndexer cache.Indexer
+	allocationMutex   sync.Mutex
 )
 
 // StartDevicePlugins starts device managers, gRPC servers, and registrars for each resource.
@@ -67,7 +75,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 		csOp, 10*time.Minute, instainformers.WithNamespace(instasliceNamespace))
 	allocInformer := allocInformerFactory.OpenShiftOperator().V1alpha1().Allocations().Informer()
 
-	// Index allocations by nodename for quick lookup.
+	// Index allocations by nodename and by the composite "node-gpu" key for quick lookup.
 	err = allocInformer.AddIndexers(cache.Indexers{
 		"nodename": func(obj interface{}) ([]string, error) {
 			a, ok := obj.(*instav1.Allocation)
@@ -75,6 +83,14 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 				return []string{}, nil
 			}
 			return []string{string(a.Spec.Nodename)}, nil
+		},
+		"node-gpu": func(obj interface{}) ([]string, error) {
+			a, ok := obj.(*instav1.Allocation)
+			if !ok {
+				return nil, nil
+			}
+			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.GPUUUID)
+			return []string{key}, nil
 		},
 	})
 	if err != nil {
@@ -95,6 +111,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 
 	// Start the informer in a separate goroutine.
 	allocInformerFactory.Start(ctx.Done())
+	allocationIndexer = allocInformer.GetIndexer()
 
 	// define the extended resources to serve
 	// TODO : load these from the instaslice CR
@@ -125,4 +142,63 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 		go reg.Start(ctx)
 	}
 	return nil
+}
+
+// GetAllocationsByNodeGPU returns up to the requested number of allocations
+// indexed by nodename and GPU UUID. If fewer than the requested number of
+// allocations are found, the lookup will be retried using an exponential
+// backoff before giving up and returning an error. The lookup and returned slice
+// creation are performed while holding a mutex to avoid races between multiple
+// callers processing the same Allocation objects.
+func GetAllocationsByNodeGPU(nodeName, gpuUUID string, count int) ([]*instav1.Allocation, error) {
+	if count <= 0 {
+		return nil, fmt.Errorf("requested allocation count must be greater than zero")
+	}
+
+	if allocationIndexer == nil {
+		return nil, fmt.Errorf("allocation indexer not initialized")
+	}
+
+	key := fmt.Sprintf("%s/%s", nodeName, gpuUUID)
+	var result []*instav1.Allocation
+	err := wait.ExponentialBackoff(wait.Backoff{Duration: 100 * time.Millisecond, Factor: 2, Steps: 5}, func() (bool, error) {
+		allocationMutex.Lock()
+		defer allocationMutex.Unlock()
+		objs, err := allocationIndexer.ByIndex("node-gpu", key)
+		if err != nil {
+			return false, err
+		}
+
+		out := make([]*instav1.Allocation, 0, len(objs))
+		for _, obj := range objs {
+			if a, ok := obj.(*instav1.Allocation); ok {
+				out = append(out, a)
+				if len(out) == count {
+					break
+				}
+			}
+		}
+		result = out
+		return len(result) >= count, nil
+	})
+	if err != nil {
+		if wait.Interrupted(err) {
+			return nil, fmt.Errorf("requested %d allocations but only found %d", count, len(result))
+		}
+		return nil, err
+	}
+
+	return result[:count], nil
+}
+
+// UpdateAllocationStatus safely updates the status of the given Allocation using
+// the provided client while holding the allocation mutex. This prevents multiple
+// goroutines from updating the same object concurrently.
+func UpdateAllocationStatus(ctx context.Context, client versioned.Interface, alloc *instav1.Allocation, status instav1.AllocationStatus) (*instav1.Allocation, error) {
+	allocationMutex.Lock()
+	defer allocationMutex.Unlock()
+
+	copy := alloc.DeepCopy()
+	copy.Status = status
+	return client.OpenShiftOperatorV1alpha1().Allocations(copy.Namespace).UpdateStatus(ctx, copy, metav1.UpdateOptions{})
 }
