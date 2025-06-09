@@ -49,7 +49,6 @@ type TargetConfigReconciler struct {
 	dynamicClient              dynamic.Interface
 	eventRecorder              events.Recorder
 	generations                []operatorsv1.GenerationStatus
-	instasliceInformer         operatorclientv1alpha1informers.InstasliceInformer
 	instasliceoperatorClient   *operatorclient.InstasliceOperatorSetClient
 	kubeClient                 kubernetes.Interface
 	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces
@@ -184,7 +183,7 @@ func (c *TargetConfigReconciler) manageWebhookCertSecret() (*corev1.Secret, bool
 	if len(secret.Data["tls.crt"]) == 0 || len(secret.Data["tls.key"]) == 0 {
 		return nil, false, fmt.Errorf("%s secret is not initialized", secret.Name)
 	}
-	return secret, false, nil
+	return secret, true, nil
 }
 
 func (c *TargetConfigReconciler) manageMutatingWebhookDeployment(ctx context.Context, ownerReference metav1.OwnerReference) error {
@@ -319,7 +318,7 @@ func (c *TargetConfigReconciler) manageCertificateWebhookCR(ctx context.Context,
 		dnsNames[i] = strings.Replace(dnsNames[i], "SERVICE_NAME", service.Name, 1)
 		dnsNames[i] = strings.Replace(dnsNames[i], "SERVICE_NAMESPACE", c.namespace, 1)
 	}
-	unstructured.SetNestedStringSlice(issuerAsUnstructured.Object, dnsNames, "spec", "dnsNames")
+	_ = unstructured.SetNestedStringSlice(issuerAsUnstructured.Object, dnsNames, "spec", "dnsNames")
 	return resourceapply.ApplyUnstructuredResourceImproved(ctx, c.dynamicClient, c.eventRecorder, issuerAsUnstructured, c.resourceCache, gvr, nil, nil)
 }
 

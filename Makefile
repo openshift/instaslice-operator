@@ -5,6 +5,7 @@ SOURCE_GIT_TAG ?=$(shell git describe --long --tags --abbrev=7 --match 'v[0-9]*'
 SOURCE_GIT_COMMIT ?=$(shell git rev-parse --short "HEAD^{commit}" 2>/dev/null)
 IMAGE_TAG ?= latest
 OPERATOR_VERSION ?= 0.1.0
+GOLANGCI_LINT ?= golangci-lint
 
 # OS_GIT_VERSION is populated by ART
 # If building out of the ART pipeline, fallback to SOURCE_GIT_TAG
@@ -64,6 +65,10 @@ build-images:
 	podman push ${IMAGE_REGISTRY}/instaslice-daemonset:${IMAGE_TAG}
 	podman build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/instaslice-webhook:${IMAGE_TAG} .
 	podman push ${IMAGE_REGISTRY}/instaslice-webhook:${IMAGE_TAG}
+
+.PHONY: lint
+lint:
+	$(GOLANGCI_LINT) run --timeout 5m ./pkg/...
 
 generate: regen-crd generate-clients
 .PHONY: generate
