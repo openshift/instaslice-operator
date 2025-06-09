@@ -6,13 +6,16 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
+	"time"
 
 	"google.golang.org/grpc"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 
 	"tags.cncf.io/container-device-interface/pkg/cdi"
@@ -34,6 +37,7 @@ type Server struct {
 	InstasliceClient instaclient.Interface
 	NodeName         string
 	EmulatedMode     instav1.EmulatedMode
+	allocMutex       sync.Mutex
 }
 
 func NewServer(mgr *Manager, socketPath string, kubeConfig *rest.Config, emulatedMode instav1.EmulatedMode) (*Server, error) {
@@ -147,22 +151,19 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 		ContainerResponses: make([]*pluginapi.ContainerAllocateResponse, count),
 	}
 
-	// Retrieve the allocation results for this node
-	const instasliceNamespace = "instaslice-system"
-	instObj, err := s.InstasliceClient.OpenShiftOperatorV1alpha1().Instaslices(instasliceNamespace).Get(ctx, s.NodeName, metav1.GetOptions{})
-	if err != nil {
-		klog.ErrorS(err, "failed to fetch instaslice object", "node", s.NodeName)
-		return nil, fmt.Errorf("failed to get instaslice %q: %w", s.NodeName, err)
+	if allocations, err := s.getAllocationsByNodeGPU(s.NodeName, s.Manager.ResourceName, count); err != nil {
+		klog.ErrorS(err, "failed to get allocations", "node", s.NodeName, "profile", s.Manager.ResourceName)
+	} else {
+		klog.InfoS("Fetched allocations for Allocate", "count", len(allocations), "node", s.NodeName, "profile", s.Manager.ResourceName)
+		klog.InfoS("Allocations IIIIII", "allocations", allocations)
 	}
-	klog.InfoS("Fetched Instaslice for Allocate", "allocation result", instObj.Status.PodAllocationResults)
 
 	for i := range count {
 		resp.ContainerResponses[i] = &pluginapi.ContainerAllocateResponse{}
 
 		id := utiluuid.NewUUID()
 
-		// TODO: use allocation result from instObj.Status.PodAllocationResults to construct CDI devices
-		_ = instObj
+		// TODO: use allocation results to construct CDI devices
 		cdiDevices, err := s.writeCDISpecForResource(s.Manager.ResourceName, string(id))
 		if err != nil {
 			return nil, err
@@ -175,6 +176,55 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 
 func (s *Server) PreStartContainer(ctx context.Context, req *pluginapi.PreStartContainerRequest) (*pluginapi.PreStartContainerResponse, error) {
 	return &pluginapi.PreStartContainerResponse{}, nil
+}
+
+func profileFromResourceName(res string) string {
+	parts := strings.Split(res, "/")
+	last := parts[len(parts)-1]
+	return strings.TrimPrefix(last, "mig-")
+}
+
+func (s *Server) getAllocationsByNodeGPU(nodeName, profileName string, count int) ([]*instav1.Allocation, error) {
+	if count <= 0 {
+		return nil, fmt.Errorf("requested allocation count must be greater than zero")
+	}
+	if allocationIndexer == nil {
+		return nil, fmt.Errorf("allocation indexer not initialized")
+	}
+
+	migProfile := profileFromResourceName(profileName)
+	key := fmt.Sprintf("%s/%s", nodeName, migProfile)
+	var result []*instav1.Allocation
+	err := wait.ExponentialBackoff(wait.Backoff{Duration: 100 * time.Millisecond, Factor: 2, Steps: 5}, func() (bool, error) {
+		s.allocMutex.Lock()
+		defer s.allocMutex.Unlock()
+		objs, err := allocationIndexer.ByIndex("node-MigProfile", key)
+		if err != nil {
+			return false, err
+		}
+
+		out := make([]*instav1.Allocation, 0, len(objs))
+		for _, obj := range objs {
+			if a, ok := obj.(*instav1.Allocation); ok {
+				if a.Spec.Profile == migProfile {
+					out = append(out, a)
+					if len(out) == count {
+						break
+					}
+				}
+			}
+		}
+		result = out
+		return len(result) >= count, nil
+	})
+	if err != nil {
+		if wait.Interrupted(err) {
+			return nil, fmt.Errorf("requested %d allocations but only found %d", count, len(result))
+		}
+		return nil, err
+	}
+
+	return result[:count], nil
 }
 
 // BuildCDIDevices builds a CDI spec and returns the spec object, spec name,

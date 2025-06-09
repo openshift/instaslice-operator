@@ -2,6 +2,7 @@ package deviceplugins
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -16,6 +17,9 @@ import (
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
 	fakeclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/fake"
 	utils "github.com/openshift/instaslice-operator/test/utils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/cache"
 )
 
 // fakeListWatchServer implements pluginapi.DevicePlugin_ListAndWatchServer.
@@ -197,5 +201,33 @@ func TestAllocateEmulated(t *testing.T) {
 				t.Fatalf("expected %d spec files, got %d", tc.containers, count)
 			}
 		})
+	}
+}
+
+func TestGetAllocationsByNodeGPU(t *testing.T) {
+	nodeName := "node1"
+	resource := "instaslice.com/mig-1g.5gb"
+
+	allocationIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
+		"node-MigProfile": func(obj interface{}) ([]string, error) {
+			a := obj.(*instav1.Allocation)
+			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.Profile)
+			return []string{key}, nil
+		},
+	})
+
+	alloc := &instav1.Allocation{
+		ObjectMeta: metav1.ObjectMeta{Name: "a1"},
+		Spec:       instav1.AllocationSpec{Profile: "1g.5gb", Nodename: types.NodeName(nodeName)},
+	}
+	_ = allocationIndexer.Add(alloc)
+
+	srv := &Server{}
+	res, err := srv.getAllocationsByNodeGPU(nodeName, resource, 1)
+	if err != nil {
+		t.Fatalf("getAllocationsByNodeGPU returned error: %v", err)
+	}
+	if len(res) != 1 || res[0] != alloc {
+		t.Fatalf("expected returned allocation")
 	}
 }
