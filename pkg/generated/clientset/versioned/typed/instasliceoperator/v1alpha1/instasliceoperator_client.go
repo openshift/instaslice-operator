@@ -26,7 +26,7 @@ import (
 
 type OpenShiftOperatorV1alpha1Interface interface {
 	RESTClient() rest.Interface
-	AllocationsGetter
+	AllocationClaimsGetter
 	InstaslicesGetter
 	InstasliceOperatorsGetter
 }
@@ -36,8 +36,8 @@ type OpenShiftOperatorV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *OpenShiftOperatorV1alpha1Client) Allocations(namespace string) AllocationInterface {
-	return newAllocations(c, namespace)
+func (c *OpenShiftOperatorV1alpha1Client) AllocationClaims(namespace string) AllocationClaimInterface {
+	return newAllocationClaims(c, namespace)
 }
 
 func (c *OpenShiftOperatorV1alpha1Client) Instaslices(namespace string) InstasliceInterface {

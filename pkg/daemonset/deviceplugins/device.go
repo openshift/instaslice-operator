@@ -67,24 +67,24 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 	}
 	klog.InfoS("MIG GPU discovery completed")
 
-	// Setup informer to watch Allocation resources. We index allocations by
+	// Setup informer to watch AllocationClaim resources. We index allocations by
 	// the target node name to easily query allocations for this node.
 	allocInformerFactory := instainformers.NewSharedInformerFactoryWithOptions(
 		csOp, 10*time.Minute, instainformers.WithNamespace(instasliceNamespace))
-	allocInformer := allocInformerFactory.OpenShiftOperator().V1alpha1().Allocations().Informer()
+	allocInformer := allocInformerFactory.OpenShiftOperator().V1alpha1().AllocationClaims().Informer()
 
 	// Index allocations by nodename, by the composite "node-gpu" key and by
 	// "node-MigProfile" for quick lookup.
 	err = allocInformer.AddIndexers(cache.Indexers{
 		"nodename": func(obj interface{}) ([]string, error) {
-			a, ok := obj.(*instav1.Allocation)
+			a, ok := obj.(*instav1.AllocationClaim)
 			if !ok {
 				return []string{}, nil
 			}
 			return []string{string(a.Spec.Nodename)}, nil
 		},
 		"node-gpu": func(obj interface{}) ([]string, error) {
-			a, ok := obj.(*instav1.Allocation)
+			a, ok := obj.(*instav1.AllocationClaim)
 			if !ok {
 				return nil, nil
 			}
@@ -92,7 +92,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 			return []string{key}, nil
 		},
 		"node-MigProfile": func(obj interface{}) ([]string, error) {
-			a, ok := obj.(*instav1.Allocation)
+			a, ok := obj.(*instav1.AllocationClaim)
 			if !ok {
 				return nil, nil
 			}
@@ -107,12 +107,12 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 
 	allocInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			a, ok := obj.(*instav1.Allocation)
+			a, ok := obj.(*instav1.AllocationClaim)
 			if !ok {
 				return
 			}
-			// Perform a simple action on Allocation creation. For now we just log it.
-			klog.InfoS("Allocation created", "name", a.Name, "node", a.Spec.Nodename, "Spec", a.Spec)
+			// Perform a simple action on AllocationClaim creation. For now we just log it.
+			klog.InfoS("AllocationClaim created", "name", a.Name, "node", a.Spec.Nodename, "Spec", a.Spec)
 		},
 	})
 
@@ -154,11 +154,11 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 // UpdateAllocationStatus safely updates the status of the given Allocation using
 // the provided client while holding the allocation mutex. This prevents multiple
 // goroutines from updating the same object concurrently.
-func UpdateAllocationStatus(ctx context.Context, client versioned.Interface, alloc *instav1.Allocation, status instav1.AllocationStatus) (*instav1.Allocation, error) {
+func UpdateAllocationStatus(ctx context.Context, client versioned.Interface, alloc *instav1.AllocationClaim, status instav1.AllocationClaimStatus) (*instav1.AllocationClaim, error) {
 	allocationMutex.Lock()
 	defer allocationMutex.Unlock()
 
 	copy := alloc.DeepCopy()
 	copy.Status = status
-	return client.OpenShiftOperatorV1alpha1().Allocations(copy.Namespace).UpdateStatus(ctx, copy, metav1.UpdateOptions{})
+	return client.OpenShiftOperatorV1alpha1().AllocationClaims(copy.Namespace).UpdateStatus(ctx, copy, metav1.UpdateOptions{})
 }

@@ -30,14 +30,14 @@ import (
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=inference.redhat.com, Version=v1alpha1
-	case v1alpha1.SchemeGroupVersion.WithKind("Allocation"):
-		return &instasliceoperatorv1alpha1.AllocationApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("AllocationClaim"):
+		return &instasliceoperatorv1alpha1.AllocationClaimApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("AllocationClaimSpec"):
+		return &instasliceoperatorv1alpha1.AllocationClaimSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("AllocationRequest"):
 		return &instasliceoperatorv1alpha1.AllocationRequestApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("AllocationResult"):
 		return &instasliceoperatorv1alpha1.AllocationResultApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("AllocationSpec"):
-		return &instasliceoperatorv1alpha1.AllocationSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("AllocationStatus"):
 		return &instasliceoperatorv1alpha1.AllocationStatusApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("DiscoveredGPU"):

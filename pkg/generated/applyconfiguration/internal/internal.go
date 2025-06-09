@@ -37,7 +37,7 @@ func Parser() *typed.Parser {
 var parserOnce sync.Once
 var parser *typed.Parser
 var schemaYAML = typed.YAMLObject(`types:
-- name: com.github.openshift.instaslice-operator.pkg.apis.instasliceoperator.v1alpha1.Allocation
+- name: com.github.openshift.instaslice-operator.pkg.apis.instasliceoperator.v1alpha1.AllocationClaim
   scalar: untyped
   list:
     elementType:

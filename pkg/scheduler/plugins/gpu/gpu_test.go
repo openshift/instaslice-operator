@@ -48,7 +48,7 @@ func TestPreBindAllocatesGPU(t *testing.T) {
 	_ = instIndexer.Add(inst)
 	allocIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
 		"node-gpu": func(obj interface{}) ([]string, error) {
-			a := obj.(*instav1.Allocation)
+			a := obj.(*instav1.AllocationClaim)
 			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.GPUUUID)
 			return []string{key}, nil
 		},
@@ -63,7 +63,7 @@ func TestPreBindAllocatesGPU(t *testing.T) {
 		t.Fatalf("unexpected status: %v", st)
 	}
 
-	allocs, err := client.OpenShiftOperatorV1alpha1().Allocations(p.namespace).List(ctx, metav1.ListOptions{})
+	allocs, err := client.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("failed to list allocations: %v", err)
 	}
@@ -78,9 +78,9 @@ func TestPreBindAllocatesGPU(t *testing.T) {
 func TestPreBindUnschedulable(t *testing.T) {
 	ctx := context.Background()
 	inst := utils.GenerateFakeCapacity("node1")
-	existing := &instav1.Allocation{
+	existing := &instav1.AllocationClaim{
 		ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "existing"},
-		Spec: instav1.AllocationSpec{
+		Spec: instav1.AllocationClaimSpec{
 			GPUUUID:      inst.Status.NodeResources.NodeGPUs[0].GPUUUID,
 			Nodename:     types.NodeName("node1"),
 			MigPlacement: instav1.Placement{Start: 0, Size: 8},
@@ -92,7 +92,7 @@ func TestPreBindUnschedulable(t *testing.T) {
 	_ = instIndexer.Add(inst)
 	allocIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
 		"node-gpu": func(obj interface{}) ([]string, error) {
-			a := obj.(*instav1.Allocation)
+			a := obj.(*instav1.AllocationClaim)
 			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.GPUUUID)
 			return []string{key}, nil
 		},
@@ -107,7 +107,7 @@ func TestPreBindUnschedulable(t *testing.T) {
 	if st != nil && !st.IsSuccess() {
 		t.Fatalf("unexpected status: %v", st)
 	}
-	allocs, err := client.OpenShiftOperatorV1alpha1().Allocations(p.namespace).List(ctx, metav1.ListOptions{})
+	allocs, err := client.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("failed to list allocations: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestPreBindInstasliceNotFound(t *testing.T) {
 	instIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 	allocIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
 		"node-gpu": func(obj interface{}) ([]string, error) {
-			a := obj.(*instav1.Allocation)
+			a := obj.(*instav1.AllocationClaim)
 			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.GPUUUID)
 			return []string{key}, nil
 		},

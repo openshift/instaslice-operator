@@ -196,7 +196,7 @@ func profileFromResourceName(res string) string {
 	return strings.TrimPrefix(last, "mig-")
 }
 
-func (s *Server) getAllocationsByNodeGPU(nodeName, profileName string, count int) ([]*instav1.Allocation, error) {
+func (s *Server) getAllocationsByNodeGPU(nodeName, profileName string, count int) ([]*instav1.AllocationClaim, error) {
 	if count <= 0 {
 		return nil, fmt.Errorf("requested allocation count must be greater than zero")
 	}
@@ -206,7 +206,7 @@ func (s *Server) getAllocationsByNodeGPU(nodeName, profileName string, count int
 
 	migProfile := profileFromResourceName(profileName)
 	key := fmt.Sprintf("%s/%s", nodeName, migProfile)
-	var result []*instav1.Allocation
+	var result []*instav1.AllocationClaim
 	err := wait.ExponentialBackoff(wait.Backoff{Duration: 100 * time.Millisecond, Factor: 2, Steps: 5}, func() (bool, error) {
 		s.allocMutex.Lock()
 		defer s.allocMutex.Unlock()
@@ -215,9 +215,9 @@ func (s *Server) getAllocationsByNodeGPU(nodeName, profileName string, count int
 			return false, err
 		}
 
-		out := make([]*instav1.Allocation, 0, len(objs))
+		out := make([]*instav1.AllocationClaim, 0, len(objs))
 		for _, obj := range objs {
-			if a, ok := obj.(*instav1.Allocation); ok {
+			if a, ok := obj.(*instav1.AllocationClaim); ok {
 				if a.Spec.Profile == migProfile {
 					out = append(out, a)
 					if len(out) == count {

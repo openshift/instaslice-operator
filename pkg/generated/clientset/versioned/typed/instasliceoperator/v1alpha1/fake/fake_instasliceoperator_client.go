@@ -26,8 +26,8 @@ type FakeOpenShiftOperatorV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeOpenShiftOperatorV1alpha1) Allocations(namespace string) v1alpha1.AllocationInterface {
-	return newFakeAllocations(c, namespace)
+func (c *FakeOpenShiftOperatorV1alpha1) AllocationClaims(namespace string) v1alpha1.AllocationClaimInterface {
+	return newFakeAllocationClaims(c, namespace)
 }
 
 func (c *FakeOpenShiftOperatorV1alpha1) Instaslices(namespace string) v1alpha1.InstasliceInterface {

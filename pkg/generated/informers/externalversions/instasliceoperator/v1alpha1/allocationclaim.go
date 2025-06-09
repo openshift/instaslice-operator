@@ -30,59 +30,59 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
-// AllocationInformer provides access to a shared informer and lister for
-// Allocations.
-type AllocationInformer interface {
+// AllocationClaimInformer provides access to a shared informer and lister for
+// AllocationClaims.
+type AllocationClaimInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() instasliceoperatorv1alpha1.AllocationLister
+	Lister() instasliceoperatorv1alpha1.AllocationClaimLister
 }
 
-type allocationInformer struct {
+type allocationClaimInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	namespace        string
 }
 
-// NewAllocationInformer constructs a new informer for Allocation type.
+// NewAllocationClaimInformer constructs a new informer for AllocationClaim type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewAllocationInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredAllocationInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewAllocationClaimInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredAllocationClaimInformer(client, namespace, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredAllocationInformer constructs a new informer for Allocation type.
+// NewFilteredAllocationClaimInformer constructs a new informer for AllocationClaim type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredAllocationInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredAllocationClaimInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.OpenShiftOperatorV1alpha1().Allocations(namespace).List(context.TODO(), options)
+				return client.OpenShiftOperatorV1alpha1().AllocationClaims(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.OpenShiftOperatorV1alpha1().Allocations(namespace).Watch(context.TODO(), options)
+				return client.OpenShiftOperatorV1alpha1().AllocationClaims(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&apisinstasliceoperatorv1alpha1.Allocation{},
+		&apisinstasliceoperatorv1alpha1.AllocationClaim{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *allocationInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredAllocationInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *allocationClaimInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredAllocationClaimInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *allocationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisinstasliceoperatorv1alpha1.Allocation{}, f.defaultInformer)
+func (f *allocationClaimInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&apisinstasliceoperatorv1alpha1.AllocationClaim{}, f.defaultInformer)
 }
 
-func (f *allocationInformer) Lister() instasliceoperatorv1alpha1.AllocationLister {
-	return instasliceoperatorv1alpha1.NewAllocationLister(f.Informer().GetIndexer())
+func (f *allocationClaimInformer) Lister() instasliceoperatorv1alpha1.AllocationClaimLister {
+	return instasliceoperatorv1alpha1.NewAllocationClaimLister(f.Informer().GetIndexer())
 }

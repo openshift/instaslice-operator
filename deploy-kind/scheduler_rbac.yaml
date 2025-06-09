@@ -112,9 +112,9 @@ rules:
       - "instaslices/status"
       - "instasliceoperators"
       - "instasliceoperators/status"
-      - "allocations"
-      - "allocations/status"
-      - "allocations/finalizers"
+      - "allocationclaims"
+      - "allocationclaims/status"
+      - "allocationclaims/finalizers"
     verbs:
       - "get"
       - "list"

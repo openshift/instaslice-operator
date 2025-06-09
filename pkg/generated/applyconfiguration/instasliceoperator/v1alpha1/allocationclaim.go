@@ -25,58 +25,58 @@ import (
 	v1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
-// AllocationApplyConfiguration represents a declarative configuration of the Allocation type for use
+// AllocationClaimApplyConfiguration represents a declarative configuration of the AllocationClaim type for use
 // with apply.
-type AllocationApplyConfiguration struct {
+type AllocationClaimApplyConfiguration struct {
 	v1.TypeMetaApplyConfiguration    `json:",inline"`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	Spec                             *AllocationSpecApplyConfiguration   `json:"spec,omitempty"`
-	Status                           *AllocationStatusApplyConfiguration `json:"status,omitempty"`
+	Spec                             *AllocationClaimSpecApplyConfiguration            `json:"spec,omitempty"`
+	Status                           *instasliceoperatorv1alpha1.AllocationClaimStatus `json:"status,omitempty"`
 }
 
-// Allocation constructs a declarative configuration of the Allocation type for use with
+// AllocationClaim constructs a declarative configuration of the AllocationClaim type for use with
 // apply.
-func Allocation(name, namespace string) *AllocationApplyConfiguration {
-	b := &AllocationApplyConfiguration{}
+func AllocationClaim(name, namespace string) *AllocationClaimApplyConfiguration {
+	b := &AllocationClaimApplyConfiguration{}
 	b.WithName(name)
 	b.WithNamespace(namespace)
-	b.WithKind("Allocation")
+	b.WithKind("AllocationClaim")
 	b.WithAPIVersion("inference.redhat.com/v1alpha1")
 	return b
 }
 
-// ExtractAllocation extracts the applied configuration owned by fieldManager from
-// allocation. If no managedFields are found in allocation for fieldManager, a
-// AllocationApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// ExtractAllocationClaim extracts the applied configuration owned by fieldManager from
+// allocationClaim. If no managedFields are found in allocationClaim for fieldManager, a
+// AllocationClaimApplyConfiguration is returned with only the Name, Namespace (if applicable),
 // APIVersion and Kind populated. It is possible that no managed fields were found for because other
 // field managers have taken ownership of all the fields previously owned by fieldManager, or because
 // the fieldManager never owned fields any fields.
-// allocation must be a unmodified Allocation API object that was retrieved from the Kubernetes API.
-// ExtractAllocation provides a way to perform a extract/modify-in-place/apply workflow.
+// allocationClaim must be a unmodified AllocationClaim API object that was retrieved from the Kubernetes API.
+// ExtractAllocationClaim provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 // Experimental!
-func ExtractAllocation(allocation *instasliceoperatorv1alpha1.Allocation, fieldManager string) (*AllocationApplyConfiguration, error) {
-	return extractAllocation(allocation, fieldManager, "")
+func ExtractAllocationClaim(allocationClaim *instasliceoperatorv1alpha1.AllocationClaim, fieldManager string) (*AllocationClaimApplyConfiguration, error) {
+	return extractAllocationClaim(allocationClaim, fieldManager, "")
 }
 
-// ExtractAllocationStatus is the same as ExtractAllocation except
+// ExtractAllocationClaimStatus is the same as ExtractAllocationClaim except
 // that it extracts the status subresource applied configuration.
 // Experimental!
-func ExtractAllocationStatus(allocation *instasliceoperatorv1alpha1.Allocation, fieldManager string) (*AllocationApplyConfiguration, error) {
-	return extractAllocation(allocation, fieldManager, "status")
+func ExtractAllocationClaimStatus(allocationClaim *instasliceoperatorv1alpha1.AllocationClaim, fieldManager string) (*AllocationClaimApplyConfiguration, error) {
+	return extractAllocationClaim(allocationClaim, fieldManager, "status")
 }
 
-func extractAllocation(allocation *instasliceoperatorv1alpha1.Allocation, fieldManager string, subresource string) (*AllocationApplyConfiguration, error) {
-	b := &AllocationApplyConfiguration{}
-	err := managedfields.ExtractInto(allocation, internal.Parser().Type("com.github.openshift.instaslice-operator.pkg.apis.instasliceoperator.v1alpha1.Allocation"), fieldManager, b, subresource)
+func extractAllocationClaim(allocationClaim *instasliceoperatorv1alpha1.AllocationClaim, fieldManager string, subresource string) (*AllocationClaimApplyConfiguration, error) {
+	b := &AllocationClaimApplyConfiguration{}
+	err := managedfields.ExtractInto(allocationClaim, internal.Parser().Type("com.github.openshift.instaslice-operator.pkg.apis.instasliceoperator.v1alpha1.AllocationClaim"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}
-	b.WithName(allocation.Name)
-	b.WithNamespace(allocation.Namespace)
+	b.WithName(allocationClaim.Name)
+	b.WithNamespace(allocationClaim.Namespace)
 
-	b.WithKind("Allocation")
+	b.WithKind("AllocationClaim")
 	b.WithAPIVersion("inference.redhat.com/v1alpha1")
 	return b, nil
 }
@@ -84,7 +84,7 @@ func extractAllocation(allocation *instasliceoperatorv1alpha1.Allocation, fieldM
 // WithKind sets the Kind field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Kind field is set to the value of the last call.
-func (b *AllocationApplyConfiguration) WithKind(value string) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithKind(value string) *AllocationClaimApplyConfiguration {
 	b.TypeMetaApplyConfiguration.Kind = &value
 	return b
 }
@@ -92,7 +92,7 @@ func (b *AllocationApplyConfiguration) WithKind(value string) *AllocationApplyCo
 // WithAPIVersion sets the APIVersion field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the APIVersion field is set to the value of the last call.
-func (b *AllocationApplyConfiguration) WithAPIVersion(value string) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithAPIVersion(value string) *AllocationClaimApplyConfiguration {
 	b.TypeMetaApplyConfiguration.APIVersion = &value
 	return b
 }
@@ -100,7 +100,7 @@ func (b *AllocationApplyConfiguration) WithAPIVersion(value string) *AllocationA
 // WithName sets the Name field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Name field is set to the value of the last call.
-func (b *AllocationApplyConfiguration) WithName(value string) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithName(value string) *AllocationClaimApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Name = &value
 	return b
@@ -109,7 +109,7 @@ func (b *AllocationApplyConfiguration) WithName(value string) *AllocationApplyCo
 // WithGenerateName sets the GenerateName field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the GenerateName field is set to the value of the last call.
-func (b *AllocationApplyConfiguration) WithGenerateName(value string) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithGenerateName(value string) *AllocationClaimApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.GenerateName = &value
 	return b
@@ -118,7 +118,7 @@ func (b *AllocationApplyConfiguration) WithGenerateName(value string) *Allocatio
 // WithNamespace sets the Namespace field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Namespace field is set to the value of the last call.
-func (b *AllocationApplyConfiguration) WithNamespace(value string) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithNamespace(value string) *AllocationClaimApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Namespace = &value
 	return b
@@ -127,7 +127,7 @@ func (b *AllocationApplyConfiguration) WithNamespace(value string) *AllocationAp
 // WithUID sets the UID field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the UID field is set to the value of the last call.
-func (b *AllocationApplyConfiguration) WithUID(value types.UID) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithUID(value types.UID) *AllocationClaimApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.UID = &value
 	return b
@@ -136,7 +136,7 @@ func (b *AllocationApplyConfiguration) WithUID(value types.UID) *AllocationApply
 // WithResourceVersion sets the ResourceVersion field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ResourceVersion field is set to the value of the last call.
-func (b *AllocationApplyConfiguration) WithResourceVersion(value string) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithResourceVersion(value string) *AllocationClaimApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.ResourceVersion = &value
 	return b
@@ -145,7 +145,7 @@ func (b *AllocationApplyConfiguration) WithResourceVersion(value string) *Alloca
 // WithGeneration sets the Generation field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Generation field is set to the value of the last call.
-func (b *AllocationApplyConfiguration) WithGeneration(value int64) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithGeneration(value int64) *AllocationClaimApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Generation = &value
 	return b
@@ -154,7 +154,7 @@ func (b *AllocationApplyConfiguration) WithGeneration(value int64) *AllocationAp
 // WithCreationTimestamp sets the CreationTimestamp field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the CreationTimestamp field is set to the value of the last call.
-func (b *AllocationApplyConfiguration) WithCreationTimestamp(value metav1.Time) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithCreationTimestamp(value metav1.Time) *AllocationClaimApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.CreationTimestamp = &value
 	return b
@@ -163,7 +163,7 @@ func (b *AllocationApplyConfiguration) WithCreationTimestamp(value metav1.Time) 
 // WithDeletionTimestamp sets the DeletionTimestamp field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DeletionTimestamp field is set to the value of the last call.
-func (b *AllocationApplyConfiguration) WithDeletionTimestamp(value metav1.Time) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithDeletionTimestamp(value metav1.Time) *AllocationClaimApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.DeletionTimestamp = &value
 	return b
@@ -172,7 +172,7 @@ func (b *AllocationApplyConfiguration) WithDeletionTimestamp(value metav1.Time) 
 // WithDeletionGracePeriodSeconds sets the DeletionGracePeriodSeconds field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DeletionGracePeriodSeconds field is set to the value of the last call.
-func (b *AllocationApplyConfiguration) WithDeletionGracePeriodSeconds(value int64) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithDeletionGracePeriodSeconds(value int64) *AllocationClaimApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.DeletionGracePeriodSeconds = &value
 	return b
@@ -182,7 +182,7 @@ func (b *AllocationApplyConfiguration) WithDeletionGracePeriodSeconds(value int6
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the Labels field,
 // overwriting an existing map entries in Labels field with the same key.
-func (b *AllocationApplyConfiguration) WithLabels(entries map[string]string) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithLabels(entries map[string]string) *AllocationClaimApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	if b.ObjectMetaApplyConfiguration.Labels == nil && len(entries) > 0 {
 		b.ObjectMetaApplyConfiguration.Labels = make(map[string]string, len(entries))
@@ -197,7 +197,7 @@ func (b *AllocationApplyConfiguration) WithLabels(entries map[string]string) *Al
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the Annotations field,
 // overwriting an existing map entries in Annotations field with the same key.
-func (b *AllocationApplyConfiguration) WithAnnotations(entries map[string]string) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithAnnotations(entries map[string]string) *AllocationClaimApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	if b.ObjectMetaApplyConfiguration.Annotations == nil && len(entries) > 0 {
 		b.ObjectMetaApplyConfiguration.Annotations = make(map[string]string, len(entries))
@@ -211,7 +211,7 @@ func (b *AllocationApplyConfiguration) WithAnnotations(entries map[string]string
 // WithOwnerReferences adds the given value to the OwnerReferences field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the OwnerReferences field.
-func (b *AllocationApplyConfiguration) WithOwnerReferences(values ...*v1.OwnerReferenceApplyConfiguration) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithOwnerReferences(values ...*v1.OwnerReferenceApplyConfiguration) *AllocationClaimApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	for i := range values {
 		if values[i] == nil {
@@ -225,7 +225,7 @@ func (b *AllocationApplyConfiguration) WithOwnerReferences(values ...*v1.OwnerRe
 // WithFinalizers adds the given value to the Finalizers field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Finalizers field.
-func (b *AllocationApplyConfiguration) WithFinalizers(values ...string) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithFinalizers(values ...string) *AllocationClaimApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	for i := range values {
 		b.ObjectMetaApplyConfiguration.Finalizers = append(b.ObjectMetaApplyConfiguration.Finalizers, values[i])
@@ -233,7 +233,7 @@ func (b *AllocationApplyConfiguration) WithFinalizers(values ...string) *Allocat
 	return b
 }
 
-func (b *AllocationApplyConfiguration) ensureObjectMetaApplyConfigurationExists() {
+func (b *AllocationClaimApplyConfiguration) ensureObjectMetaApplyConfigurationExists() {
 	if b.ObjectMetaApplyConfiguration == nil {
 		b.ObjectMetaApplyConfiguration = &v1.ObjectMetaApplyConfiguration{}
 	}
@@ -242,7 +242,7 @@ func (b *AllocationApplyConfiguration) ensureObjectMetaApplyConfigurationExists(
 // WithSpec sets the Spec field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Spec field is set to the value of the last call.
-func (b *AllocationApplyConfiguration) WithSpec(value *AllocationSpecApplyConfiguration) *AllocationApplyConfiguration {
+func (b *AllocationClaimApplyConfiguration) WithSpec(value *AllocationClaimSpecApplyConfiguration) *AllocationClaimApplyConfiguration {
 	b.Spec = value
 	return b
 }
@@ -250,13 +250,13 @@ func (b *AllocationApplyConfiguration) WithSpec(value *AllocationSpecApplyConfig
 // WithStatus sets the Status field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Status field is set to the value of the last call.
-func (b *AllocationApplyConfiguration) WithStatus(value *AllocationStatusApplyConfiguration) *AllocationApplyConfiguration {
-	b.Status = value
+func (b *AllocationClaimApplyConfiguration) WithStatus(value instasliceoperatorv1alpha1.AllocationClaimStatus) *AllocationClaimApplyConfiguration {
+	b.Status = &value
 	return b
 }
 
 // GetName retrieves the value of the Name field in the declarative configuration.
-func (b *AllocationApplyConfiguration) GetName() *string {
+func (b *AllocationClaimApplyConfiguration) GetName() *string {
 	b.ensureObjectMetaApplyConfigurationExists()
 	return b.ObjectMetaApplyConfiguration.Name
 }

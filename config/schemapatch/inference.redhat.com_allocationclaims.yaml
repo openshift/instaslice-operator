@@ -3,22 +3,23 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.17.2
-  name: allocations.inference.redhat.com
+  name: allocationclaims.inference.redhat.com
 spec:
   group: inference.redhat.com
   names:
-    kind: Allocation
-    listKind: AllocationList
-    plural: allocations
+    kind: AllocationClaim
+    listKind: AllocationClaimList
+    plural: allocationclaims
     shortNames:
       - alloc
-    singular: allocation
+    singular: allocationclaim
   scope: Namespaced
   versions:
     - name: v1alpha1
       schema:
         openAPIV3Schema:
-          description: Allocation is the Schema for GPU slice allocation custom resource.
+          description: AllocationClaim is the Schema for GPU slice allocation custom resource.
+          type: object
           properties:
             apiVersion:
               description: |-
@@ -39,30 +40,36 @@ spec:
               type: object
             spec:
               description: spec defines the desired allocation
+              type: object
+              required:
+                - gpuUUID
+                - migPlacement
+                - nodename
               properties:
                 gpuUUID:
                   description: gpuUUID represents the UUID of the selected GPU
                   type: string
                 migPlacement:
                   description: migPlacement specifies the MIG placement details
-                  properties:
-                    size:
-                      description: size represents slots consumed by a profile on GPU
-                      format: int32
-                      type: integer
-                    start:
-                      description: start represents the starting index driven by size for a profile
-                      format: int32
-                      type: integer
+                  type: object
                   required:
                     - size
                     - start
-                  type: object
+                  properties:
+                    size:
+                      description: size represents slots consumed by a profile on GPU
+                      type: integer
+                      format: int32
+                    start:
+                      description: start represents the starting index driven by size for a profile
+                      type: integer
+                      format: int32
                 nodename:
                   description: nodename represents the name of the selected node
                   type: string
                 podRef:
                   description: podRef is a reference to the gated Pod requesting the allocation
+                  type: object
                   properties:
                     apiVersion:
                       description: API version of the referent.
@@ -102,27 +109,13 @@ spec:
                         UID of the referent.
                         More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
                       type: string
-                  type: object
                   x-kubernetes-map-type: atomic
                 profile:
                   description: profile specifies the MIG slice profile for allocation
                   type: string
-              required:
-                - gpuUUID
-                - migPlacement
-                - nodename
-              type: object
             status:
               description: status describes the current allocation state
-              properties:
-                allocationStatusController:
-                  description: allocationStatusDaemonset represents the current status of the allocation from the Controller's perspective
-                  type: string
-                allocationStatusDaemonset:
-                  description: allocationStatusDaemonset represents the current status of the allocation from the DaemonSet's perspective
-                  type: string
-              type: object
-          type: object
+              type: string
       served: true
       storage: true
       subresources:

@@ -4,22 +4,23 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.17.2
-  name: allocations.inference.redhat.com
+  name: allocationclaims.inference.redhat.com
 spec:
   group: inference.redhat.com
   names:
-    kind: Allocation
-    listKind: AllocationList
-    plural: allocations
+    kind: AllocationClaim
+    listKind: AllocationClaimList
+    plural: allocationclaims
     shortNames:
     - alloc
-    singular: allocation
+    singular: allocationclaim
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Allocation is the Schema for GPU slice allocation custom resource.
+        description: AllocationClaim is the Schema for GPU slice allocation custom
+          resource.
         properties:
           apiVersion:
             description: |-
@@ -117,16 +118,7 @@ spec:
             type: object
           status:
             description: status describes the current allocation state
-            properties:
-              allocationStatusController:
-                description: allocationStatusDaemonset represents the current status
-                  of the allocation from the Controller's perspective
-                type: string
-              allocationStatusDaemonset:
-                description: allocationStatusDaemonset represents the current status
-                  of the allocation from the DaemonSet's perspective
-                type: string
-            type: object
+            type: string
         type: object
     served: true
     storage: true

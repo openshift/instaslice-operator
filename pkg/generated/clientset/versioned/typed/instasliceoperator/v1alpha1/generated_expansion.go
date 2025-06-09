@@ -16,7 +16,7 @@ limitations under the License.
 
 package v1alpha1
 
-type AllocationExpansion interface{}
+type AllocationClaimExpansion interface{}
 
 type InstasliceExpansion interface{}
 

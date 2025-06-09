@@ -22,8 +22,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// Allocations returns a AllocationInformer.
-	Allocations() AllocationInformer
+	// AllocationClaims returns a AllocationClaimInformer.
+	AllocationClaims() AllocationClaimInformer
 	// Instaslices returns a InstasliceInformer.
 	Instaslices() InstasliceInformer
 	// InstasliceOperators returns a InstasliceOperatorInformer.
@@ -41,9 +41,9 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// Allocations returns a AllocationInformer.
-func (v *version) Allocations() AllocationInformer {
-	return &allocationInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// AllocationClaims returns a AllocationClaimInformer.
+func (v *version) AllocationClaims() AllocationClaimInformer {
+	return &allocationClaimInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // Instaslices returns a InstasliceInformer.

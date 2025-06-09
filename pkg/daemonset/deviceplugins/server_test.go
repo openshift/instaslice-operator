@@ -210,15 +210,15 @@ func TestGetAllocationsByNodeGPU(t *testing.T) {
 
 	allocationIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
 		"node-MigProfile": func(obj interface{}) ([]string, error) {
-			a := obj.(*instav1.Allocation)
+			a := obj.(*instav1.AllocationClaim)
 			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.Profile)
 			return []string{key}, nil
 		},
 	})
 
-	alloc := &instav1.Allocation{
+	alloc := &instav1.AllocationClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: "a1"},
-		Spec:       instav1.AllocationSpec{Profile: "1g.5gb", Nodename: types.NodeName(nodeName)},
+		Spec:       instav1.AllocationClaimSpec{Profile: "1g.5gb", Nodename: types.NodeName(nodeName)},
 	}
 	_ = allocationIndexer.Add(alloc)
 

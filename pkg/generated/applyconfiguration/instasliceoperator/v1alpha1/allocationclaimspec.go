@@ -21,9 +21,9 @@ import (
 	types "k8s.io/apimachinery/pkg/types"
 )
 
-// AllocationSpecApplyConfiguration represents a declarative configuration of the AllocationSpec type for use
+// AllocationClaimSpecApplyConfiguration represents a declarative configuration of the AllocationClaimSpec type for use
 // with apply.
-type AllocationSpecApplyConfiguration struct {
+type AllocationClaimSpecApplyConfiguration struct {
 	Profile      *string                      `json:"profile,omitempty"`
 	PodRef       *v1.ObjectReference          `json:"podRef,omitempty"`
 	MigPlacement *PlacementApplyConfiguration `json:"migPlacement,omitempty"`
@@ -31,16 +31,16 @@ type AllocationSpecApplyConfiguration struct {
 	Nodename     *types.NodeName              `json:"nodename,omitempty"`
 }
 
-// AllocationSpecApplyConfiguration constructs a declarative configuration of the AllocationSpec type for use with
+// AllocationClaimSpecApplyConfiguration constructs a declarative configuration of the AllocationClaimSpec type for use with
 // apply.
-func AllocationSpec() *AllocationSpecApplyConfiguration {
-	return &AllocationSpecApplyConfiguration{}
+func AllocationClaimSpec() *AllocationClaimSpecApplyConfiguration {
+	return &AllocationClaimSpecApplyConfiguration{}
 }
 
 // WithProfile sets the Profile field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Profile field is set to the value of the last call.
-func (b *AllocationSpecApplyConfiguration) WithProfile(value string) *AllocationSpecApplyConfiguration {
+func (b *AllocationClaimSpecApplyConfiguration) WithProfile(value string) *AllocationClaimSpecApplyConfiguration {
 	b.Profile = &value
 	return b
 }
@@ -48,7 +48,7 @@ func (b *AllocationSpecApplyConfiguration) WithProfile(value string) *Allocation
 // WithPodRef sets the PodRef field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the PodRef field is set to the value of the last call.
-func (b *AllocationSpecApplyConfiguration) WithPodRef(value v1.ObjectReference) *AllocationSpecApplyConfiguration {
+func (b *AllocationClaimSpecApplyConfiguration) WithPodRef(value v1.ObjectReference) *AllocationClaimSpecApplyConfiguration {
 	b.PodRef = &value
 	return b
 }
@@ -56,7 +56,7 @@ func (b *AllocationSpecApplyConfiguration) WithPodRef(value v1.ObjectReference) 
 // WithMigPlacement sets the MigPlacement field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the MigPlacement field is set to the value of the last call.
-func (b *AllocationSpecApplyConfiguration) WithMigPlacement(value *PlacementApplyConfiguration) *AllocationSpecApplyConfiguration {
+func (b *AllocationClaimSpecApplyConfiguration) WithMigPlacement(value *PlacementApplyConfiguration) *AllocationClaimSpecApplyConfiguration {
 	b.MigPlacement = value
 	return b
 }
@@ -64,7 +64,7 @@ func (b *AllocationSpecApplyConfiguration) WithMigPlacement(value *PlacementAppl
 // WithGPUUUID sets the GPUUUID field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the GPUUUID field is set to the value of the last call.
-func (b *AllocationSpecApplyConfiguration) WithGPUUUID(value string) *AllocationSpecApplyConfiguration {
+func (b *AllocationClaimSpecApplyConfiguration) WithGPUUUID(value string) *AllocationClaimSpecApplyConfiguration {
 	b.GPUUUID = &value
 	return b
 }
@@ -72,7 +72,7 @@ func (b *AllocationSpecApplyConfiguration) WithGPUUUID(value string) *Allocation
 // WithNodename sets the Nodename field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Nodename field is set to the value of the last call.
-func (b *AllocationSpecApplyConfiguration) WithNodename(value types.NodeName) *AllocationSpecApplyConfiguration {
+func (b *AllocationClaimSpecApplyConfiguration) WithNodename(value types.NodeName) *AllocationClaimSpecApplyConfiguration {
 	b.Nodename = &value
 	return b
 }
