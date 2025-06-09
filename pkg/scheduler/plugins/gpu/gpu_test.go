@@ -70,8 +70,12 @@ func TestPreBindAllocatesGPU(t *testing.T) {
 	if len(allocs.Items) != 1 {
 		t.Fatalf("expected one allocation, got %d", len(allocs.Items))
 	}
-	if allocs.Items[0].Spec.GPUUUID == "" {
+	alloc := allocs.Items[0]
+	if alloc.Spec.GPUUUID == "" {
 		t.Fatalf("allocation not populated")
+	}
+	if alloc.Status != instav1.AllocationClaimStatusCreated {
+		t.Fatalf("expected allocation status created, got %s", alloc.Status)
 	}
 }
 
@@ -114,6 +118,19 @@ func TestPreBindUnschedulable(t *testing.T) {
 	if len(allocs.Items) != 2 {
 		t.Fatalf("expected two allocations, got %d", len(allocs.Items))
 	}
+	var created *instav1.AllocationClaim
+	for i := range allocs.Items {
+		if allocs.Items[i].Name == "p2" {
+			created = &allocs.Items[i]
+			break
+		}
+	}
+	if created == nil {
+		t.Fatalf("new allocation not found")
+	}
+	if created.Status != instav1.AllocationClaimStatusCreated {
+		t.Fatalf("expected new allocation status created, got %s", created.Status)
+	}
 }
 
 func TestPreBindInstasliceNotFound(t *testing.T) {
@@ -135,7 +152,7 @@ func TestPreBindInstasliceNotFound(t *testing.T) {
 	if st == nil || st.Code() != framework.Error {
 		t.Fatalf("expected error status when instaslice missing, got %v", st)
 	}
-	allocs, err := client.OpenShiftOperatorV1alpha1().Allocations(p.namespace).List(ctx, metav1.ListOptions{})
+	allocs, err := client.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("failed to list allocations: %v", err)
 	}

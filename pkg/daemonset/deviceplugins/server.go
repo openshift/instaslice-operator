@@ -154,7 +154,7 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 		ContainerResponses: make([]*pluginapi.ContainerAllocateResponse, count),
 	}
 
-	allocations, err := s.getAllocationsByNodeGPU(s.NodeName, s.Manager.ResourceName, count)
+	allocations, err := s.getAllocationsByNodeGPU(ctx, s.NodeName, s.Manager.ResourceName, count)
 	if err != nil {
 		klog.ErrorS(err, "failed to get allocations", "node", s.NodeName, "profile", s.Manager.ResourceName)
 	} else {
@@ -196,7 +196,7 @@ func profileFromResourceName(res string) string {
 	return strings.TrimPrefix(last, "mig-")
 }
 
-func (s *Server) getAllocationsByNodeGPU(nodeName, profileName string, count int) ([]*instav1.AllocationClaim, error) {
+func (s *Server) getAllocationsByNodeGPU(ctx context.Context, nodeName, profileName string, count int) ([]*instav1.AllocationClaim, error) {
 	if count <= 0 {
 		return nil, fmt.Errorf("requested allocation count must be greater than zero")
 	}
@@ -207,9 +207,13 @@ func (s *Server) getAllocationsByNodeGPU(nodeName, profileName string, count int
 	migProfile := profileFromResourceName(profileName)
 	key := fmt.Sprintf("%s/%s", nodeName, migProfile)
 	var result []*instav1.AllocationClaim
+
+	// First fetch the requested AllocationClaims from the indexer. We retry
+	// a few times in case the informer cache hasn't synced yet.
 	err := wait.ExponentialBackoff(wait.Backoff{Duration: 100 * time.Millisecond, Factor: 2, Steps: 5}, func() (bool, error) {
 		s.allocMutex.Lock()
 		defer s.allocMutex.Unlock()
+
 		objs, err := allocationIndexer.ByIndex("node-MigProfile", key)
 		if err != nil {
 			return false, err
@@ -218,7 +222,7 @@ func (s *Server) getAllocationsByNodeGPU(nodeName, profileName string, count int
 		out := make([]*instav1.AllocationClaim, 0, len(objs))
 		for _, obj := range objs {
 			if a, ok := obj.(*instav1.AllocationClaim); ok {
-				if a.Spec.Profile == migProfile {
+				if a.Spec.Profile == migProfile && a.Status == instav1.AllocationClaimStatusCreated {
 					out = append(out, a)
 					if len(out) == count {
 						break
@@ -234,6 +238,26 @@ func (s *Server) getAllocationsByNodeGPU(nodeName, profileName string, count int
 			return nil, fmt.Errorf("requested %d allocations but only found %d", count, len(result))
 		}
 		return nil, err
+	}
+
+	// Update each claim status to Processing outside of the fetch loop so
+	// failures here don't masquerade as cache lookup errors.
+	for _, a := range result[:count] {
+		a.Status = instav1.AllocationClaimStatusProcessing
+		if s.InstasliceClient != nil {
+			if _, err := UpdateAllocationStatus(ctx, s.InstasliceClient, a, instav1.AllocationClaimStatusProcessing); err != nil {
+				klog.ErrorS(err, "failed to update allocation status", "allocation", a.Name, "status", instav1.AllocationClaimStatusProcessing)
+				return nil, fmt.Errorf("failed to update allocation status for %q: %w", a.Name, err)
+			}
+		}
+
+		s.allocMutex.Lock()
+		if err := allocationIndexer.Update(a); err != nil {
+			klog.ErrorS(err, "failed to update allocation in indexer", "allocation", a.Name)
+		}
+		s.allocMutex.Unlock()
+
+		klog.InfoS("Updated allocation status to Processing", "allocation", a.Name, "status", a.Status)
 	}
 
 	return result[:count], nil

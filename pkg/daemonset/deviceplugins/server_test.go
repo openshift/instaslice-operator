@@ -219,15 +219,19 @@ func TestGetAllocationsByNodeGPU(t *testing.T) {
 	alloc := &instav1.AllocationClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: "a1"},
 		Spec:       instav1.AllocationClaimSpec{Profile: "1g.5gb", Nodename: types.NodeName(nodeName)},
+		Status:     instav1.AllocationClaimStatusCreated,
 	}
 	_ = allocationIndexer.Add(alloc)
 
 	srv := &Server{}
-	res, err := srv.getAllocationsByNodeGPU(nodeName, resource, 1)
+	res, err := srv.getAllocationsByNodeGPU(context.Background(), nodeName, resource, 1)
 	if err != nil {
 		t.Fatalf("getAllocationsByNodeGPU returned error: %v", err)
 	}
 	if len(res) != 1 || res[0] != alloc {
 		t.Fatalf("expected returned allocation")
+	}
+	if alloc.Status != instav1.AllocationClaimStatusProcessing {
+		t.Fatalf("expected allocation status updated, got %s", alloc.Status)
 	}
 }

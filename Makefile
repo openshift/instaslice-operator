@@ -180,8 +180,8 @@ build-push-scheduler:
 	# docker push localhost:5000/instaslice-scheduler:dev
 
 build-push-daemonset:
-	docker build -f Dockerfile.daemonset.ocp -t localhost:5000/instaslice-daemonset:dev .
-	docker push localhost:5000/instaslice-daemonset:dev
+	# docker build -f Dockerfile.daemonset.ocp -t localhost:5000/instaslice-daemonset:dev .
+	# docker push localhost:5000/instaslice-daemonset:dev
 
 build-push-operator:
 	# docker build -f Dockerfile.ocp -t localhost:5000/instaslice-operator:dev .

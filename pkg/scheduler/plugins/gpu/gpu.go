@@ -18,6 +18,7 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
 	instav1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	deviceplugins "github.com/openshift/instaslice-operator/pkg/daemonset/deviceplugins"
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	instainformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
 	instalisters "github.com/openshift/instaslice-operator/pkg/generated/listers/instasliceoperator/v1alpha1"
@@ -140,7 +141,7 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 			size,
 			pod.GetUID(),
 			types.NodeName(instObj.GetName()),
-			instav1alpha1.AllocationClaimStatusProcessing,
+			instav1alpha1.AllocationClaimStatusCreated,
 			discoveredGiprofile,
 			Ciprofileid,
 			Ciengprofileid,
@@ -155,7 +156,11 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 	if selectedGPU == "" {
 		return framework.NewStatus(framework.Unschedulable, "no GPU available")
 	}
-	if _, err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims("instaslice-system").Create(ctx, alloc, metav1.CreateOptions{}); err != nil {
+	created, err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims("instaslice-system").Create(ctx, alloc, metav1.CreateOptions{})
+	if err != nil {
+		return framework.AsStatus(err)
+	}
+	if _, err := deviceplugins.UpdateAllocationStatus(ctx, p.instaClient, created, instav1alpha1.AllocationClaimStatusCreated); err != nil {
 		return framework.AsStatus(err)
 	}
 	klog.InfoS("instaslice GPU selected ", "pod", klog.KObj(pod), "node", nodeName, "gpu", selectedGPU)

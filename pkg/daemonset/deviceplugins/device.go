@@ -151,7 +151,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 	return nil
 }
 
-// UpdateAllocationStatus safely updates the status of the given Allocation using
+// UpdateAllocationStatus safely updates the status of the given AllocationClaim using
 // the provided client while holding the allocation mutex. This prevents multiple
 // goroutines from updating the same object concurrently.
 func UpdateAllocationStatus(ctx context.Context, client versioned.Interface, alloc *instav1.AllocationClaim, status instav1.AllocationClaimStatus) (*instav1.AllocationClaim, error) {
