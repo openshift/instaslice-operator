@@ -176,8 +176,8 @@ cleanup-kind:
 .PHONY: build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
 
 build-push-scheduler:
-	# docker build -f Dockerfile.scheduler.ocp -t localhost:5000/instaslice-scheduler:dev .
-	# docker push localhost:5000/instaslice-scheduler:dev
+	docker build -f Dockerfile.scheduler.ocp -t localhost:5000/instaslice-scheduler:dev .
+	docker push localhost:5000/instaslice-scheduler:dev
 
 build-push-daemonset:
 	# docker build -f Dockerfile.daemonset.ocp -t localhost:5000/instaslice-daemonset:dev .

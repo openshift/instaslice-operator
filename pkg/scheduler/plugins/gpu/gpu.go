@@ -28,10 +28,11 @@ const Name = "InstasliceGPU"
 
 // Plugin implements a scheduler PreBind extension for GPU allocation.
 type Plugin struct {
-	handle           framework.Handle
-	instaClient      instaclient.Interface
-	namespace        string
-	instasliceLister instalisters.InstasliceLister
+	handle            framework.Handle
+	instaClient       instaclient.Interface
+	namespace         string
+	instasliceLister  instalisters.InstasliceLister
+	allocationIndexer cache.Indexer
 }
 
 // Args holds the scheduler plugin configuration.
@@ -100,34 +101,17 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 		return nil, err
 	}
 
-	// indexer usage
-	// indexer := allocInformer.GetIndexer()
-
-	// nodeName := "node-42"
-	// gpuUUID := "abc123"
-	// compositeKey := fmt.Sprintf("%s/%s", nodeName, gpuUUID)
-
-	// objs, err := indexer.ByIndex("node-gpu", compositeKey)
-	// if err != nil {
-	// 	// handle error
-	// }
-
-	// for _, obj := range objs {
-	// 	alloc := obj.(*instav1alpha1.Allocation)
-	// 	fmt.Printf("Found Allocation %s on node %s for GPU %s\n",
-	// 		alloc.Name, alloc.Spec.Nodename, alloc.Spec.GPUUUID)
-	// }
-
 	informerFactory.Start(ctx.Done())
 	if ok := cache.WaitForCacheSync(ctx.Done(), allocInformer.HasSynced, instasliceInf.HasSynced); !ok {
 		return nil, fmt.Errorf("failed to sync caches")
 	}
 
 	return &Plugin{
-		handle:           handle,
-		instaClient:      instaClient,
-		namespace:        ns,
-		instasliceLister: instasliceLister,
+		handle:            handle,
+		instaClient:       instaClient,
+		namespace:         ns,
+		instasliceLister:  instasliceLister,
+		allocationIndexer: allocInformer.GetIndexer(),
 	}, nil
 }
 
@@ -140,7 +124,10 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 	var selectedGPU string
 	var alloc *instav1alpha1.Allocation
 	for _, gpu := range instObj.Status.NodeResources.NodeGPUs {
-		gpuAllocated := gpuAllocatedSlices(instObj, gpu.GPUUUID)
+		gpuAllocated, err := gpuAllocatedSlices(p.allocationIndexer, nodeName, gpu.GPUUUID)
+		if err != nil {
+			return framework.AsStatus(err)
+		}
 		profileName := extractProfileName(pod.Spec.Containers[0].Resources.Limits)
 		newStart := getStartIndexFromAllocationResults(instObj, profileName, gpuAllocated)
 		if newStart == int32(9) {
@@ -297,15 +284,30 @@ func getStartIndexFromAllocationResults(instaslice *instav1alpha1.Instaslice, pr
 	return newStart
 }
 
-func gpuAllocatedSlices(instObj *instav1alpha1.Instaslice, gpuUUID string) [8]int32 {
+func gpuAllocatedSlices(indexer cache.Indexer, nodeName, gpuUUID string) ([8]int32, error) {
 	var gpuAllocatedIndex [8]int32
 	for i := range gpuAllocatedIndex {
 		gpuAllocatedIndex[i] = 0
 	}
-	for _, allocResult := range instObj.Status.PodAllocationResults {
-		for i := 0; i < int(allocResult.MigPlacement.Size); i++ {
-			gpuAllocatedIndex[int(allocResult.MigPlacement.Start)+i] = 1
+	if indexer == nil {
+		err := fmt.Errorf("allocation indexer is nil")
+		klog.ErrorS(err, "indexer not initialized")
+		return gpuAllocatedIndex, err
+	}
+	key := fmt.Sprintf("%s/%s", nodeName, gpuUUID)
+	objs, err := indexer.ByIndex("node-gpu", key)
+	if err != nil {
+		klog.ErrorS(err, "unable to fetch allocations from indexer")
+		return gpuAllocatedIndex, err
+	}
+	for _, obj := range objs {
+		alloc, ok := obj.(*instav1alpha1.Allocation)
+		if !ok {
+			continue
+		}
+		for i := 0; i < int(alloc.Spec.MigPlacement.Size); i++ {
+			gpuAllocatedIndex[int(alloc.Spec.MigPlacement.Start)+i] = 1
 		}
 	}
-	return gpuAllocatedIndex
+	return gpuAllocatedIndex, nil
 }

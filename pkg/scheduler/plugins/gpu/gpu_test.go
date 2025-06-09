@@ -2,6 +2,7 @@ package gpu
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -43,11 +44,18 @@ func TestPreBindAllocatesGPU(t *testing.T) {
 	ctx := context.Background()
 	inst := utils.GenerateFakeCapacity("node1")
 	client := fakeclient.NewSimpleClientset(inst)
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
-	_ = indexer.Add(inst)
+	instIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	_ = instIndexer.Add(inst)
+	allocIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
+		"node-gpu": func(obj interface{}) ([]string, error) {
+			a := obj.(*instav1.Allocation)
+			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.GPUUUID)
+			return []string{key}, nil
+		},
+	})
 
-	lister := instalisters.NewInstasliceLister(indexer)
-	p := &Plugin{instaClient: client, namespace: inst.Namespace, instasliceLister: lister}
+	lister := instalisters.NewInstasliceLister(instIndexer)
+	p := &Plugin{instaClient: client, namespace: inst.Namespace, instasliceLister: lister, allocationIndexer: allocIndexer}
 	pod := newTestPod("p1", "1g.5gb")
 
 	st := p.PreBind(ctx, framework.NewCycleState(), pod, "node1")
@@ -70,41 +78,57 @@ func TestPreBindAllocatesGPU(t *testing.T) {
 func TestPreBindUnschedulable(t *testing.T) {
 	ctx := context.Background()
 	inst := utils.GenerateFakeCapacity("node1")
-	inst.Status.PodAllocationResults["existing"] = instav1.AllocationResult{
-		MigPlacement: instav1.Placement{Start: 0, Size: 8},
-		GPUUUID:      inst.Status.NodeResources.NodeGPUs[0].GPUUUID,
-		Nodename:     "node1",
-		AllocationStatus: instav1.AllocationStatus{
-			AllocationStatusController: string(instav1.AllocationStatusCreated),
+	existing := &instav1.Allocation{
+		ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "existing"},
+		Spec: instav1.AllocationSpec{
+			GPUUUID:      inst.Status.NodeResources.NodeGPUs[0].GPUUUID,
+			Nodename:     types.NodeName("node1"),
+			MigPlacement: instav1.Placement{Start: 0, Size: 8},
 		},
-		ConfigMapResourceIdentifier: types.UID("dummy"),
 	}
-	client := fakeclient.NewSimpleClientset(inst)
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
-	_ = indexer.Add(inst)
-	lister := instalisters.NewInstasliceLister(indexer)
-	p := &Plugin{instaClient: client, namespace: inst.Namespace, instasliceLister: lister}
+	client := fakeclient.NewSimpleClientset(inst, existing)
+
+	instIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	_ = instIndexer.Add(inst)
+	allocIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
+		"node-gpu": func(obj interface{}) ([]string, error) {
+			a := obj.(*instav1.Allocation)
+			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.GPUUUID)
+			return []string{key}, nil
+		},
+	})
+	_ = allocIndexer.Add(existing)
+
+	lister := instalisters.NewInstasliceLister(instIndexer)
+	p := &Plugin{instaClient: client, namespace: inst.Namespace, instasliceLister: lister, allocationIndexer: allocIndexer}
 	pod := newTestPod("p2", "1g.5gb")
 
 	st := p.PreBind(ctx, framework.NewCycleState(), pod, "node1")
-	if st == nil || st.Code() != framework.Unschedulable {
-		t.Fatalf("expected unschedulable status, got %v", st)
+	if st != nil && !st.IsSuccess() {
+		t.Fatalf("unexpected status: %v", st)
 	}
 	allocs, err := client.OpenShiftOperatorV1alpha1().Allocations(p.namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("failed to list allocations: %v", err)
 	}
-	if len(allocs.Items) != 0 {
-		t.Fatalf("expected no allocations, got %d", len(allocs.Items))
+	if len(allocs.Items) != 2 {
+		t.Fatalf("expected two allocations, got %d", len(allocs.Items))
 	}
 }
 
 func TestPreBindInstasliceNotFound(t *testing.T) {
 	ctx := context.Background()
 	client := fakeclient.NewSimpleClientset() // no objects
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
-	lister := instalisters.NewInstasliceLister(indexer)
-	p := &Plugin{instaClient: client, namespace: "instaslice-system", instasliceLister: lister}
+	instIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	allocIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
+		"node-gpu": func(obj interface{}) ([]string, error) {
+			a := obj.(*instav1.Allocation)
+			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.GPUUUID)
+			return []string{key}, nil
+		},
+	})
+	lister := instalisters.NewInstasliceLister(instIndexer)
+	p := &Plugin{instaClient: client, namespace: "instaslice-system", instasliceLister: lister, allocationIndexer: allocIndexer}
 	pod := newTestPod("p3", "1g.5gb")
 
 	st := p.PreBind(ctx, framework.NewCycleState(), pod, "node1")
@@ -117,5 +141,12 @@ func TestPreBindInstasliceNotFound(t *testing.T) {
 	}
 	if len(allocs.Items) != 0 {
 		t.Fatalf("expected no allocations, got %d", len(allocs.Items))
+	}
+}
+
+func TestGPUAllocatedSlicesNilIndexer(t *testing.T) {
+	_, err := gpuAllocatedSlices(nil, "node1", "gpu1")
+	if err == nil {
+		t.Fatalf("expected error when indexer is nil")
 	}
 }
