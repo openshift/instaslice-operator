@@ -1,60 +1,69 @@
-kind: Pipeline
+kind: PipelineRun
 apiVersion: tekton.dev/v1
 metadata:
   name: golangci-lint
+  namespace: dynamicacceleratorsl-tenant
+  annotations:
+    build.appstudio.openshift.io/repo: https://github.com/openshift/instaslice-operator?rev={{revision}}
+    build.appstudio.redhat.com/commit_sha: '{{revision}}'
+    build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
+    build.appstudio.redhat.com/target_branch: '{{target_branch}}'
+    pipelinesascode.tekton.dev/cancel-in-progress: "true"
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "next"
+  labels:
+    appstudio.openshift.io/application: dynamicacceleratorslicer-next
+    appstudio.openshift.io/component: instaslice-operator-next
+    pipelines.appstudio.openshift.io/type: build
 spec:
   params: [ ]
-  tasks:
-    - name: clone-ci-lint-check-gosec
-      taskSpec:
-        volumes:
-          - name: source
-            emptyDir: { }
-        steps:
-          - image: quay.io/sec-eng-special/golang:1.24.4
-            env:
-              - name: COMPONENT
-                valueFrom:
-                  fieldRef:
-                    fieldPath: metadata.annotations['appstudio.openshift.io/component']
-              - name: REVISION
-                valueFrom:
-                  fieldRef:
-                    fieldPath: metadata.annotations['pac.test.appstudio.openshift.io/sha']
-              - name: URL
-                valueFrom:
-                  fieldRef:
-                    fieldPath: metadata.annotations['pac.test.appstudio.openshift.io/source-repo-url']
-            computeResources:
-              limits:
-                cpu: 8
-                memory: 4Gi
-              requests:
-                cpu: 500m
-                memory: 1Gi
-            volumeMounts:
-              - name: source
-                mountPath: /workspace
-            script: |
-              #!/bin/bash
-              set -ex
-              echo "COMPONENT:$COMPONENT"
-              echo "REVISION:$REVISION"
-              echo "URL:$URL"
-              if [ -z "$URL" ] || [ -z "$REVISION" ]; then
-                echo "URL and REVISION not set"
-                exit 0
-              fi
-              echo "Initializing the env vars"
-              echo "URL: $URL"
-              echo "REVISION: $REVISION"
-              mkdir /workspace/source
-              cd /workspace/source
-              git init
-              git remote add origin $URL
-              git fetch origin $REVISION
-              git checkout FETCH_HEAD
-              git log -1
-              go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-              make lint
-              exit $? # exit with the status of the tests
+  pipelineSpec:
+    tasks:
+      - name: ci-lint-check
+        taskSpec:
+          volumes:
+            - name: source
+              emptyDir: { }
+          steps:
+            - image: quay.io/sec-eng-special/golang:1.24.1
+              env:
+                - name: COMPONENT
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.labels['appstudio.openshift.io/component']
+                - name: URL
+                  value: "{{ repo_url }}"
+                - name: REVISION
+                  value: "{{ revision }}"
+              computeResources:
+                limits:
+                  cpu: 8
+                  memory: 4Gi
+                requests:
+                  cpu: 500m
+                  memory: 1Gi
+              volumeMounts:
+                - name: source
+                  mountPath: /workspace
+              script: |
+                #!/bin/bash
+                set -ex
+                echo "COMPONENT:$COMPONENT"
+                echo "REVISION:$REVISION"
+                echo "URL:$URL"
+                if [ -z "$URL" ] || [ -z "$REVISION" ]; then
+                  echo "URL and REVISION not set"
+                  exit 0
+                fi
+                echo "Initializing the env vars"
+                echo "URL: $URL"
+                echo "REVISION: $REVISION"
+                mkdir /workspace/source
+                cd /workspace/source
+                git init
+                git remote add origin $URL
+                git fetch origin $REVISION
+                git checkout FETCH_HEAD
+                git log -1
+                go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+                GO_REQUIRED_MIN_VERSION= make lint
+                exit $? # exit with the status of the tests

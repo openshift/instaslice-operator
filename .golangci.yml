@@ -24,6 +24,10 @@ linters:
           - dupl
           - lll
         path: test/e2e/*
+      - linters:
+          - dupl
+          - lll
+        path: pkg/*
     paths:
       - third_party$
       - builtin$
