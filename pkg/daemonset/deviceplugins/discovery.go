@@ -27,14 +27,14 @@ type MigGpuDiscoverer interface {
 type EmulatedMigGpuDiscoverer struct {
 	ctx         context.Context
 	nodeName    string
-	instaClient v1alpha1.InstasliceInterface
+	instaClient v1alpha1.NodeAcceleratorInterface
 }
 
 func (e *EmulatedMigGpuDiscoverer) Discover() error {
 	// Ensure Instaslice CR exists
 	instaslice, err := e.instaClient.Get(e.ctx, e.nodeName, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		instaslice = &instav1.Instaslice{
+		instaslice = &instav1.NodeAccelerator{
 			ObjectMeta: metav1.ObjectMeta{Name: e.nodeName, Namespace: instasliceNamespace},
 		}
 		instaslice, err = e.instaClient.Create(e.ctx, instaslice, metav1.CreateOptions{})
@@ -68,7 +68,7 @@ func (e *EmulatedMigGpuDiscoverer) Discover() error {
 type RealMigGpuDiscoverer struct {
 	ctx         context.Context
 	nodeName    string
-	instaClient v1alpha1.InstasliceInterface
+	instaClient v1alpha1.NodeAcceleratorInterface
 }
 
 var _ MigGpuDiscoverer = &RealMigGpuDiscoverer{}
@@ -83,7 +83,7 @@ func (r *RealMigGpuDiscoverer) Discover() error {
 	defer nvml.Shutdown()
 
 	// Ensure Instaslice CR exists
-	instaslice := &instav1.Instaslice{
+	instaslice := &instav1.NodeAccelerator{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.nodeName,
 			Namespace: instasliceNamespace,

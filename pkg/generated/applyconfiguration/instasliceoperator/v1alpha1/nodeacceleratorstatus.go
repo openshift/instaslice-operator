@@ -20,24 +20,24 @@ import (
 	v1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
-// InstasliceStatusApplyConfiguration represents a declarative configuration of the InstasliceStatus type for use
+// NodeAcceleratorStatusApplyConfiguration represents a declarative configuration of the NodeAcceleratorStatus type for use
 // with apply.
-type InstasliceStatusApplyConfiguration struct {
+type NodeAcceleratorStatusApplyConfiguration struct {
 	Conditions           []v1.ConditionApplyConfiguration              `json:"conditions,omitempty"`
 	PodAllocationResults map[string]AllocationResultApplyConfiguration `json:"podAllocationResults,omitempty"`
 	NodeResources        *DiscoveredNodeResourcesApplyConfiguration    `json:"nodeResources,omitempty"`
 }
 
-// InstasliceStatusApplyConfiguration constructs a declarative configuration of the InstasliceStatus type for use with
+// NodeAcceleratorStatusApplyConfiguration constructs a declarative configuration of the NodeAcceleratorStatus type for use with
 // apply.
-func InstasliceStatus() *InstasliceStatusApplyConfiguration {
-	return &InstasliceStatusApplyConfiguration{}
+func NodeAcceleratorStatus() *NodeAcceleratorStatusApplyConfiguration {
+	return &NodeAcceleratorStatusApplyConfiguration{}
 }
 
 // WithConditions adds the given value to the Conditions field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Conditions field.
-func (b *InstasliceStatusApplyConfiguration) WithConditions(values ...*v1.ConditionApplyConfiguration) *InstasliceStatusApplyConfiguration {
+func (b *NodeAcceleratorStatusApplyConfiguration) WithConditions(values ...*v1.ConditionApplyConfiguration) *NodeAcceleratorStatusApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithConditions")
@@ -51,7 +51,7 @@ func (b *InstasliceStatusApplyConfiguration) WithConditions(values ...*v1.Condit
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the PodAllocationResults field,
 // overwriting an existing map entries in PodAllocationResults field with the same key.
-func (b *InstasliceStatusApplyConfiguration) WithPodAllocationResults(entries map[string]AllocationResultApplyConfiguration) *InstasliceStatusApplyConfiguration {
+func (b *NodeAcceleratorStatusApplyConfiguration) WithPodAllocationResults(entries map[string]AllocationResultApplyConfiguration) *NodeAcceleratorStatusApplyConfiguration {
 	if b.PodAllocationResults == nil && len(entries) > 0 {
 		b.PodAllocationResults = make(map[string]AllocationResultApplyConfiguration, len(entries))
 	}
@@ -64,7 +64,7 @@ func (b *InstasliceStatusApplyConfiguration) WithPodAllocationResults(entries ma
 // WithNodeResources sets the NodeResources field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the NodeResources field is set to the value of the last call.
-func (b *InstasliceStatusApplyConfiguration) WithNodeResources(value *DiscoveredNodeResourcesApplyConfiguration) *InstasliceStatusApplyConfiguration {
+func (b *NodeAcceleratorStatusApplyConfiguration) WithNodeResources(value *DiscoveredNodeResourcesApplyConfiguration) *NodeAcceleratorStatusApplyConfiguration {
 	b.NodeResources = value
 	return b
 }

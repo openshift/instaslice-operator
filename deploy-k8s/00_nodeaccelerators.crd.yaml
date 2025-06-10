@@ -4,20 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.17.2
-  name: instaslices.inference.redhat.com
+  name: nodeaccelerators.inference.redhat.com
 spec:
   group: inference.redhat.com
   names:
-    kind: Instaslice
-    listKind: InstasliceList
-    plural: instaslices
-    singular: instaslice
+    kind: NodeAccelerator
+    listKind: NodeAcceleratorList
+    plural: nodeaccelerators
+    singular: nodeaccelerator
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Instaslice is the Schema for the instaslices API
+        description: NodeAccelerator is the Schema for the nodeaccelerators API
         properties:
           apiVersion:
             description: |-
@@ -156,7 +156,7 @@ spec:
             type: object
           status:
             description: status provides the information about provisioned allocations
-              and health of the instaslice object
+              and health of the NodeAccelerator object
             properties:
               conditions:
                 description: |-

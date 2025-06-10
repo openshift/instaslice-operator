@@ -54,7 +54,7 @@ func TestPreBindAllocatesGPU(t *testing.T) {
 		},
 	})
 
-	lister := instalisters.NewInstasliceLister(instIndexer)
+	lister := instalisters.NewNodeAcceleratorLister(instIndexer)
 	p := &Plugin{instaClient: client, namespace: inst.Namespace, instasliceLister: lister, allocationIndexer: allocIndexer}
 	pod := newTestPod("p1", "1g.5gb")
 
@@ -103,7 +103,7 @@ func TestPreBindUnschedulable(t *testing.T) {
 	})
 	_ = allocIndexer.Add(existing)
 
-	lister := instalisters.NewInstasliceLister(instIndexer)
+	lister := instalisters.NewNodeAcceleratorLister(instIndexer)
 	p := &Plugin{instaClient: client, namespace: inst.Namespace, instasliceLister: lister, allocationIndexer: allocIndexer}
 	pod := newTestPod("p2", "1g.5gb")
 
@@ -144,7 +144,7 @@ func TestPreBindInstasliceNotFound(t *testing.T) {
 			return []string{key}, nil
 		},
 	})
-	lister := instalisters.NewInstasliceLister(instIndexer)
+	lister := instalisters.NewNodeAcceleratorLister(instIndexer)
 	p := &Plugin{instaClient: client, namespace: "instaslice-system", instasliceLister: lister, allocationIndexer: allocIndexer}
 	pod := newTestPod("p3", "1g.5gb")
 

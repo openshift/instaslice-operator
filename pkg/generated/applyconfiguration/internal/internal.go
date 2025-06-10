@@ -47,7 +47,7 @@ var schemaYAML = typed.YAMLObject(`types:
     elementType:
       namedType: __untyped_deduced_
     elementRelationship: separable
-- name: com.github.openshift.instaslice-operator.pkg.apis.instasliceoperator.v1alpha1.Instaslice
+- name: com.github.openshift.instaslice-operator.pkg.apis.instasliceoperator.v1alpha1.InstasliceOperator
   scalar: untyped
   list:
     elementType:
@@ -57,7 +57,7 @@ var schemaYAML = typed.YAMLObject(`types:
     elementType:
       namedType: __untyped_deduced_
     elementRelationship: separable
-- name: com.github.openshift.instaslice-operator.pkg.apis.instasliceoperator.v1alpha1.InstasliceOperator
+- name: com.github.openshift.instaslice-operator.pkg.apis.instasliceoperator.v1alpha1.NodeAccelerator
   scalar: untyped
   list:
     elementType:

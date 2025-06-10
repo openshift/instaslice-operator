@@ -25,58 +25,58 @@ import (
 	v1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
-// InstasliceApplyConfiguration represents a declarative configuration of the Instaslice type for use
+// NodeAcceleratorApplyConfiguration represents a declarative configuration of the NodeAccelerator type for use
 // with apply.
-type InstasliceApplyConfiguration struct {
+type NodeAcceleratorApplyConfiguration struct {
 	v1.TypeMetaApplyConfiguration    `json:",inline"`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	Spec                             *InstasliceSpecApplyConfiguration   `json:"spec,omitempty"`
-	Status                           *InstasliceStatusApplyConfiguration `json:"status,omitempty"`
+	Spec                             *NodeAcceleratorSpecApplyConfiguration   `json:"spec,omitempty"`
+	Status                           *NodeAcceleratorStatusApplyConfiguration `json:"status,omitempty"`
 }
 
-// Instaslice constructs a declarative configuration of the Instaslice type for use with
+// NodeAccelerator constructs a declarative configuration of the NodeAccelerator type for use with
 // apply.
-func Instaslice(name, namespace string) *InstasliceApplyConfiguration {
-	b := &InstasliceApplyConfiguration{}
+func NodeAccelerator(name, namespace string) *NodeAcceleratorApplyConfiguration {
+	b := &NodeAcceleratorApplyConfiguration{}
 	b.WithName(name)
 	b.WithNamespace(namespace)
-	b.WithKind("Instaslice")
+	b.WithKind("NodeAccelerator")
 	b.WithAPIVersion("inference.redhat.com/v1alpha1")
 	return b
 }
 
-// ExtractInstaslice extracts the applied configuration owned by fieldManager from
-// instaslice. If no managedFields are found in instaslice for fieldManager, a
-// InstasliceApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// ExtractNodeAccelerator extracts the applied configuration owned by fieldManager from
+// nodeAccelerator. If no managedFields are found in nodeAccelerator for fieldManager, a
+// NodeAcceleratorApplyConfiguration is returned with only the Name, Namespace (if applicable),
 // APIVersion and Kind populated. It is possible that no managed fields were found for because other
 // field managers have taken ownership of all the fields previously owned by fieldManager, or because
 // the fieldManager never owned fields any fields.
-// instaslice must be a unmodified Instaslice API object that was retrieved from the Kubernetes API.
-// ExtractInstaslice provides a way to perform a extract/modify-in-place/apply workflow.
+// nodeAccelerator must be a unmodified NodeAccelerator API object that was retrieved from the Kubernetes API.
+// ExtractNodeAccelerator provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 // Experimental!
-func ExtractInstaslice(instaslice *instasliceoperatorv1alpha1.Instaslice, fieldManager string) (*InstasliceApplyConfiguration, error) {
-	return extractInstaslice(instaslice, fieldManager, "")
+func ExtractNodeAccelerator(nodeAccelerator *instasliceoperatorv1alpha1.NodeAccelerator, fieldManager string) (*NodeAcceleratorApplyConfiguration, error) {
+	return extractNodeAccelerator(nodeAccelerator, fieldManager, "")
 }
 
-// ExtractInstasliceStatus is the same as ExtractInstaslice except
+// ExtractNodeAcceleratorStatus is the same as ExtractNodeAccelerator except
 // that it extracts the status subresource applied configuration.
 // Experimental!
-func ExtractInstasliceStatus(instaslice *instasliceoperatorv1alpha1.Instaslice, fieldManager string) (*InstasliceApplyConfiguration, error) {
-	return extractInstaslice(instaslice, fieldManager, "status")
+func ExtractNodeAcceleratorStatus(nodeAccelerator *instasliceoperatorv1alpha1.NodeAccelerator, fieldManager string) (*NodeAcceleratorApplyConfiguration, error) {
+	return extractNodeAccelerator(nodeAccelerator, fieldManager, "status")
 }
 
-func extractInstaslice(instaslice *instasliceoperatorv1alpha1.Instaslice, fieldManager string, subresource string) (*InstasliceApplyConfiguration, error) {
-	b := &InstasliceApplyConfiguration{}
-	err := managedfields.ExtractInto(instaslice, internal.Parser().Type("com.github.openshift.instaslice-operator.pkg.apis.instasliceoperator.v1alpha1.Instaslice"), fieldManager, b, subresource)
+func extractNodeAccelerator(nodeAccelerator *instasliceoperatorv1alpha1.NodeAccelerator, fieldManager string, subresource string) (*NodeAcceleratorApplyConfiguration, error) {
+	b := &NodeAcceleratorApplyConfiguration{}
+	err := managedfields.ExtractInto(nodeAccelerator, internal.Parser().Type("com.github.openshift.instaslice-operator.pkg.apis.instasliceoperator.v1alpha1.NodeAccelerator"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}
-	b.WithName(instaslice.Name)
-	b.WithNamespace(instaslice.Namespace)
+	b.WithName(nodeAccelerator.Name)
+	b.WithNamespace(nodeAccelerator.Namespace)
 
-	b.WithKind("Instaslice")
+	b.WithKind("NodeAccelerator")
 	b.WithAPIVersion("inference.redhat.com/v1alpha1")
 	return b, nil
 }
@@ -84,7 +84,7 @@ func extractInstaslice(instaslice *instasliceoperatorv1alpha1.Instaslice, fieldM
 // WithKind sets the Kind field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Kind field is set to the value of the last call.
-func (b *InstasliceApplyConfiguration) WithKind(value string) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithKind(value string) *NodeAcceleratorApplyConfiguration {
 	b.TypeMetaApplyConfiguration.Kind = &value
 	return b
 }
@@ -92,7 +92,7 @@ func (b *InstasliceApplyConfiguration) WithKind(value string) *InstasliceApplyCo
 // WithAPIVersion sets the APIVersion field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the APIVersion field is set to the value of the last call.
-func (b *InstasliceApplyConfiguration) WithAPIVersion(value string) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithAPIVersion(value string) *NodeAcceleratorApplyConfiguration {
 	b.TypeMetaApplyConfiguration.APIVersion = &value
 	return b
 }
@@ -100,7 +100,7 @@ func (b *InstasliceApplyConfiguration) WithAPIVersion(value string) *InstasliceA
 // WithName sets the Name field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Name field is set to the value of the last call.
-func (b *InstasliceApplyConfiguration) WithName(value string) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithName(value string) *NodeAcceleratorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Name = &value
 	return b
@@ -109,7 +109,7 @@ func (b *InstasliceApplyConfiguration) WithName(value string) *InstasliceApplyCo
 // WithGenerateName sets the GenerateName field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the GenerateName field is set to the value of the last call.
-func (b *InstasliceApplyConfiguration) WithGenerateName(value string) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithGenerateName(value string) *NodeAcceleratorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.GenerateName = &value
 	return b
@@ -118,7 +118,7 @@ func (b *InstasliceApplyConfiguration) WithGenerateName(value string) *Instaslic
 // WithNamespace sets the Namespace field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Namespace field is set to the value of the last call.
-func (b *InstasliceApplyConfiguration) WithNamespace(value string) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithNamespace(value string) *NodeAcceleratorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Namespace = &value
 	return b
@@ -127,7 +127,7 @@ func (b *InstasliceApplyConfiguration) WithNamespace(value string) *InstasliceAp
 // WithUID sets the UID field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the UID field is set to the value of the last call.
-func (b *InstasliceApplyConfiguration) WithUID(value types.UID) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithUID(value types.UID) *NodeAcceleratorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.UID = &value
 	return b
@@ -136,7 +136,7 @@ func (b *InstasliceApplyConfiguration) WithUID(value types.UID) *InstasliceApply
 // WithResourceVersion sets the ResourceVersion field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ResourceVersion field is set to the value of the last call.
-func (b *InstasliceApplyConfiguration) WithResourceVersion(value string) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithResourceVersion(value string) *NodeAcceleratorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.ResourceVersion = &value
 	return b
@@ -145,7 +145,7 @@ func (b *InstasliceApplyConfiguration) WithResourceVersion(value string) *Instas
 // WithGeneration sets the Generation field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Generation field is set to the value of the last call.
-func (b *InstasliceApplyConfiguration) WithGeneration(value int64) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithGeneration(value int64) *NodeAcceleratorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Generation = &value
 	return b
@@ -154,7 +154,7 @@ func (b *InstasliceApplyConfiguration) WithGeneration(value int64) *InstasliceAp
 // WithCreationTimestamp sets the CreationTimestamp field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the CreationTimestamp field is set to the value of the last call.
-func (b *InstasliceApplyConfiguration) WithCreationTimestamp(value metav1.Time) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithCreationTimestamp(value metav1.Time) *NodeAcceleratorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.CreationTimestamp = &value
 	return b
@@ -163,7 +163,7 @@ func (b *InstasliceApplyConfiguration) WithCreationTimestamp(value metav1.Time) 
 // WithDeletionTimestamp sets the DeletionTimestamp field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DeletionTimestamp field is set to the value of the last call.
-func (b *InstasliceApplyConfiguration) WithDeletionTimestamp(value metav1.Time) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithDeletionTimestamp(value metav1.Time) *NodeAcceleratorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.DeletionTimestamp = &value
 	return b
@@ -172,7 +172,7 @@ func (b *InstasliceApplyConfiguration) WithDeletionTimestamp(value metav1.Time) 
 // WithDeletionGracePeriodSeconds sets the DeletionGracePeriodSeconds field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DeletionGracePeriodSeconds field is set to the value of the last call.
-func (b *InstasliceApplyConfiguration) WithDeletionGracePeriodSeconds(value int64) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithDeletionGracePeriodSeconds(value int64) *NodeAcceleratorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.DeletionGracePeriodSeconds = &value
 	return b
@@ -182,7 +182,7 @@ func (b *InstasliceApplyConfiguration) WithDeletionGracePeriodSeconds(value int6
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the Labels field,
 // overwriting an existing map entries in Labels field with the same key.
-func (b *InstasliceApplyConfiguration) WithLabels(entries map[string]string) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithLabels(entries map[string]string) *NodeAcceleratorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	if b.ObjectMetaApplyConfiguration.Labels == nil && len(entries) > 0 {
 		b.ObjectMetaApplyConfiguration.Labels = make(map[string]string, len(entries))
@@ -197,7 +197,7 @@ func (b *InstasliceApplyConfiguration) WithLabels(entries map[string]string) *In
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the Annotations field,
 // overwriting an existing map entries in Annotations field with the same key.
-func (b *InstasliceApplyConfiguration) WithAnnotations(entries map[string]string) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithAnnotations(entries map[string]string) *NodeAcceleratorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	if b.ObjectMetaApplyConfiguration.Annotations == nil && len(entries) > 0 {
 		b.ObjectMetaApplyConfiguration.Annotations = make(map[string]string, len(entries))
@@ -211,7 +211,7 @@ func (b *InstasliceApplyConfiguration) WithAnnotations(entries map[string]string
 // WithOwnerReferences adds the given value to the OwnerReferences field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the OwnerReferences field.
-func (b *InstasliceApplyConfiguration) WithOwnerReferences(values ...*v1.OwnerReferenceApplyConfiguration) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithOwnerReferences(values ...*v1.OwnerReferenceApplyConfiguration) *NodeAcceleratorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	for i := range values {
 		if values[i] == nil {
@@ -225,7 +225,7 @@ func (b *InstasliceApplyConfiguration) WithOwnerReferences(values ...*v1.OwnerRe
 // WithFinalizers adds the given value to the Finalizers field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Finalizers field.
-func (b *InstasliceApplyConfiguration) WithFinalizers(values ...string) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithFinalizers(values ...string) *NodeAcceleratorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	for i := range values {
 		b.ObjectMetaApplyConfiguration.Finalizers = append(b.ObjectMetaApplyConfiguration.Finalizers, values[i])
@@ -233,7 +233,7 @@ func (b *InstasliceApplyConfiguration) WithFinalizers(values ...string) *Instasl
 	return b
 }
 
-func (b *InstasliceApplyConfiguration) ensureObjectMetaApplyConfigurationExists() {
+func (b *NodeAcceleratorApplyConfiguration) ensureObjectMetaApplyConfigurationExists() {
 	if b.ObjectMetaApplyConfiguration == nil {
 		b.ObjectMetaApplyConfiguration = &v1.ObjectMetaApplyConfiguration{}
 	}
@@ -242,7 +242,7 @@ func (b *InstasliceApplyConfiguration) ensureObjectMetaApplyConfigurationExists(
 // WithSpec sets the Spec field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Spec field is set to the value of the last call.
-func (b *InstasliceApplyConfiguration) WithSpec(value *InstasliceSpecApplyConfiguration) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithSpec(value *NodeAcceleratorSpecApplyConfiguration) *NodeAcceleratorApplyConfiguration {
 	b.Spec = value
 	return b
 }
@@ -250,13 +250,13 @@ func (b *InstasliceApplyConfiguration) WithSpec(value *InstasliceSpecApplyConfig
 // WithStatus sets the Status field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Status field is set to the value of the last call.
-func (b *InstasliceApplyConfiguration) WithStatus(value *InstasliceStatusApplyConfiguration) *InstasliceApplyConfiguration {
+func (b *NodeAcceleratorApplyConfiguration) WithStatus(value *NodeAcceleratorStatusApplyConfiguration) *NodeAcceleratorApplyConfiguration {
 	b.Status = value
 	return b
 }
 
 // GetName retrieves the value of the Name field in the declarative configuration.
-func (b *InstasliceApplyConfiguration) GetName() *string {
+func (b *NodeAcceleratorApplyConfiguration) GetName() *string {
 	b.ensureObjectMetaApplyConfigurationExists()
 	return b.ObjectMetaApplyConfiguration.Name
 }

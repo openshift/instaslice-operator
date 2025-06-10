@@ -8,17 +8,17 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// GenerateFakeCapacity returns a fake Instaslice CR for emulated mode.
-func GenerateFakeCapacity(nodeName string) *instav1.Instaslice {
-	return &instav1.Instaslice{
+// GenerateFakeCapacity returns a fake NodeAccelerator CR for emulated mode.
+func GenerateFakeCapacity(nodeName string) *instav1.NodeAccelerator {
+	return &instav1.NodeAccelerator{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nodeName,
 			Namespace: "instaslice-system",
 		},
-		Spec: instav1.InstasliceSpec{
+		Spec: instav1.NodeAcceleratorSpec{
 			PodAllocationRequests: &map[types.UID]instav1.AllocationRequest{},
 		},
-		Status: instav1.InstasliceStatus{
+		Status: instav1.NodeAcceleratorStatus{
 			Conditions: []metav1.Condition{
 				{
 					Type:               "Ready",

@@ -52,13 +52,13 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 		discoverer = &EmulatedMigGpuDiscoverer{
 			ctx:         ctx,
 			nodeName:    nodeName,
-			instaClient: csOp.OpenShiftOperatorV1alpha1().Instaslices(instasliceNamespace),
+			instaClient: csOp.OpenShiftOperatorV1alpha1().NodeAccelerators(instasliceNamespace),
 		}
 	} else {
 		discoverer = &RealMigGpuDiscoverer{
 			ctx:         ctx,
 			nodeName:    nodeName,
-			instaClient: csOp.OpenShiftOperatorV1alpha1().Instaslices(instasliceNamespace),
+			instaClient: csOp.OpenShiftOperatorV1alpha1().NodeAccelerators(instasliceNamespace),
 		}
 	}
 	if err := discoverer.Discover(); err != nil {

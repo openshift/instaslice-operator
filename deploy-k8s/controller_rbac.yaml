@@ -12,9 +12,9 @@ rules:
   - apiGroups:
       - inference.redhat.com
     resources:
-      - instaslices
-      - instaslices/status
-      - instaslices/finalizers
+      - nodeaccelerators
+      - nodeaccelerators/status
+      - nodeaccelerators/finalizers
       - instasliceoperators
       - instasliceoperators/status
       - instasliceoperators/finalizers

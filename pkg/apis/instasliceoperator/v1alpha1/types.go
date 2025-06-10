@@ -5,14 +5,14 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-type InstasliceSpec struct {
+type NodeAcceleratorSpec struct {
 	// podAllocationRequests specifies the allocation requests per pod
 	// +optional
 	PodAllocationRequests *map[types.UID]AllocationRequest `json:"podAllocationRequests"`
 }
 
 // +k8s:openapi-gen=true
-type InstasliceStatus struct {
+type NodeAcceleratorStatus struct {
 	// conditions represent the observed state of the Instaslice object
 	// For example:
 	//   conditions:
@@ -48,33 +48,33 @@ type InstasliceStatus struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Instaslice is the Schema for the instaslices API
+// NodeAccelerator is the Schema for the nodeaccelerators API
 // +k8s:openapi-gen=true
 // +genclient
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
-type Instaslice struct {
+type NodeAccelerator struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
 
 	// spec specifies the GPU slice requirements by workload pods
 	// +optional
-	Spec InstasliceSpec `json:"spec"`
+	Spec NodeAcceleratorSpec `json:"spec"`
 
-	// status provides the information about provisioned allocations and health of the instaslice object
-	Status InstasliceStatus `json:"status"`
+	// status provides the information about provisioned allocations and health of the NodeAccelerator object
+	Status NodeAcceleratorStatus `json:"status"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
-// InstasliceList contains a list of Instaslice resources
+// NodeAcceleratorList contains a list of NodeAccelerator resources
 // +optional
-type InstasliceList struct {
+type NodeAcceleratorList struct {
 	metav1.TypeMeta `json:",inline"`
 	// +optional
 	metav1.ListMeta `json:"metadata,omitempty"`
 
-	// items provides the list of instaslice objects in the cluster
+	// items provides the list of NodeAccelerator objects in the cluster
 	// +optional
-	Items []Instaslice `json:"items"`
+	Items []NodeAccelerator `json:"items"`
 }

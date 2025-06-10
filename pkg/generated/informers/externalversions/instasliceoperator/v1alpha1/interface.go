@@ -24,10 +24,10 @@ import (
 type Interface interface {
 	// AllocationClaims returns a AllocationClaimInformer.
 	AllocationClaims() AllocationClaimInformer
-	// Instaslices returns a InstasliceInformer.
-	Instaslices() InstasliceInformer
 	// InstasliceOperators returns a InstasliceOperatorInformer.
 	InstasliceOperators() InstasliceOperatorInformer
+	// NodeAccelerators returns a NodeAcceleratorInformer.
+	NodeAccelerators() NodeAcceleratorInformer
 }
 
 type version struct {
@@ -46,12 +46,12 @@ func (v *version) AllocationClaims() AllocationClaimInformer {
 	return &allocationClaimInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
-// Instaslices returns a InstasliceInformer.
-func (v *version) Instaslices() InstasliceInformer {
-	return &instasliceInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
 // InstasliceOperators returns a InstasliceOperatorInformer.
 func (v *version) InstasliceOperators() InstasliceOperatorInformer {
 	return &instasliceOperatorInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// NodeAccelerators returns a NodeAcceleratorInformer.
+func (v *version) NodeAccelerators() NodeAcceleratorInformer {
+	return &nodeAcceleratorInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

@@ -30,59 +30,59 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
-// InstasliceInformer provides access to a shared informer and lister for
-// Instaslices.
-type InstasliceInformer interface {
+// NodeAcceleratorInformer provides access to a shared informer and lister for
+// NodeAccelerators.
+type NodeAcceleratorInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() instasliceoperatorv1alpha1.InstasliceLister
+	Lister() instasliceoperatorv1alpha1.NodeAcceleratorLister
 }
 
-type instasliceInformer struct {
+type nodeAcceleratorInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	namespace        string
 }
 
-// NewInstasliceInformer constructs a new informer for Instaslice type.
+// NewNodeAcceleratorInformer constructs a new informer for NodeAccelerator type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewInstasliceInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredInstasliceInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewNodeAcceleratorInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredNodeAcceleratorInformer(client, namespace, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredInstasliceInformer constructs a new informer for Instaslice type.
+// NewFilteredNodeAcceleratorInformer constructs a new informer for NodeAccelerator type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredInstasliceInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredNodeAcceleratorInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.OpenShiftOperatorV1alpha1().Instaslices(namespace).List(context.TODO(), options)
+				return client.OpenShiftOperatorV1alpha1().NodeAccelerators(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.OpenShiftOperatorV1alpha1().Instaslices(namespace).Watch(context.TODO(), options)
+				return client.OpenShiftOperatorV1alpha1().NodeAccelerators(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&apisinstasliceoperatorv1alpha1.Instaslice{},
+		&apisinstasliceoperatorv1alpha1.NodeAccelerator{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *instasliceInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredInstasliceInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *nodeAcceleratorInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredNodeAcceleratorInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *instasliceInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisinstasliceoperatorv1alpha1.Instaslice{}, f.defaultInformer)
+func (f *nodeAcceleratorInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&apisinstasliceoperatorv1alpha1.NodeAccelerator{}, f.defaultInformer)
 }
 
-func (f *instasliceInformer) Lister() instasliceoperatorv1alpha1.InstasliceLister {
-	return instasliceoperatorv1alpha1.NewInstasliceLister(f.Informer().GetIndexer())
+func (f *nodeAcceleratorInformer) Lister() instasliceoperatorv1alpha1.NodeAcceleratorLister {
+	return instasliceoperatorv1alpha1.NewNodeAcceleratorLister(f.Informer().GetIndexer())
 }

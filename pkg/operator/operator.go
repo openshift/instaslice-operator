@@ -107,7 +107,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	sliceControllerConfig := instaslicecontroller.InstasliceControllerConfig{
 		Namespace:          namespace,
 		OperatorClient:     operatorConfigClient,
-		InstasliceInformer: operatorConfigInformers.OpenShiftOperator().V1alpha1().Instaslices().Informer(),
+		InstasliceInformer: operatorConfigInformers.OpenShiftOperator().V1alpha1().NodeAccelerators().Informer(),
 		EventRecorder:      cc.EventRecorder,
 	}
 	instasliceController := instaslicecontroller.NewInstasliceController(&sliceControllerConfig)

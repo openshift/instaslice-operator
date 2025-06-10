@@ -20,22 +20,22 @@ import (
 	types "k8s.io/apimachinery/pkg/types"
 )
 
-// InstasliceSpecApplyConfiguration represents a declarative configuration of the InstasliceSpec type for use
+// NodeAcceleratorSpecApplyConfiguration represents a declarative configuration of the NodeAcceleratorSpec type for use
 // with apply.
-type InstasliceSpecApplyConfiguration struct {
+type NodeAcceleratorSpecApplyConfiguration struct {
 	PodAllocationRequests *map[types.UID]AllocationRequestApplyConfiguration `json:"podAllocationRequests,omitempty"`
 }
 
-// InstasliceSpecApplyConfiguration constructs a declarative configuration of the InstasliceSpec type for use with
+// NodeAcceleratorSpecApplyConfiguration constructs a declarative configuration of the NodeAcceleratorSpec type for use with
 // apply.
-func InstasliceSpec() *InstasliceSpecApplyConfiguration {
-	return &InstasliceSpecApplyConfiguration{}
+func NodeAcceleratorSpec() *NodeAcceleratorSpecApplyConfiguration {
+	return &NodeAcceleratorSpecApplyConfiguration{}
 }
 
 // WithPodAllocationRequests sets the PodAllocationRequests field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the PodAllocationRequests field is set to the value of the last call.
-func (b *InstasliceSpecApplyConfiguration) WithPodAllocationRequests(value map[types.UID]AllocationRequestApplyConfiguration) *InstasliceSpecApplyConfiguration {
+func (b *NodeAcceleratorSpecApplyConfiguration) WithPodAllocationRequests(value map[types.UID]AllocationRequestApplyConfiguration) *NodeAcceleratorSpecApplyConfiguration {
 	b.PodAllocationRequests = &value
 	return b
 }

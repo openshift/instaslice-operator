@@ -41,7 +41,7 @@ rules:
 - apiGroups:
   - inference.redhat.com
   resources:
-  - instaslices
+  - nodeaccelerators
   verbs:
   - create
   - delete
@@ -53,13 +53,13 @@ rules:
 - apiGroups:
   - inference.redhat.com
   resources:
-  - instaslices/finalizers
+  - nodeaccelerators/finalizers
   verbs:
   - update
 - apiGroups:
   - inference.redhat.com
   resources:
-  - instaslices/status
+  - nodeaccelerators/status
   verbs:
   - get
   - patch

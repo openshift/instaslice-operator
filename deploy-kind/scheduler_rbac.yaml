@@ -108,8 +108,8 @@ rules:
     verbs: ["create", "patch", "update"]
   - apiGroups: ["inference.redhat.com"]
     resources:
-      - "instaslices"
-      - "instaslices/status"
+      - "nodeaccelerators"
+      - "nodeaccelerators/status"
       - "instasliceoperators"
       - "instasliceoperators/status"
       - "allocationclaims"

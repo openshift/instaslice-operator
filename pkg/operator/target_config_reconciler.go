@@ -49,6 +49,7 @@ type TargetConfigReconciler struct {
 	dynamicClient              dynamic.Interface
 	eventRecorder              events.Recorder
 	generations                []operatorsv1.GenerationStatus
+	instasliceInformer         operatorclientv1alpha1informers.NodeAcceleratorInformer
 	instasliceoperatorClient   *operatorclient.InstasliceOperatorSetClient
 	kubeClient                 kubernetes.Interface
 	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces

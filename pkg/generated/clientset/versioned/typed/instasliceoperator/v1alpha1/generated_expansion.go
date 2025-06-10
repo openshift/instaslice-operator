@@ -18,6 +18,6 @@ package v1alpha1
 
 type AllocationClaimExpansion interface{}
 
-type InstasliceExpansion interface{}
-
 type InstasliceOperatorExpansion interface{}
+
+type NodeAcceleratorExpansion interface{}

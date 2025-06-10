@@ -32,7 +32,7 @@ type Plugin struct {
 	handle            framework.Handle
 	instaClient       instaclient.Interface
 	namespace         string
-	instasliceLister  instalisters.InstasliceLister
+	instasliceLister  instalisters.NodeAcceleratorLister
 	allocationIndexer cache.Indexer
 }
 
@@ -82,7 +82,7 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 	instasliceInformer := informerFactory.
 		OpenShiftOperator().
 		V1alpha1().
-		Instaslices()
+		NodeAccelerators()
 	instasliceInf := instasliceInformer.Informer()
 	instasliceLister := instasliceInformer.Lister()
 
@@ -116,9 +116,9 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 	}, nil
 }
 
-// PreBind selects a GPU and updates the Instaslice object for the chosen node.
+// PreBind selects a GPU and updates the NodeAccelerator object for the chosen node.
 func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) *framework.Status {
-	instObj, err := p.instasliceLister.Instaslices(p.namespace).Get(nodeName)
+	instObj, err := p.instasliceLister.NodeAccelerators(p.namespace).Get(nodeName)
 	if err != nil {
 		return framework.AsStatus(err)
 	}
@@ -210,7 +210,7 @@ func SetAllocationDetails(profileName string, newStart, size int32, podUUID type
 	}
 }
 
-func extractGpuProfile(instaslice *instav1alpha1.Instaslice, profileName string) (int32, int32, int32, int32) {
+func extractGpuProfile(instaslice *instav1alpha1.NodeAccelerator, profileName string) (int32, int32, int32, int32) {
 	var size int32
 	var discoveredGiprofile int32
 	var Ciprofileid int32
@@ -229,7 +229,7 @@ func extractGpuProfile(instaslice *instav1alpha1.Instaslice, profileName string)
 	return size, discoveredGiprofile, Ciprofileid, Ciengprofileid
 }
 
-func getStartIndexFromAllocationResults(instaslice *instav1alpha1.Instaslice, profileName string, gpuAllocatedIndex [8]int32) int32 {
+func getStartIndexFromAllocationResults(instaslice *instav1alpha1.NodeAccelerator, profileName string, gpuAllocatedIndex [8]int32) int32 {
 	allAllocated := true
 	for _, allocated := range gpuAllocatedIndex {
 		if allocated != 1 {
