@@ -58,7 +58,7 @@ func NewServer(mgr *Manager, socketPath string, kubeConfig *rest.Config, emulate
 func (s *Server) Start(ctx context.Context) error {
 	klog.InfoS("Starting device plugin server", "socket", s.SocketPath)
 	// configure CDI cache to write specs to /etc/cdi only (persistent across reboots)
-	if err := cdi.Configure(cdi.WithSpecDirs(cdi.DefaultDynamicDir)); err != nil {
+	if err := cdi.Configure(cdi.WithSpecDirs(cdi.DefaultStaticDir)); err != nil {
 		klog.ErrorS(err, "failed to configure CDI spec directories")
 		return fmt.Errorf("failed to configure CDI spec directories: %w", err)
 	}
@@ -270,7 +270,7 @@ func BuildCDIDevices(kind, sanitizedClass, id string, annotations map[string]str
 	specNameBase := fmt.Sprintf("%s_%s", sanitizedClass, id)
 	specName := specNameBase + ".cdi.json"
 
-	dynamicDir := cdi.DefaultDynamicDir
+	dynamicDir := cdi.DefaultStaticDir
 	dirs := cdi.GetDefaultCache().GetSpecDirectories()
 	if len(dirs) > 0 {
 		dynamicDir = dirs[len(dirs)-1]

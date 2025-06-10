@@ -44,7 +44,7 @@ func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) erro
 
 	// Setup CDI spec watcher
 	cdiCache := watcher.NewCDICache()
-	if err := watcher.SetupCDIDeletionWatcher(ctx, cdi.DefaultDynamicDir, cdiCache, opClientset); err != nil {
+	if err := watcher.SetupCDIDeletionWatcher(ctx, cdi.DefaultStaticDir, cdiCache, opClientset); err != nil {
 		klog.ErrorS(err, "Failed to setup CDI watcher")
 		return err
 	}

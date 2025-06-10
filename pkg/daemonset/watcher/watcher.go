@@ -65,7 +65,7 @@ func SetupCDIDeletionWatcher(ctx context.Context, dir string, cache *CDICache, c
 	if err := w.Add(dir); err != nil {
 		return fmt.Errorf("failed to watch directory %s: %w", dir, err)
 	}
-	klog.InfoS("Starting CDI watcher", "dir", dir)
+	klog.InfoS("Starting CDI watcher 9999", "dir", dir)
 
 	// Preload existing specs.
 	entries, err := os.ReadDir(dir)
