@@ -105,7 +105,7 @@ build-push-images:
 	podman push ${IMAGE_REGISTRY}/instaslice-daemonset:${IMAGE_TAG}
 	podman push ${IMAGE_REGISTRY}/instaslice-webhook:${IMAGE_TAG}
 
-generate: regen-crd generate-clients
+generate: regen-crd regen-crd-kind regen-crd-k8s generate-clients
 .PHONY: generate
 
 generate-clients:

@@ -40,18 +40,12 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &instasliceoperatorv1alpha1.AllocationResultApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("AllocationStatus"):
 		return &instasliceoperatorv1alpha1.AllocationStatusApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("DiscoveredGPU"):
-		return &instasliceoperatorv1alpha1.DiscoveredGPUApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("DiscoveredNodeResources"):
-		return &instasliceoperatorv1alpha1.DiscoveredNodeResourcesApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("InstasliceOperator"):
 		return &instasliceoperatorv1alpha1.InstasliceOperatorApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("InstasliceOperatorSpec"):
 		return &instasliceoperatorv1alpha1.InstasliceOperatorSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("InstasliceOperatorStatus"):
 		return &instasliceoperatorv1alpha1.InstasliceOperatorStatusApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("Mig"):
-		return &instasliceoperatorv1alpha1.MigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("NodeAccelerator"):
 		return &instasliceoperatorv1alpha1.NodeAcceleratorApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("NodeAcceleratorSpec"):

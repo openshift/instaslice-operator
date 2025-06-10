@@ -24,6 +24,13 @@ InstaSlice will help if
 
 - Integration with vLLM, Kserve, [Deployments](samples/vllm_deployment.yaml), [Jobs](samples/vllm_job.yaml), and [Statefulsets](samples/vllm_statefulset.yaml)
 
+### Accelerator Types
+
+NodeAccelerator objects include an optional `acceleratorType` field to describe
+the accelerator class or vendor. Supported examples include `nvidia-mig`,
+`amd-mi300`, and `intel-xe`. The operator currently sets this value
+automatically to `nvidia-mig` for NVIDIA MIG-enabled GPUs.
+
 # Demo
 
 [InstaSlice demo](samples/demo_script/demo_video/instaslice.mp4)

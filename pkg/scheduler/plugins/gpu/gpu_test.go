@@ -2,6 +2,7 @@ package gpu
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -82,10 +83,12 @@ func TestPreBindAllocatesGPU(t *testing.T) {
 func TestPreBindUnschedulable(t *testing.T) {
 	ctx := context.Background()
 	inst := utils.GenerateFakeCapacity("node1")
+	var resources instav1.DiscoveredNodeResources
+	_ = json.Unmarshal(inst.Status.NodeResources.Raw, &resources)
 	existing := &instav1.AllocationClaim{
 		ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "existing"},
 		Spec: instav1.AllocationClaimSpec{
-			GPUUUID:      inst.Status.NodeResources.NodeGPUs[0].GPUUUID,
+			GPUUUID:      resources.NodeGPUs[0].GPUUUID,
 			Nodename:     types.NodeName("node1"),
 			MigPlacement: instav1.Placement{Start: 0, Size: 8},
 		},

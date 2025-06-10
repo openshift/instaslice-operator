@@ -40,6 +40,11 @@ spec:
               description: spec specifies the GPU slice requirements by workload pods
               type: object
               properties:
+                acceleratorType:
+                  description: |-
+                    AcceleratorType describes the accelerator class or vendor.
+                    Examples: "nvidia-mig", "amd-mi300", "intel-xe".
+                  type: string
                 podAllocationRequests:
                   description: podAllocationRequests specifies the allocation requests per pod
                   type: object
@@ -232,84 +237,13 @@ spec:
                     - type
                   x-kubernetes-list-type: map
                 nodeResources:
-                  description: nodeResources specifies the discovered resources of the node
+                  description: |-
+                    nodeResources specifies the discovered resources of the node.
+                    This is a runtime.RawExtension to allow different accelerator
+                    vendors to report arbitrary status objects. For NVIDIA MIG the
+                    object is a DiscoveredNodeResources struct.
                   type: object
-                  required:
-                    - migPlacement
-                    - nodeGpus
-                    - nodeResources
-                  properties:
-                    migPlacement:
-                      description: migPlacement represents GPU instance, compute instance with placement for a profile
-                      type: object
-                      additionalProperties:
-                        type: object
-                        required:
-                          - ciProfileId
-                          - giProfileId
-                          - placements
-                        properties:
-                          ciEngProfileId:
-                            description: ciEngProfileId provides the compute instance engineering ID of a profile
-                            type: integer
-                            format: int32
-                          ciProfileId:
-                            description: ciProfileId provides the compute instance ID of a profile
-                            type: integer
-                            format: int32
-                          giProfileId:
-                            description: giProfileId provides the GPU instance ID of a profile
-                            type: integer
-                            format: int32
-                          placements:
-                            description: placements specify vendor profile indexes and sizes
-                            type: array
-                            items:
-                              type: object
-                              required:
-                                - size
-                                - start
-                              properties:
-                                size:
-                                  description: size represents slots consumed by a profile on GPU
-                                  type: integer
-                                  format: int32
-                                start:
-                                  description: start represents the starting index driven by size for a profile
-                                  type: integer
-                                  format: int32
-                    nodeGpus:
-                      description: nodeGpus represents the discovered mig enabled GPUs on the node
-                      type: array
-                      items:
-                        type: object
-                        required:
-                          - gpuMemory
-                          - gpuName
-                          - gpuUuid
-                        properties:
-                          gpuMemory:
-                            description: gpuMemory represents the memory capacity of the GPU
-                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                            anyOf:
-                              - type: integer
-                              - type: string
-                            x-kubernetes-int-or-string: true
-                          gpuName:
-                            description: gpuName represents the name of the GPU
-                            type: string
-                          gpuUuid:
-                            description: gpuUuid represents the UUID of the GPU
-                            type: string
-                    nodeResources:
-                      description: nodeResources represents the resource list of the node at boot time
-                      type: object
-                      additionalProperties:
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                        anyOf:
-                          - type: integer
-                          - type: string
-                        x-kubernetes-int-or-string: true
+                  x-kubernetes-preserve-unknown-fields: true
                 podAllocationResults:
                   description: |-
                     PodAllocationResults specify the allocation results per pod

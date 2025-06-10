@@ -2,6 +2,7 @@ package gpu
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -122,19 +123,28 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 	if err != nil {
 		return framework.AsStatus(err)
 	}
+	if instObj.Spec.AcceleratorType != "" && instObj.Spec.AcceleratorType != "nvidia-mig" {
+		return framework.NewStatus(framework.Unschedulable, fmt.Sprintf("unsupported acceleratorType %s", instObj.Spec.AcceleratorType))
+	}
+	var resources instav1alpha1.DiscoveredNodeResources
+	if len(instObj.Status.NodeResources.Raw) > 0 {
+		if err := json.Unmarshal(instObj.Status.NodeResources.Raw, &resources); err != nil {
+			return framework.AsStatus(err)
+		}
+	}
 	var selectedGPU string
 	var alloc *instav1alpha1.AllocationClaim
-	for _, gpu := range instObj.Status.NodeResources.NodeGPUs {
+	for _, gpu := range resources.NodeGPUs {
 		gpuAllocated, err := gpuAllocatedSlices(p.allocationIndexer, nodeName, gpu.GPUUUID)
 		if err != nil {
 			return framework.AsStatus(err)
 		}
 		profileName := extractProfileName(pod.Spec.Containers[0].Resources.Limits)
-		newStart := getStartIndexFromAllocationResults(instObj, profileName, gpuAllocated)
+		newStart := getStartIndexFromAllocationResults(resources, profileName, gpuAllocated)
 		if newStart == int32(9) {
 			continue
 		}
-		size, discoveredGiprofile, Ciprofileid, Ciengprofileid := extractGpuProfile(instObj, profileName)
+		size, discoveredGiprofile, Ciprofileid, Ciengprofileid := extractGpuProfile(resources, profileName)
 		alloc = SetAllocationDetails(
 			profileName,
 			newStart,
@@ -210,12 +220,12 @@ func SetAllocationDetails(profileName string, newStart, size int32, podUUID type
 	}
 }
 
-func extractGpuProfile(instaslice *instav1alpha1.NodeAccelerator, profileName string) (int32, int32, int32, int32) {
+func extractGpuProfile(resources instav1alpha1.DiscoveredNodeResources, profileName string) (int32, int32, int32, int32) {
 	var size int32
 	var discoveredGiprofile int32
 	var Ciprofileid int32
 	var Ciengprofileid int32
-	for profName, placement := range instaslice.Status.NodeResources.MigPlacement {
+	for profName, placement := range resources.MigPlacement {
 		if profName == profileName {
 			for _, aPlacement := range placement.Placements {
 				size = aPlacement.Size
@@ -229,7 +239,7 @@ func extractGpuProfile(instaslice *instav1alpha1.NodeAccelerator, profileName st
 	return size, discoveredGiprofile, Ciprofileid, Ciengprofileid
 }
 
-func getStartIndexFromAllocationResults(instaslice *instav1alpha1.NodeAccelerator, profileName string, gpuAllocatedIndex [8]int32) int32 {
+func getStartIndexFromAllocationResults(resources instav1alpha1.DiscoveredNodeResources, profileName string, gpuAllocatedIndex [8]int32) int32 {
 	allAllocated := true
 	for _, allocated := range gpuAllocatedIndex {
 		if allocated != 1 {
@@ -242,7 +252,7 @@ func getStartIndexFromAllocationResults(instaslice *instav1alpha1.NodeAccelerato
 	}
 	var neededContinousSlot int32
 	var possiblePlacements []int32
-	for profile, placement := range instaslice.Status.NodeResources.MigPlacement {
+	for profile, placement := range resources.MigPlacement {
 		if profile == profileName {
 			neededContinousSlot = placement.Placements[0].Size
 			for _, placement := range placement.Placements {

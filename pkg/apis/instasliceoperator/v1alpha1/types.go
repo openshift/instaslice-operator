@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -9,6 +10,11 @@ type NodeAcceleratorSpec struct {
 	// podAllocationRequests specifies the allocation requests per pod
 	// +optional
 	PodAllocationRequests *map[types.UID]AllocationRequest `json:"podAllocationRequests"`
+
+	// AcceleratorType describes the accelerator class or vendor.
+	// Examples: "nvidia-mig", "amd-mi300", "intel-xe".
+	// +optional
+	AcceleratorType string `json:"acceleratorType,omitempty"`
 }
 
 // +k8s:openapi-gen=true
@@ -42,8 +48,12 @@ type NodeAcceleratorStatus struct {
 	// +optional
 	PodAllocationResults map[string]AllocationResult `json:"podAllocationResults"`
 
-	// nodeResources specifies the discovered resources of the node
-	NodeResources DiscoveredNodeResources `json:"nodeResources"`
+	// nodeResources specifies the discovered resources of the node.
+	// This is a runtime.RawExtension to allow different accelerator
+	// vendors to report arbitrary status objects. For NVIDIA MIG the
+	// object is a DiscoveredNodeResources struct.
+	// +optional
+	NodeResources runtime.RawExtension `json:"nodeResources,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

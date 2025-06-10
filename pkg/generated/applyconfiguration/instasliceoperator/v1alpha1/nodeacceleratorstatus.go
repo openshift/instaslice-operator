@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	runtime "k8s.io/apimachinery/pkg/runtime"
 	v1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
@@ -25,7 +26,7 @@ import (
 type NodeAcceleratorStatusApplyConfiguration struct {
 	Conditions           []v1.ConditionApplyConfiguration              `json:"conditions,omitempty"`
 	PodAllocationResults map[string]AllocationResultApplyConfiguration `json:"podAllocationResults,omitempty"`
-	NodeResources        *DiscoveredNodeResourcesApplyConfiguration    `json:"nodeResources,omitempty"`
+	NodeResources        *runtime.RawExtension                         `json:"nodeResources,omitempty"`
 }
 
 // NodeAcceleratorStatusApplyConfiguration constructs a declarative configuration of the NodeAcceleratorStatus type for use with
@@ -64,7 +65,7 @@ func (b *NodeAcceleratorStatusApplyConfiguration) WithPodAllocationResults(entri
 // WithNodeResources sets the NodeResources field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the NodeResources field is set to the value of the last call.
-func (b *NodeAcceleratorStatusApplyConfiguration) WithNodeResources(value *DiscoveredNodeResourcesApplyConfiguration) *NodeAcceleratorStatusApplyConfiguration {
-	b.NodeResources = value
+func (b *NodeAcceleratorStatusApplyConfiguration) WithNodeResources(value runtime.RawExtension) *NodeAcceleratorStatusApplyConfiguration {
+	b.NodeResources = &value
 	return b
 }

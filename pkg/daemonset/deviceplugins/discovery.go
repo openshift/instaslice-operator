@@ -2,15 +2,18 @@ package deviceplugins
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	nvml "github.com/NVIDIA/go-nvml/pkg/nvml"
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
 	"github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/instasliceoperator/v1alpha1"
 	utils "github.com/openshift/instaslice-operator/test/utils"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 )
 
@@ -47,6 +50,7 @@ func (e *EmulatedMigGpuDiscoverer) Discover() error {
 	fake := utils.GenerateFakeCapacity(e.nodeName)
 	// Update spec only; status subresource is updated separately
 	instaslice.Spec = fake.Spec
+	instaslice.Spec.AcceleratorType = "nvidia-mig"
 	updated, err := e.instaClient.Update(e.ctx, instaslice, metav1.UpdateOptions{})
 	if err != nil {
 		klog.ErrorS(err, "Failed to update instaslice spec during emulation", "node", e.nodeName)
@@ -88,6 +92,9 @@ func (r *RealMigGpuDiscoverer) Discover() error {
 			Name:      r.nodeName,
 			Namespace: instasliceNamespace,
 		},
+		Spec: instav1.NodeAcceleratorSpec{
+			AcceleratorType: "nvidia-mig",
+		},
 	}
 	klog.V(2).InfoS("Ensuring Instaslice CR exists", "node", r.nodeName)
 	_, err := r.instaClient.Create(r.ctx, instaslice, metav1.CreateOptions{})
@@ -101,6 +108,13 @@ func (r *RealMigGpuDiscoverer) Discover() error {
 		if err != nil {
 			klog.ErrorS(err, "Failed to get existing Instaslice CR", "node", r.nodeName)
 			return err
+		}
+		if instaslice.Spec.AcceleratorType == "" {
+			instaslice.Spec.AcceleratorType = "nvidia-mig"
+			if _, err := r.instaClient.Update(r.ctx, instaslice, metav1.UpdateOptions{}); err != nil {
+				klog.ErrorS(err, "Failed to update accelerator type", "node", r.nodeName)
+				return err
+			}
 		}
 	} else {
 		klog.V(2).InfoS("Created Instaslice CR", "node", r.nodeName)
@@ -116,8 +130,11 @@ func (r *RealMigGpuDiscoverer) Discover() error {
 		return err
 	}
 	klog.V(2).InfoS("Number of GPUs detected", "count", count)
-	instaslice.Status.NodeResources.NodeGPUs = []instav1.DiscoveredGPU{}
-	instaslice.Status.NodeResources.MigPlacement = make(map[string]instav1.Mig)
+	migResources := instav1.DiscoveredNodeResources{
+		NodeGPUs:      []instav1.DiscoveredGPU{},
+		MigPlacement:  make(map[string]instav1.Mig),
+		NodeResources: corev1.ResourceList{},
+	}
 	for i := 0; i < count; i++ {
 		dev, ret := nvml.DeviceGetHandleByIndex(i)
 		if ret != nvml.SUCCESS {
@@ -143,7 +160,7 @@ func (r *RealMigGpuDiscoverer) Discover() error {
 			klog.ErrorS(err, "Error getting memory info for GPU", "uuid", uuid, "returnCode", ret)
 			return err
 		}
-		instaslice.Status.NodeResources.NodeGPUs = append(instaslice.Status.NodeResources.NodeGPUs, instav1.DiscoveredGPU{
+		migResources.NodeGPUs = append(migResources.NodeGPUs, instav1.DiscoveredGPU{
 			GPUUUID:   uuid,
 			GPUName:   name,
 			GPUMemory: *resource.NewQuantity(int64(memInfo.Total), resource.BinarySI),
@@ -151,7 +168,13 @@ func (r *RealMigGpuDiscoverer) Discover() error {
 		discovered = append(discovered, uuid)
 		klog.V(2).InfoS("Discovered MIG-enabled GPU", "uuid", uuid, "name", name, "memoryBytes", memInfo.Total)
 	}
-	klog.InfoS("Completed GPU discovery", "discoveredCount", len(instaslice.Status.NodeResources.NodeGPUs))
+	klog.InfoS("Completed GPU discovery", "discoveredCount", len(migResources.NodeGPUs))
+
+	raw, err := json.Marshal(&migResources)
+	if err != nil {
+		return err
+	}
+	instaslice.Status.NodeResources = runtime.RawExtension{Raw: raw}
 
 	_, err = r.instaClient.UpdateStatus(r.ctx, instaslice, metav1.UpdateOptions{})
 	if err != nil {
