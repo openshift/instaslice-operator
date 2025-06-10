@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -9,10 +10,18 @@ import (
 	"sync"
 
 	"github.com/fsnotify/fsnotify"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
+
+	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	versioned "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
+
 	cdiapi "tags.cncf.io/container-device-interface/pkg/cdi"
 	cdispec "tags.cncf.io/container-device-interface/specs-go"
 )
+
+const allocationAnnotationKey = "instaslice.com/allocation"
 
 // CDICache stores CDI specs loaded from disk. It is safe for concurrent use.
 type CDICache struct {
@@ -47,7 +56,7 @@ func (c *CDICache) delete(path string) {
 
 // SetupCDIDeletionWatcher watches the given directory for CDI Spec file changes
 // and updates the provided cache accordingly.
-func SetupCDIDeletionWatcher(ctx context.Context, dir string, cache *CDICache) error {
+func SetupCDIDeletionWatcher(ctx context.Context, dir string, cache *CDICache, client versioned.Interface) error {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("failed to create fsnotify watcher: %w", err)
@@ -86,6 +95,27 @@ func SetupCDIDeletionWatcher(ctx context.Context, dir string, cache *CDICache) e
 				switch {
 				case event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename):
 					klog.V(3).InfoS("CDI spec removed", "path", event.Name)
+					if spec, ok := cache.Get(event.Name); ok && client != nil {
+						for _, dev := range spec.Devices {
+							ann, ok := dev.Annotations[allocationAnnotationKey]
+							if !ok || ann == "" {
+								continue
+							}
+							var alloc instav1.AllocationClaim
+							if err := json.Unmarshal([]byte(ann), &alloc); err != nil {
+								klog.ErrorS(err, "failed to unmarshal allocation annotation", "path", event.Name)
+								continue
+							}
+							if alloc.Name == "" {
+								continue
+							}
+							if err := client.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Delete(ctx, alloc.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+								klog.ErrorS(err, "failed to delete AllocationClaim", "namespace", alloc.Namespace, "name", alloc.Name)
+							} else {
+								klog.V(3).InfoS("Deleted AllocationClaim for CDI spec", "namespace", alloc.Namespace, "name", alloc.Name)
+							}
+						}
+					}
 					cache.delete(event.Name)
 				case event.Has(fsnotify.Create) || event.Has(fsnotify.Write):
 					klog.V(3).InfoS("CDI spec updated", "path", event.Name)

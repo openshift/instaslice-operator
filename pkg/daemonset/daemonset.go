@@ -33,15 +33,7 @@ func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) erro
 	}
 	klog.InfoS("Device plugins started")
 
-	// Setup CDI spec watcher
-	cdiCache := watcher.NewCDICache()
-	if err := watcher.SetupCDIDeletionWatcher(ctx, cdi.DefaultDynamicDir, cdiCache); err != nil {
-		klog.ErrorS(err, "Failed to setup CDI watcher")
-		return err
-	}
-	klog.InfoS("CDI watcher setup completed")
-
-	// Set up operator config informers for dynamic log level
+	// Prepare client for watcher and controllers
 	cfg := rest.CopyConfig(cc.KubeConfig)
 	cfg.AcceptContentTypes = "application/json"
 	cfg.ContentType = "application/json"
@@ -49,6 +41,16 @@ func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) erro
 	if err != nil {
 		return fmt.Errorf("failed to create instaslice operator client: %w", err)
 	}
+
+	// Setup CDI spec watcher
+	cdiCache := watcher.NewCDICache()
+	if err := watcher.SetupCDIDeletionWatcher(ctx, cdi.DefaultDynamicDir, cdiCache, opClientset); err != nil {
+		klog.ErrorS(err, "Failed to setup CDI watcher")
+		return err
+	}
+	klog.InfoS("CDI watcher setup completed")
+
+	// Set up operator config informers for dynamic log level
 	operatorNamespace := cc.OperatorNamespace
 	if operatorNamespace == "openshift-config-managed" {
 		operatorNamespace = "instaslice-system"
