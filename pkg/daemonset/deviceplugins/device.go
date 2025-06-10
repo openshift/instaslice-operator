@@ -2,9 +2,11 @@ package deviceplugins
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -120,18 +122,32 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 	allocInformerFactory.Start(ctx.Done())
 	allocationIndexer = allocInformer.GetIndexer()
 
-	// define the extended resources to serve
-	// TODO : load these from the instaslice CR
-	resourceNames := []string{
-		// TODO - rename these to nvidia.instaslice.com/mig-1g.5gb, etc.
-		"instaslice.com/mig-1g.5gb",
-		"instaslice.com/mig-2g.10gb",
-		"instaslice.com/mig-7g.40gb",
+	// Fetch discovered node resources from the NodeAccelerator CR
+	instObj, err := csOp.OpenShiftOperatorV1alpha1().NodeAccelerators(instasliceNamespace).Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		klog.ErrorS(err, "Failed to get NodeAccelerator", "node", nodeName)
+		return err
 	}
+	var discovered instav1.DiscoveredNodeResources
+	if len(instObj.Status.NodeResources.Raw) > 0 {
+		if err := json.Unmarshal(instObj.Status.NodeResources.Raw, &discovered); err != nil {
+			klog.ErrorS(err, "Failed to unmarshal NodeResources")
+			return err
+		}
+	}
+
+	// define the extended resources to serve based on the discovered
+	// NodeAccelerator resources
+	var resourceNames []string
+	for profile := range discovered.MigPlacement {
+		resourceNames = append(resourceNames, fmt.Sprintf("instaslice.com/mig-%s", profile))
+	}
+	// ensure deterministic ordering for stable socket names
+	sort.Strings(resourceNames)
 	const socketDir = "/var/lib/kubelet/device-plugins"
 
 	for _, res := range resourceNames {
-		mgr := NewManager(res)
+		mgr := NewManager(res, discovered)
 
 		sanitized := strings.ReplaceAll(res, "/", "_")
 		endpoint := sanitized + ".sock"

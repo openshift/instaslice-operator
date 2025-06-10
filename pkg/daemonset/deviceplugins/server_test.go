@@ -62,7 +62,7 @@ func TestListAndWatchInitialSpecs(t *testing.T) {
 		t.Fatalf("failed to write spec: %v", err)
 	}
 
-	mgr := NewManager("vendor/class")
+	mgr := NewManager("vendor/class", instav1.DiscoveredNodeResources{})
 	srv := &Server{Manager: mgr}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -96,7 +96,7 @@ func TestListAndWatchForwardsUpdates(t *testing.T) {
 		t.Fatalf("failed to configure cdi: %v", err)
 	}
 
-	mgr := NewManager("vendor/class")
+	mgr := NewManager("vendor/class", instav1.DiscoveredNodeResources{})
 	srv := &Server{Manager: mgr}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -156,7 +156,7 @@ func TestAllocateEmulated(t *testing.T) {
 				t.Fatalf("failed to configure cdi: %v", err)
 			}
 
-			mgr := NewManager("instaslice.com/mig-1g.5gb")
+			mgr := NewManager("instaslice.com/mig-1g.5gb", instav1.DiscoveredNodeResources{})
 			srv := &Server{
 				Manager:          mgr,
 				SocketPath:       filepath.Join(dir, "dp.sock"),
