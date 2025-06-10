@@ -24,9 +24,8 @@ import (
 // NodeAcceleratorStatusApplyConfiguration represents a declarative configuration of the NodeAcceleratorStatus type for use
 // with apply.
 type NodeAcceleratorStatusApplyConfiguration struct {
-	Conditions           []v1.ConditionApplyConfiguration              `json:"conditions,omitempty"`
-	PodAllocationResults map[string]AllocationResultApplyConfiguration `json:"podAllocationResults,omitempty"`
-	NodeResources        *runtime.RawExtension                         `json:"nodeResources,omitempty"`
+	Conditions    []v1.ConditionApplyConfiguration `json:"conditions,omitempty"`
+	NodeResources *runtime.RawExtension            `json:"nodeResources,omitempty"`
 }
 
 // NodeAcceleratorStatusApplyConfiguration constructs a declarative configuration of the NodeAcceleratorStatus type for use with
@@ -44,20 +43,6 @@ func (b *NodeAcceleratorStatusApplyConfiguration) WithConditions(values ...*v1.C
 			panic("nil value passed to WithConditions")
 		}
 		b.Conditions = append(b.Conditions, *values[i])
-	}
-	return b
-}
-
-// WithPodAllocationResults puts the entries into the PodAllocationResults field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, the entries provided by each call will be put on the PodAllocationResults field,
-// overwriting an existing map entries in PodAllocationResults field with the same key.
-func (b *NodeAcceleratorStatusApplyConfiguration) WithPodAllocationResults(entries map[string]AllocationResultApplyConfiguration) *NodeAcceleratorStatusApplyConfiguration {
-	if b.PodAllocationResults == nil && len(entries) > 0 {
-		b.PodAllocationResults = make(map[string]AllocationResultApplyConfiguration, len(entries))
-	}
-	for k, v := range entries {
-		b.PodAllocationResults[k] = v
 	}
 	return b
 }

@@ -8,7 +8,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 // GenerateFakeCapacity returns a fake NodeAccelerator CR for emulated mode.
@@ -19,8 +18,7 @@ func GenerateFakeCapacity(nodeName string) *instav1.NodeAccelerator {
 			Namespace: "instaslice-system",
 		},
 		Spec: instav1.NodeAcceleratorSpec{
-			PodAllocationRequests: &map[types.UID]instav1.AllocationRequest{},
-			AcceleratorType:       "nvidia-mig",
+			AcceleratorType: "nvidia-mig",
 		},
 		Status: instav1.NodeAcceleratorStatus{
 			Conditions: []metav1.Condition{
@@ -32,7 +30,6 @@ func GenerateFakeCapacity(nodeName string) *instav1.NodeAccelerator {
 					Message:            "All discovered GPUs are accessible and the driver is healthy.",
 				},
 			},
-			PodAllocationResults: map[string]instav1.AllocationResult{},
 			NodeResources: func() runtime.RawExtension {
 				res := instav1.DiscoveredNodeResources{
 					NodeGPUs: []instav1.DiscoveredGPU{

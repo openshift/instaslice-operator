@@ -34,12 +34,6 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &instasliceoperatorv1alpha1.AllocationClaimApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("AllocationClaimSpec"):
 		return &instasliceoperatorv1alpha1.AllocationClaimSpecApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("AllocationRequest"):
-		return &instasliceoperatorv1alpha1.AllocationRequestApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("AllocationResult"):
-		return &instasliceoperatorv1alpha1.AllocationResultApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("AllocationStatus"):
-		return &instasliceoperatorv1alpha1.AllocationStatusApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("InstasliceOperator"):
 		return &instasliceoperatorv1alpha1.InstasliceOperatorApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("InstasliceOperatorSpec"):

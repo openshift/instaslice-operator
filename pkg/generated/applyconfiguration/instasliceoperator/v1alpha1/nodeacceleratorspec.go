@@ -16,29 +16,16 @@ limitations under the License.
 
 package v1alpha1
 
-import (
-	types "k8s.io/apimachinery/pkg/types"
-)
-
 // NodeAcceleratorSpecApplyConfiguration represents a declarative configuration of the NodeAcceleratorSpec type for use
 // with apply.
 type NodeAcceleratorSpecApplyConfiguration struct {
-	PodAllocationRequests *map[types.UID]AllocationRequestApplyConfiguration `json:"podAllocationRequests,omitempty"`
-	AcceleratorType       *string                                            `json:"acceleratorType,omitempty"`
+	AcceleratorType *string `json:"acceleratorType,omitempty"`
 }
 
 // NodeAcceleratorSpecApplyConfiguration constructs a declarative configuration of the NodeAcceleratorSpec type for use with
 // apply.
 func NodeAcceleratorSpec() *NodeAcceleratorSpecApplyConfiguration {
 	return &NodeAcceleratorSpecApplyConfiguration{}
-}
-
-// WithPodAllocationRequests sets the PodAllocationRequests field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the PodAllocationRequests field is set to the value of the last call.
-func (b *NodeAcceleratorSpecApplyConfiguration) WithPodAllocationRequests(value map[types.UID]AllocationRequestApplyConfiguration) *NodeAcceleratorSpecApplyConfiguration {
-	b.PodAllocationRequests = &value
-	return b
 }
 
 // WithAcceleratorType sets the AcceleratorType field in the declarative configuration to the given value

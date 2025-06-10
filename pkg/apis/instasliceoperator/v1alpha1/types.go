@@ -3,14 +3,9 @@ package v1alpha1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 type NodeAcceleratorSpec struct {
-	// podAllocationRequests specifies the allocation requests per pod
-	// +optional
-	PodAllocationRequests *map[types.UID]AllocationRequest `json:"podAllocationRequests"`
-
 	// AcceleratorType describes the accelerator class or vendor.
 	// Examples: "nvidia-mig", "amd-mi300", "intel-xe".
 	// +optional
@@ -42,11 +37,6 @@ type NodeAcceleratorStatus struct {
 	// +patchStrategy=merge
 	// +patchMergeKey=type
 	Conditions []metav1.Condition `json:"conditions"`
-
-	// PodAllocationResults specify the allocation results per pod
-	// kubebuilder:validation:Optional
-	// +optional
-	PodAllocationResults map[string]AllocationResult `json:"podAllocationResults"`
 
 	// nodeResources specifies the discovered resources of the node.
 	// This is a runtime.RawExtension to allow different accelerator
