@@ -10,12 +10,12 @@ import (
 
 	_ "sigs.k8s.io/scheduler-plugins/apis/config/scheme"
 
-	"github.com/openshift/instaslice-operator/pkg/scheduler/plugins/gpu"
+	mig "github.com/openshift/instaslice-operator/pkg/scheduler/plugins/mig"
 )
 
 func main() {
 	command := app.NewSchedulerCommand(
-		app.WithPlugin(gpu.Name, gpu.New),
+		app.WithPlugin(mig.Name, mig.New),
 	)
 	code := cli.Run(command)
 	os.Exit(code)

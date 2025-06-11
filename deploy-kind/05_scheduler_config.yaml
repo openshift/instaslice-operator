@@ -17,8 +17,8 @@ data:
       plugins:
         multiPoint:
           enabled:
-          - name: InstasliceGPU
+          - name: MigAccelerator
       pluginConfig:
-      - name: InstasliceGPU
+      - name: MigAccelerator
         args:
           namespace: instaslice-system

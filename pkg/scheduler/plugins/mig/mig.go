@@ -1,4 +1,4 @@
-package gpu
+package mig
 
 import (
 	"context"
@@ -26,7 +26,7 @@ import (
 	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
 )
 
-const Name = "InstasliceGPU"
+const Name = "MigAccelerator"
 
 // Plugin implements a scheduler PreBind extension for GPU allocation.
 type Plugin struct {
