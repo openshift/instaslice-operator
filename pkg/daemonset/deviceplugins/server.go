@@ -41,7 +41,7 @@ type Server struct {
 	allocMutex       sync.Mutex
 }
 
-const allocationAnnotationKey = "instaslice.com/allocation"
+const allocationAnnotationKey = "mig.das.com/allocation"
 
 func NewServer(mgr *Manager, socketPath string, kubeConfig *rest.Config, emulatedMode instav1.EmulatedMode) (*Server, error) {
 	cfg := rest.CopyConfig(kubeConfig)
@@ -205,6 +205,7 @@ func (s *Server) getAllocationsByNodeGPU(ctx context.Context, nodeName, profileN
 	}
 
 	migProfile := profileFromResourceName(profileName)
+	migProfile = unsanitizeProfileName(migProfile)
 	key := fmt.Sprintf("%s/%s", nodeName, migProfile)
 	var result []*instav1.AllocationClaim
 

@@ -25,6 +25,19 @@ var (
 	allocationMutex   sync.Mutex
 )
 
+// sanitizeProfileName replaces characters not allowed in Kubernetes resource
+// names with a safe representation. Currently this only replaces '+' with
+// "-plus-".
+func sanitizeProfileName(profile string) string {
+	return strings.ReplaceAll(profile, "+", "-plus-")
+}
+
+// unsanitizeProfileName reverses sanitizeProfileName, converting "-plus-" back
+// to '+'.
+func unsanitizeProfileName(profile string) string {
+	return strings.ReplaceAll(profile, "-plus-", "+")
+}
+
 // StartDevicePlugins starts device managers, gRPC servers, and registrars for each resource.
 func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 
@@ -136,7 +149,8 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 	// NodeAccelerator resources
 	var resourceNames []string
 	for profile := range discovered.MigPlacement {
-		resourceNames = append(resourceNames, fmt.Sprintf("instaslice.com/mig-%s", profile))
+		sanitizedProfile := sanitizeProfileName(profile)
+		resourceNames = append(resourceNames, fmt.Sprintf("instaslice.com/mig-%s", sanitizedProfile))
 	}
 	// ensure deterministic ordering for stable socket names
 	sort.Strings(resourceNames)
@@ -146,6 +160,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 		mgr := NewManager(res, discovered)
 
 		sanitized := strings.ReplaceAll(res, "/", "_")
+		sanitized = sanitizeProfileName(sanitized)
 		endpoint := sanitized + ".sock"
 		socketPath := filepath.Join(socketDir, endpoint)
 

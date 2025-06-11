@@ -176,20 +176,20 @@ cleanup-kind:
 .PHONY: build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
 
 build-push-scheduler:
-	docker build -f Dockerfile.scheduler.ocp -t localhost:5000/instaslice-scheduler:dev .
-	docker push localhost:5000/instaslice-scheduler:dev
+	# docker build -f Dockerfile.scheduler.ocp -t localhost:5000/instaslice-scheduler:dev .
+	# docker push localhost:5000/instaslice-scheduler:dev
 
 build-push-daemonset:
 	docker build -f Dockerfile.daemonset.ocp -t localhost:5000/instaslice-daemonset:dev .
 	docker push localhost:5000/instaslice-daemonset:dev
 
 build-push-operator:
-	docker build -f Dockerfile.ocp -t localhost:5000/instaslice-operator:dev .
-	docker push localhost:5000/instaslice-operator:dev
+	# docker build -f Dockerfile.ocp -t localhost:5000/instaslice-operator:dev .
+	# docker push localhost:5000/instaslice-operator:dev
 
 build-push-webhook:
-	docker build -f Dockerfile.webhook.ocp -t localhost:5000/instaslice-webhook:dev .
-	docker push localhost:5000/instaslice-webhook:dev
+	# docker build -f Dockerfile.webhook.ocp -t localhost:5000/instaslice-webhook:dev .
+	# docker push localhost:5000/instaslice-webhook:dev
 
 .PHONY: test-k8s
 test-k8s:

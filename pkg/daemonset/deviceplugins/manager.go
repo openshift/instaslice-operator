@@ -56,6 +56,7 @@ func (m *Manager) Start(ctx context.Context) {
 	klog.InfoS("Starting device manager", "resource", m.ResourceName)
 	parts := strings.SplitN(m.ResourceName, "/", 2)
 	profile := strings.TrimPrefix(parts[len(parts)-1], "mig-")
+	profile = unsanitizeProfileName(profile)
 	num := countDevices(m.resources, profile)
 	devs := make([]*pluginapi.Device, 0, num)
 	for i := 0; i < num; i++ {
