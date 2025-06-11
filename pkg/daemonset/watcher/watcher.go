@@ -21,17 +21,22 @@ import (
 	cdispec "tags.cncf.io/container-device-interface/specs-go"
 )
 
-const allocationAnnotationKey = "instaslice.com/allocation"
+const allocationAnnotationKey = "mig.das.com/allocation"
 
 // CDICache stores CDI specs loaded from disk. It is safe for concurrent use.
 type CDICache struct {
+	cdi   *cdiapi.Cache
 	mu    sync.RWMutex
 	specs map[string]*cdispec.Spec
 }
 
-// NewCDICache creates a new empty CDICache.
-func NewCDICache() *CDICache {
-	return &CDICache{specs: make(map[string]*cdispec.Spec)}
+// NewCDICache creates a new empty CDICache. If cache is nil the default CDI
+// cache is used.
+func NewCDICache(cache *cdiapi.Cache) *CDICache {
+	if cache == nil {
+		cache = cdiapi.GetDefaultCache()
+	}
+	return &CDICache{cdi: cache, specs: make(map[string]*cdispec.Spec)}
 }
 
 // Get returns the spec for the given path if present.

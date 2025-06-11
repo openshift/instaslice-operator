@@ -40,7 +40,7 @@ func waitFor(t *testing.T, cond func() bool) {
 
 func TestCDIWatcherLifecycle(t *testing.T) {
 	dir := t.TempDir()
-	cache := NewCDICache()
+	cache := NewCDICache(nil)
 	alloc := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Name: "alloc1", Namespace: "default"}}
 	client := fakeclient.NewSimpleClientset(alloc)
 	ctx, cancel := context.WithCancel(context.Background())

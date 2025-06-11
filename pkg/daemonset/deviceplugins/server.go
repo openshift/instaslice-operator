@@ -57,11 +57,7 @@ func NewServer(mgr *Manager, socketPath string, kubeConfig *rest.Config, emulate
 
 func (s *Server) Start(ctx context.Context) error {
 	klog.InfoS("Starting device plugin server", "socket", s.SocketPath)
-	// configure CDI cache to write specs to /etc/cdi only (persistent across reboots)
-	if err := cdi.Configure(cdi.WithSpecDirs(cdi.DefaultStaticDir)); err != nil {
-		klog.ErrorS(err, "failed to configure CDI spec directories")
-		return fmt.Errorf("failed to configure CDI spec directories: %w", err)
-	}
+	// CDI cache is configured during daemonset initialization
 
 	// remove existing socket file, if any
 	if err := os.Remove(s.SocketPath); err != nil {

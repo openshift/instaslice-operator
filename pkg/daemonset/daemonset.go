@@ -19,6 +19,12 @@ import (
 
 func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) error {
 	klog.InfoS("RunDaemonset started")
+	// Configure the CDI cache once so both the device plugin and watcher
+	// operate on the same instance.
+	if err := cdi.Configure(cdi.WithSpecDirs(cdi.DefaultStaticDir)); err != nil {
+		klog.ErrorS(err, "Failed to configure CDI cache")
+		return err
+	}
 	// Patch node with max MIG placements capacity
 	// Patch node with max MIG placements capacity
 	// if err := addMigCapacityToNode(ctx, cc.KubeConfig); err != nil {
@@ -42,8 +48,8 @@ func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) erro
 		return fmt.Errorf("failed to create instaslice operator client: %w", err)
 	}
 
-	// Setup CDI spec watcher
-	cdiCache := watcher.NewCDICache()
+	// Setup CDI spec watcher using the same CDI cache as the device plugin
+	cdiCache := watcher.NewCDICache(cdi.GetDefaultCache())
 	if err := watcher.SetupCDIDeletionWatcher(ctx, cdi.DefaultStaticDir, cdiCache, opClientset); err != nil {
 		klog.ErrorS(err, "Failed to setup CDI watcher")
 		return err
