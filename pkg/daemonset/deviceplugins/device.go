@@ -63,7 +63,8 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 			instaClient: csOp.OpenShiftOperatorV1alpha1().NodeAccelerators(instasliceNamespace),
 		}
 	}
-	if err := discoverer.Discover(); err != nil {
+	instObj, err := discoverer.Discover()
+	if err != nil {
 		klog.ErrorS(err, "Failed to discover MIG-enabled GPUs")
 		return fmt.Errorf("failed to discover MIG GPUs: %w", err)
 	}
@@ -122,12 +123,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 	allocInformerFactory.Start(ctx.Done())
 	allocationIndexer = allocInformer.GetIndexer()
 
-	// Fetch discovered node resources from the NodeAccelerator CR
-	instObj, err := csOp.OpenShiftOperatorV1alpha1().NodeAccelerators(instasliceNamespace).Get(ctx, nodeName, metav1.GetOptions{})
-	if err != nil {
-		klog.ErrorS(err, "Failed to get NodeAccelerator", "node", nodeName)
-		return err
-	}
+	// Use the NodeAccelerator returned by the discovery step
 	var discovered instav1.DiscoveredNodeResources
 	if len(instObj.Status.NodeResources.Raw) > 0 {
 		if err := json.Unmarshal(instObj.Status.NodeResources.Raw, &discovered); err != nil {
