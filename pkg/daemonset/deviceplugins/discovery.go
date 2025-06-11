@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	instasliceNamespace = "instaslice-system"
+	instasliceNamespace = "das-operator"
 )
 
 // MigGpuDiscoverer is an interface for MIG GPU discovery implementations.

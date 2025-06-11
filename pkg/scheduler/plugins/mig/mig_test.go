@@ -148,7 +148,7 @@ func TestPreBindInstasliceNotFound(t *testing.T) {
 		},
 	})
 	lister := instalisters.NewNodeAcceleratorLister(instIndexer)
-	p := &Plugin{instaClient: client, namespace: "instaslice-system", instasliceLister: lister, allocationIndexer: allocIndexer}
+	p := &Plugin{instaClient: client, namespace: "das-operator", instasliceLister: lister, allocationIndexer: allocIndexer}
 	pod := newTestPod("p3", "1g.5gb")
 
 	st := p.PreBind(ctx, framework.NewCycleState(), pod, "node1")

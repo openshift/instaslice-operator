@@ -1,17 +1,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: instaslice-operator
-  namespace: instaslice-system
+  name: das-operator
+  namespace: das-operator
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: instaslice-operator
+      app: das-operator
   template:
     metadata:
       labels:
-        app: instaslice-operator
+        app: das-operator
     spec:
       affinity:
         podAffinity:
@@ -47,12 +47,12 @@ spec:
           imagePullPolicy: Always
           env:
             - name: OPERATOR_NAME
-              value: "instaslice-operator"
+              value: "das-operator"
             - name: RELATED_IMAGE_DAEMONSET_IMAGE
               value: quay.io/ryan.phillips/instaslice-daemonset
             - name: RELATED_IMAGE_WEBHOOK_IMAGE
               value: quay.io/ryan.phillips/instaslice-webhook
-      serviceAccountName: instaslice-operator
+      serviceAccountName: das-operator
       volumes:
         - name: tmp
           emptyDir: {}

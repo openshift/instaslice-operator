@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: test-instaslice
+  name: test-das
 spec:
-  schedulerName: instaslice-scheduler
+  schedulerName: das-scheduler
   containers:
   - name: busy
     image: quay.io/prometheus/busybox 

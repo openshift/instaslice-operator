@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: instaslice-daemonset
-  namespace: instaslice-system
+  name: das-daemonset
+  namespace: das-operator
   labels:
-    k8s-app: instaslice-daemonset
+    k8s-app: das-daemonset
 spec:
   selector:
     matchLabels:
-      name: instaslice-daemonset
+      name: das-daemonset
   template:
     metadata:
       labels:
-        name: instaslice-daemonset
+        name: das-daemonset
     spec:
       nodeSelector:
         nvidia.com/mig.capable: "true"
@@ -20,7 +20,7 @@ spec:
         runAsNonRoot: false
         seccompProfile:
           type: RuntimeDefault
-      serviceAccountName: instaslice-operator
+      serviceAccountName: das-operator
       volumes:
       - name: device-plugins
         hostPath:

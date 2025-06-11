@@ -4,31 +4,31 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: $(CERTIFICATE_NAMESPACE)/$(CERTIFICATE_NAME)
   labels:
-    app.kubernetes.io/managed-by: instaslice-operator
-    app.kubernetes.io/name: instaslice-operator-webhook
-    app.kubernetes.io/part-of: instaslice-operator
+    app.kubernetes.io/managed-by: das-operator
+    app.kubernetes.io/name: das-operator-webhook
+    app.kubernetes.io/part-of: das-operator
     app.kubernetes.io/version: 0.0.1
-  name: instaslice-operator-webhook
-  namespace: instaslice-system
+  name: das-operator-webhook
+  namespace: das-operator
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app.kubernetes.io/name: instaslice-operator-webhook
-      app.kubernetes.io/part-of: instaslice-operator
+      app.kubernetes.io/name: das-operator-webhook
+      app.kubernetes.io/part-of: das-operator
   strategy:
     rollingUpdate:
       maxUnavailable: 1
   template:
     metadata:
       annotations:
-        kubectl.kubernetes.io/default-container: instaslice-operator-webhook
+        kubectl.kubernetes.io/default-container: das-operator-webhook
         openshift.io/required-scc: restricted-v2
         target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
       labels:
-        app.kubernetes.io/managed-by: instaslice-operator
-        app.kubernetes.io/name: instaslice-operator-webhook
-        app.kubernetes.io/part-of: instaslice-operator
+        app.kubernetes.io/managed-by: das-operator
+        app.kubernetes.io/name: das-operator-webhook
+        app.kubernetes.io/part-of: das-operator
         app.kubernetes.io/version: 0.0.1
     spec:
       affinity:
@@ -51,7 +51,7 @@ spec:
           - --tlscert=/tmp/k8s-webhook-server/serving-certs/tls.crt
           - --cacert=/tmp/k8s-webhook-server/serving-certs/ca.crt
         image: quay.io/ryan.phillips/instaslice-webhook
-        name: instaslice-operator-webhook
+        name: das-operator-webhook
         livenessProbe:
           httpGet:
             scheme: HTTPS
@@ -81,7 +81,7 @@ spec:
           readOnly: true
       priorityClassName: system-cluster-critical
       securityContext: {}
-      serviceAccountName: instaslice-operator
+      serviceAccountName: das-operator
       volumes:
       - name: cert
         secret:

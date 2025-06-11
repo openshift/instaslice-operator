@@ -9,4 +9,4 @@ webhooks:
     matchExpressions:
       - key: kubernetes.io/metadata.name
         operator: NotIn
-        values: ["instaslice-system", "cert-manager", "kube-system"]
+        values: ["das-operator", "cert-manager", "kube-system"]

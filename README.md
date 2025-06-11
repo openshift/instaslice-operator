@@ -51,10 +51,10 @@ Before proceeding with the operator installation, please ensure that all prerequ
 After the installation of prerequisites, please follow these steps to install the operator.
 
 ```bash
-$ oc new-project instaslice-system
+$ oc new-project das-operator
 ```
 ```bash
-$ operator-sdk run bundle quay.io/ibm/instaslice-bundle:v0.0.2 -n instaslice-system
+$ operator-sdk run bundle quay.io/ibm/instaslice-bundle:v0.0.2 -n das-operator
 ```
 
 ### Node Management Label
@@ -99,7 +99,7 @@ apiVersion: inference.redhat.com/v1alpha1
 kind: InstasliceOperator
 metadata:
   name: cluster
-  namespace: instaslice-system
+  namespace: das-operator
 spec:
   managementState: Managed
   logLevel: Normal
@@ -112,7 +112,7 @@ spec:
 ### Running a sample workload
 Please note that running a sample workload requires availability of compatible GPUs (nvidia A100, H100, H200) on the worker nodes.
 
-Download and run a [sample pod](https://raw.githubusercontent.com/openshift/instaslice-operator/refs/heads/main/samples/test-pod.yaml) which will trigger a dynamic slice creation. To observe the slice provisioning status, fetch the instaslice object that holds the allocation for the given pod. Please note that the instaslice object shares the name with the node it represents. i.e. if the worker node where the pod is running is called `worker-0-1`, then the corresponding instaslice object can be fetched using `oc get instaslice worker-0-1 -n instaslice-system -o yaml`
+Download and run a [sample pod](https://raw.githubusercontent.com/openshift/instaslice-operator/refs/heads/main/samples/test-pod.yaml) which will trigger a dynamic slice creation. To observe the slice provisioning status, fetch the instaslice object that holds the allocation for the given pod. Please note that the instaslice object shares the name with the node it represents. i.e. if the worker node where the pod is running is called `worker-0-1`, then the corresponding instaslice object can be fetched using `oc get instaslice worker-0-1 -n das-operator -o yaml`
 
 ## Getting Started with Kind
 
@@ -296,7 +296,7 @@ IMG=quay.io/example/instaslice2-controller:1.0 IMG_DMST=quay.io/example/instasli
 3. Verify that the InstaSlice pods are successfully running:
 
 ```console
-kubectl get pod -n instaslice-system
+kubectl get pod -n das-operator
 ```
 
 ```

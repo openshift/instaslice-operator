@@ -1,14 +1,14 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: instaslice-scheduler-view
+  name: das-scheduler-view
 subjects:
 - kind: ServiceAccount
   name: default
-  namespace: instaslice-system
+  namespace: das-operator
 - kind: ServiceAccount
-  name: instaslice-scheduler
-  namespace: instaslice-system
+  name: das-scheduler
+  namespace: das-operator
 roleRef:
   kind: ClusterRole
   name: view
@@ -17,14 +17,14 @@ roleRef:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: instaslice-scheduler-authentication-reader
+  name: das-scheduler-authentication-reader
 subjects:
 - kind: ServiceAccount
   name: default
-  namespace: instaslice-system
+  namespace: das-operator
 - kind: ServiceAccount
-  name: instaslice-scheduler
-  namespace: instaslice-system
+  name: das-scheduler
+  namespace: das-operator
 roleRef:
   kind: ClusterRole
   name: system:extension-apiserver-authentication-reader
@@ -43,14 +43,14 @@ rules:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: instaslice-scheduler
-  namespace: instaslice-system
+  name: das-scheduler
+  namespace: das-operator
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: instaslice-scheduler
-  namespace: instaslice-system
+  name: das-scheduler
+  namespace: das-operator
 rules:
 - apiGroups: [""]
   resources: ["pods"]
@@ -59,21 +59,21 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: instaslice-scheduler
-  namespace: instaslice-system
+  name: das-scheduler
+  namespace: das-operator
 subjects:
 - kind: ServiceAccount
-  name: instaslice-scheduler
-  namespace: instaslice-system
+  name: das-scheduler
+  namespace: das-operator
 roleRef:
   kind: Role
-  name: instaslice-scheduler
+  name: das-scheduler
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: instaslice-scheduler-node-reader
+  name: das-scheduler-node-reader
 rules:
 - apiGroups: [""]
   resources: ["nodes"]
@@ -82,20 +82,20 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: instaslice-scheduler-node-reader-binding
+  name: das-scheduler-node-reader-binding
 subjects:
 - kind: ServiceAccount
-  name: instaslice-scheduler
-  namespace: instaslice-system
+  name: das-scheduler
+  namespace: das-operator
 roleRef:
   kind: ClusterRole
-  name: instaslice-scheduler-node-reader
+  name: das-scheduler-node-reader
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: instaslice-scheduler
+  name: das-scheduler
 rules:
   - apiGroups: [""]
     resources: ["pods/binding", "pods/status"]
@@ -138,12 +138,12 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: instaslice-scheduler
+  name: das-scheduler
 subjects:
   - kind: ServiceAccount
-    name: instaslice-scheduler
-    namespace: instaslice-system
+    name: das-scheduler
+    namespace: das-operator
 roleRef:
   kind: ClusterRole
-  name: instaslice-scheduler
+  name: das-scheduler
   apiGroup: rbac.authorization.k8s.io

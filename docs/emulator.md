@@ -38,7 +38,7 @@ make deploy-emulated
 - Wait for controllers to be ready
 
 ```console
-kubectl get pods -n instaslice-system --watch
+kubectl get pods -n das-operator --watch
 ```
 
 ```

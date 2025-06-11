@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: instaslice-operator-operand
+  name: das-operator-operand
 rules:
 - apiGroups:
   - ""
@@ -94,21 +94,21 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: instaslice-operator-operand
+  name: das-operator-operand
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: instaslice-operator-operand
+  name: das-operator-operand
 subjects:
 - kind: ServiceAccount
-  name: instaslice-operator
-  namespace: instaslice-system
+  name: das-operator
+  namespace: das-operator
 ---
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: instaslice-operator-operand
-  namespace: instaslice-system
+  name: das-operator-operand
+  namespace: das-operator
 rules:
 - apiGroups:
     - ""
@@ -182,13 +182,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: instaslice-operator-operand
-  namespace: instaslice-system
+  name: das-operator-operand
+  namespace: das-operator
 subjects:
 - kind: ServiceAccount
-  name: instaslice-operator-operand
-  namespace: instaslice-system
+  name: das-operator-operand
+  namespace: das-operator
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: instaslice-operator-operand
+  name: das-operator-operand

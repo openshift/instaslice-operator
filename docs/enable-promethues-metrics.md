@@ -44,7 +44,7 @@ Instaslice exposes the following Prometheus metrics:
    ```
 4. **Forward the Instaslice Metrics Service port:**
    ```sh
-   kubectl port-forward svc/instaslice-metrics 8443:8443 -n instaslice-system
+   kubectl port-forward svc/instaslice-metrics 8443:8443 -n das-operator
    ```
 5. **Verify the exposed metrics using curl:**
    ```sh

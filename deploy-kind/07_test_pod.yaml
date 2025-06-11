@@ -3,7 +3,7 @@ kind: Pod
 metadata:
   name: test-instaslice
 spec:
-  schedulerName: instaslice-scheduler
+  schedulerName: das-scheduler
   containers:
   - name: busy
     image: busybox

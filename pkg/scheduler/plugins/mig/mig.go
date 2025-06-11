@@ -66,7 +66,7 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 	if ns == "" {
 		ns = os.Getenv("INSTASLICE_NAMESPACE")
 		if ns == "" {
-			ns = "instaslice-system"
+			ns = "das-operator"
 		}
 	}
 
@@ -166,7 +166,7 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 	if selectedGPU == "" {
 		return framework.NewStatus(framework.Unschedulable, "no GPU available")
 	}
-	created, err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims("instaslice-system").Create(ctx, alloc, metav1.CreateOptions{})
+	created, err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims("das-operator").Create(ctx, alloc, metav1.CreateOptions{})
 	if err != nil {
 		return framework.AsStatus(err)
 	}
@@ -199,7 +199,7 @@ func SetAllocationDetails(profileName string, newStart, size int32, podUUID type
 	return &instav1alpha1.AllocationClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      string(podUUID),
-			Namespace: "instaslice-system",
+			Namespace: "das-operator",
 		},
 		Spec: instav1alpha1.AllocationClaimSpec{
 			Profile: profileName,

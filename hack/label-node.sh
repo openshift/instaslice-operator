@@ -3,7 +3,7 @@
 set -eou pipefail
 
 KUBECTL=${KUBECTL:-oc}
-NAMESPACE=${NAMESPACE:-"instaslice-system"}
+NAMESPACE=${NAMESPACE:-"das-operator"}
 
 _kubectl() {
         ${KUBECTL} $@

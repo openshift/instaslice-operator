@@ -6,7 +6,7 @@ KIND=${KIND:-kind}
 KUBECTL=${KUBECTL:-kubectl}
 KIND_NAME=${KIND_NAME:-"kind-e2e"}
 KIND_CONTEXT=kind-${KIND_NAME}
-NAMESPACE=${NAMESPACE:-"instaslice-system"}
+NAMESPACE=${NAMESPACE:-"das-operator"}
 KIND_NODE_NAME=${KIND_NODE_NAME:-"kind-e2e-control-plane"}
 WEBHOOK_TIMEOUT=${WEBHOOK_TIMEOUT:-2m}
 

@@ -25,7 +25,7 @@ import (
 	"github.com/openshift/instaslice-operator/pkg/operator/operatorclient"
 )
 
-var operatorNamespace = "instaslice-system"
+var operatorNamespace = "das-operator"
 
 const namespaceLabel = "inference.redhat.com/enabled=true"
 

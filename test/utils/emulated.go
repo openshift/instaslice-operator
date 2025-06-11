@@ -15,7 +15,7 @@ func GenerateFakeCapacity(nodeName string) *instav1.NodeAccelerator {
 	return &instav1.NodeAccelerator{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nodeName,
-			Namespace: "instaslice-system",
+			Namespace: "das-operator",
 		},
 		Spec: instav1.NodeAcceleratorSpec{
 			AcceleratorType: "nvidia-mig",

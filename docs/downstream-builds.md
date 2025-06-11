@@ -33,8 +33,8 @@ $ make bundle-push
 
 1. Deploy test bundle
 ```console
-$ oc new-project instaslice-system
-$ operator-sdk run bundle $BUNDLE_IMAGE -n instaslice-system (FOR OCP 4.18: --security-context-config restricted)
+$ oc new-project das-operator
+$ operator-sdk run bundle $BUNDLE_IMAGE -n das-operator (FOR OCP 4.18: --security-context-config restricted)
 ```
 1. Enable the emulator
 Set EMULATOR_MODE=true in CSV

@@ -1,8 +1,8 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: instaslice-scheduler-config
-  namespace: instaslice-system
+  name: das-scheduler-config
+  namespace: das-operator
 data:
   config.yaml: |
     apiVersion: kubescheduler.config.k8s.io/v1
@@ -13,7 +13,7 @@ data:
       acceptContentTypes: application/json
       contentType: application/json
     profiles:
-    - schedulerName: instaslice-scheduler
+    - schedulerName: das-scheduler
       plugins:
         multiPoint:
           enabled:
@@ -21,4 +21,4 @@ data:
       pluginConfig:
       - name: MigAccelerator
         args:
-          namespace: instaslice-system
+          namespace: das-operator
