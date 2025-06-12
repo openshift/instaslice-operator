@@ -10,4 +10,4 @@ spec:
     command: ["sh","-c","sleep 3600"]
     resources:
       limits:
-        instaslice.com/mig-1g.5gb: "1"
+        mig.das.com/mig-1g.5gb: "1"

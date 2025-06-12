@@ -158,7 +158,7 @@ func TestAllocateEmulated(t *testing.T) {
 				t.Fatalf("failed to configure cdi: %v", err)
 			}
 
-			mgr := NewManager("instaslice.com/mig-1g.5gb", instav1.DiscoveredNodeResources{})
+			mgr := NewManager("mig.das.com/mig-1g.5gb", instav1.DiscoveredNodeResources{})
 			srv := &Server{
 				Manager:          mgr,
 				SocketPath:       filepath.Join(dir, "dp.sock"),
@@ -183,7 +183,7 @@ func TestAllocateEmulated(t *testing.T) {
 				if len(cr.CDIDevices) != 1 {
 					t.Fatalf("response %d expected 1 CDI device, got %d", i, len(cr.CDIDevices))
 				}
-				want := "instaslice.com/mig-1g.5gb=dev0"
+				want := "mig.das.com/mig-1g.5gb=dev0"
 				if cr.CDIDevices[0].Name != want {
 					t.Fatalf("response %d unexpected CDI device %q", i, cr.CDIDevices[0].Name)
 				}
@@ -208,7 +208,7 @@ func TestAllocateEmulated(t *testing.T) {
 
 func TestGetAllocationsByNodeGPU(t *testing.T) {
 	nodeName := "node1"
-	resource := "instaslice.com/mig-1g.5gb"
+	resource := "mig.das.com/mig-1g.5gb"
 
 	allocationIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
 		"node-MigProfile": func(obj interface{}) ([]string, error) {

@@ -96,13 +96,13 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 		for name, qty := range c.Resources.Limits {
 			key := string(name)
 			switch {
-			case strings.HasPrefix(key, "nvidia.com/mig-"):
-				newKey := corev1.ResourceName(strings.Replace(key, "nvidia.com/", "instaslice.com/", 1))
+			case strings.HasPrefix(key, "nvidia.com/"):
+				newKey := corev1.ResourceName(strings.Replace(key, "nvidia.com/", "mig.das.com/", 1))
 				newLimits[newKey] = qty
 				needsScheduler = true
 			default:
 				newLimits[name] = qty
-				if strings.HasPrefix(key, "instaslice.com/mig-") {
+				if strings.HasPrefix(key, "mig.das.com/mig-") {
 					needsScheduler = true
 				}
 			}

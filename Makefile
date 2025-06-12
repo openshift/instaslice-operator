@@ -152,7 +152,7 @@ test-kind:
        -f deploy-kind/00_nodeaccelerators.crd.yaml
 
 	@echo "=== Waiting for CRDs to be established ==="
-	kubectl wait --for=condition=established --timeout=60s crd instasliceoperators.inference.redhat.com
+       kubectl wait --for=condition=established --timeout=60s crd dasoperators.inference.redhat.com
 
 	@echo "=== Applying Kind core manifests ==="
 	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
@@ -213,7 +213,7 @@ test-k8s:
 
 	@echo "=== Waiting for CRDs to be established ==="
 	kubectl wait --for=condition=established --timeout=60s \
-	             crd instasliceoperators.inference.redhat.com
+                     crd dasoperators.inference.redhat.com
 
 	@echo "=== Applying K8s core manifests ==="
 	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="

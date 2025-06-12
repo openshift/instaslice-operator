@@ -13,7 +13,7 @@ import (
 // Manager tracks and monitors devices for a specific extended-resource.
 // It drives discovery and health monitoring and pushes device updates.
 type Manager struct {
-	// ResourceName is the extended-resource string (e.g. "instaslice.com/1g.5gb").
+	// ResourceName is the extended-resource string (e.g. "mig.das.com/mig-1g.5gb").
 	ResourceName string
 	// resources contains the discovered node information used to determine
 	// the number of devices to advertise for the resource.
