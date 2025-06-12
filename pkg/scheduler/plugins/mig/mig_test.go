@@ -92,6 +92,36 @@ func newEphemeralContainerPod(uid, profile string) *corev1.Pod {
 	}
 }
 
+func newTwoContainerPod(uid, profile1, profile2 string) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:       types.UID(uid),
+			Name:      "pod-" + uid,
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name: "c1",
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceName("nvidia.com/mig-" + profile1): resource.MustParse("1"),
+						},
+					},
+				},
+				{
+					Name: "c2",
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceName("nvidia.com/mig-" + profile2): resource.MustParse("1"),
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func newNoProfilePod(uid string) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -266,6 +296,45 @@ func TestPreBind(t *testing.T) {
 			},
 			expect: framework.Error,
 			allocs: 1,
+		},
+		{
+			name: "init container",
+			// Profile request comes from an init container. PreBind should
+			// create the claim successfully.
+			setup: func() (*Plugin, *corev1.Pod, string) {
+				inst := utils.GenerateFakeCapacity("node1")
+				p := newPlugin(inst)
+				pod := newInitContainerPod("ic", "1g.5gb")
+				return p, pod, "node1"
+			},
+			expect: framework.Success,
+			allocs: 1,
+		},
+		{
+			name: "ephemeral container",
+			// Profile request is specified via an ephemeral container.
+			// PreBind should create the claim successfully.
+			setup: func() (*Plugin, *corev1.Pod, string) {
+				inst := utils.GenerateFakeCapacity("node1")
+				p := newPlugin(inst)
+				pod := newEphemeralContainerPod("ec", "1g.5gb")
+				return p, pod, "node1"
+			},
+			expect: framework.Success,
+			allocs: 1,
+		},
+		{
+			name: "multiple containers",
+			// Pod has two containers requesting slices. Both allocations
+			// should be created.
+			setup: func() (*Plugin, *corev1.Pod, string) {
+				inst := utils.GenerateFakeCapacity("node1")
+				p := newPlugin(inst)
+				pod := newTwoContainerPod("mc", "1g.5gb", "1g.5gb")
+				return p, pod, "node1"
+			},
+			expect: framework.Success,
+			allocs: 2,
 		},
 	}
 
