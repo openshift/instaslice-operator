@@ -30,8 +30,8 @@ func (c *FakeOpenShiftOperatorV1alpha1) AllocationClaims(namespace string) v1alp
 	return newFakeAllocationClaims(c, namespace)
 }
 
-func (c *FakeOpenShiftOperatorV1alpha1) InstasliceOperators(namespace string) v1alpha1.InstasliceOperatorInterface {
-	return newFakeInstasliceOperators(c, namespace)
+func (c *FakeOpenShiftOperatorV1alpha1) DASOperators(namespace string) v1alpha1.DASOperatorInterface {
+	return newFakeDASOperators(c, namespace)
 }
 
 func (c *FakeOpenShiftOperatorV1alpha1) NodeAccelerators(namespace string) v1alpha1.NodeAcceleratorInterface {

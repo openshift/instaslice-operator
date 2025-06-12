@@ -33,8 +33,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&NodeAcceleratorList{},
 		&AllocationClaim{},
 		&AllocationClaimList{},
-		&InstasliceOperator{},
-		&InstasliceOperatorList{},
+		&DASOperator{},
+		&DASOperatorList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

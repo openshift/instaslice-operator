@@ -50,11 +50,11 @@ type TargetConfigReconciler struct {
 	eventRecorder              events.Recorder
 	generations                []operatorsv1.GenerationStatus
 	instasliceInformer         operatorclientv1alpha1informers.NodeAcceleratorInformer
-	instasliceoperatorClient   *operatorclient.InstasliceOperatorSetClient
+       instasliceoperatorClient   *operatorclient.DASOperatorSetClient
 	kubeClient                 kubernetes.Interface
 	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces
 	namespace                  string
-	operatorClient             instasliceoperatorv1alphaclientset.InstasliceOperatorInterface
+       operatorClient             instasliceoperatorv1alphaclientset.DASOperatorInterface
 	resourceCache              resourceapply.ResourceCache
 	secretLister               v1.SecretLister
 	targetDaemonsetImage       string
@@ -67,11 +67,11 @@ func NewTargetConfigReconciler(
 	targetDaemonsetImage string,
 	targetWebhookImage string,
 	namespace string,
-	operatorConfigClient instasliceoperatorv1alphaclientset.InstasliceOperatorInterface,
-	operatorClientInformer operatorclientv1alpha1informers.InstasliceOperatorInformer,
-	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces,
-	appsClient appsv1client.DaemonSetsGetter,
-	instasliceoperatorClient *operatorclient.InstasliceOperatorSetClient,
+       operatorConfigClient instasliceoperatorv1alphaclientset.DASOperatorInterface,
+       operatorClientInformer operatorclientv1alpha1informers.DASOperatorInformer,
+       kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces,
+       appsClient appsv1client.DaemonSetsGetter,
+       instasliceoperatorClient *operatorclient.DASOperatorSetClient,
 	dynamicClient dynamic.Interface,
 	discoveryClient discovery.DiscoveryInterface,
 	kubeClient kubernetes.Interface,
@@ -109,8 +109,8 @@ func NewTargetConfigReconciler(
 		kubeInformersForNamespaces.InformersFor(namespace).Core().V1().Services().Informer(),
 	).ResyncEvery(time.Minute*5).
 		WithSync(c.sync).
-		WithSyncDegradedOnError(instasliceoperatorClient).
-		ToController("InstasliceOperatorController", eventRecorder)
+               WithSyncDegradedOnError(instasliceoperatorClient).
+               ToController("DASOperatorController", eventRecorder)
 }
 
 func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncContext) error {
@@ -135,12 +135,12 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	c.emulatedMode = sliceOperator.Spec.EmulatedMode
 	c.nodeSelector = sliceOperator.Spec.NodeSelector
 
-	ownerReference := metav1.OwnerReference{
-		APIVersion: "inference.redhat.com/v1alpha1",
-		Kind:       "InstasliceOperator",
-		Name:       sliceOperator.Name,
-		UID:        sliceOperator.UID,
-	}
+       ownerReference := metav1.OwnerReference{
+               APIVersion: "inference.redhat.com/v1alpha1",
+               Kind:       "DASOperator",
+               Name:       sliceOperator.Name,
+               UID:        sliceOperator.UID,
+       }
 
 	klog.V(2).InfoS("Got operator config", "emulated_mode", c.emulatedMode)
 

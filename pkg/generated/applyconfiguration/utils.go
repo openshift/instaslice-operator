@@ -34,12 +34,12 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &instasliceoperatorv1alpha1.AllocationClaimApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("AllocationClaimSpec"):
 		return &instasliceoperatorv1alpha1.AllocationClaimSpecApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("InstasliceOperator"):
-		return &instasliceoperatorv1alpha1.InstasliceOperatorApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("InstasliceOperatorSpec"):
-		return &instasliceoperatorv1alpha1.InstasliceOperatorSpecApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("InstasliceOperatorStatus"):
-		return &instasliceoperatorv1alpha1.InstasliceOperatorStatusApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("DASOperator"):
+		return &instasliceoperatorv1alpha1.DASOperatorApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("DASOperatorSpec"):
+		return &instasliceoperatorv1alpha1.DASOperatorSpecApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("DASOperatorStatus"):
+		return &instasliceoperatorv1alpha1.DASOperatorStatusApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("NodeAccelerator"):
 		return &instasliceoperatorv1alpha1.NodeAcceleratorApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("NodeAcceleratorSpec"):

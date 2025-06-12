@@ -69,9 +69,9 @@ regen-crd:
 	go build -o _output/tools/bin/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
 	rm -f manifests/instaslice-operator.crd.yaml
 	./_output/tools/bin/controller-gen crd paths=./pkg/apis/instasliceoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
-	mv manifests/inference.redhat.com_instasliceoperators.yaml manifests/instaslice-operator.crd.yaml
+	mv manifests/inference.redhat.com_dasoperators.yaml manifests/instaslice-operator.crd.yaml
 	cp manifests/instaslice-operator.crd.yaml deploy/00_instaslice-operator.crd.yaml
-	cp manifests/inference.redhat.com_nodeaccelerators.yaml deploy/00_nodeaccelerators.crd.yaml
+		cp manifests/inference.redhat.com_nodeaccelerators.yaml deploy/00_nodeaccelerators.crd.yaml
 
 .PHONY: regen-crd-kind
 regen-crd-kind:
@@ -80,7 +80,7 @@ regen-crd-kind:
 	rm -f deploy-kind/00_instaslice-operator.crd.yaml
 	rm -f deploy-kind/00_nodeaccelerators.crd.yaml
 	./_output/tools/bin/controller-gen crd paths=./pkg/apis/instasliceoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./deploy-kind
-	mv deploy-kind/inference.redhat.com_instasliceoperators.yaml deploy-kind/00_instaslice-operator.crd.yaml
+	mv deploy-kind/inference.redhat.com_dasoperators.yaml deploy-kind/00_instaslice-operator.crd.yaml
 	mv deploy-kind/inference.redhat.com_nodeaccelerators.yaml deploy-kind/00_nodeaccelerators.crd.yaml
 
 .PHONY: regen-crd-k8s
@@ -88,10 +88,10 @@ regen-crd-k8s:
 	@echo "Generating CRDs into deploy-k8s directory"
 	go build -o _output/tools/bin/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
 	rm -f deploy-k8s/00_instaslice-operator.crd.yaml
-	       rm -f deploy-k8s/00_nodeaccelerators.crd.yaml
+	rm -f deploy-k8s/00_nodeaccelerators.crd.yaml
 	./_output/tools/bin/controller-gen crd paths=./pkg/apis/instasliceoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./deploy-k8s
-	mv deploy-k8s/inference.redhat.com_instasliceoperators.yaml deploy-k8s/00_instaslice-operator.crd.yaml
-	       mv deploy-k8s/inference.redhat.com_nodeaccelerators.yaml deploy-k8s/00_nodeaccelerators.crd.yaml
+	mv deploy-k8s/inference.redhat.com_dasoperators.yaml deploy-k8s/00_instaslice-operator.crd.yaml
+	mv deploy-k8s/inference.redhat.com_nodeaccelerators.yaml deploy-k8s/00_nodeaccelerators.crd.yaml
 
 build-images:
 	podman build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
@@ -176,20 +176,20 @@ cleanup-kind:
 .PHONY: build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
 
 build-push-scheduler:
-	# docker build -f Dockerfile.scheduler.ocp -t localhost:5000/instaslice-scheduler:dev .
-	# docker push localhost:5000/instaslice-scheduler:dev
+	docker build -f Dockerfile.scheduler.ocp -t localhost:5000/instaslice-scheduler:dev .
+	docker push localhost:5000/instaslice-scheduler:dev
 
 build-push-daemonset:
 	docker build -f Dockerfile.daemonset.ocp -t localhost:5000/instaslice-daemonset:dev .
 	docker push localhost:5000/instaslice-daemonset:dev
 
 build-push-operator:
-	# docker build -f Dockerfile.ocp -t localhost:5000/instaslice-operator:dev .
-	# docker push localhost:5000/instaslice-operator:dev
+	docker build -f Dockerfile.ocp -t localhost:5000/instaslice-operator:dev .
+	docker push localhost:5000/instaslice-operator:dev
 
 build-push-webhook:
-	# docker build -f Dockerfile.webhook.ocp -t localhost:5000/instaslice-webhook:dev .
-	# docker push localhost:5000/instaslice-webhook:dev
+	docker build -f Dockerfile.webhook.ocp -t localhost:5000/instaslice-webhook:dev .
+	docker push localhost:5000/instaslice-webhook:dev
 
 .PHONY: test-k8s
 test-k8s:

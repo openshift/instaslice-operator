@@ -110,8 +110,8 @@ rules:
     resources:
       - "nodeaccelerators"
       - "nodeaccelerators/status"
-      - "instasliceoperators"
-      - "instasliceoperators/status"
+      - "dasoperators"
+      - "dasoperators/status"
       - "allocationclaims"
       - "allocationclaims/status"
       - "allocationclaims/finalizers"

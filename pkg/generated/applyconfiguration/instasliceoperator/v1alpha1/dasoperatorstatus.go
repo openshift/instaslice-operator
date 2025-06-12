@@ -20,22 +20,22 @@ import (
 	v1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
 )
 
-// InstasliceOperatorStatusApplyConfiguration represents a declarative configuration of the InstasliceOperatorStatus type for use
+// DASOperatorStatusApplyConfiguration represents a declarative configuration of the DASOperatorStatus type for use
 // with apply.
-type InstasliceOperatorStatusApplyConfiguration struct {
+type DASOperatorStatusApplyConfiguration struct {
 	v1.OperatorStatusApplyConfiguration `json:",inline"`
 }
 
-// InstasliceOperatorStatusApplyConfiguration constructs a declarative configuration of the InstasliceOperatorStatus type for use with
+// DASOperatorStatusApplyConfiguration constructs a declarative configuration of the DASOperatorStatus type for use with
 // apply.
-func InstasliceOperatorStatus() *InstasliceOperatorStatusApplyConfiguration {
-	return &InstasliceOperatorStatusApplyConfiguration{}
+func DASOperatorStatus() *DASOperatorStatusApplyConfiguration {
+	return &DASOperatorStatusApplyConfiguration{}
 }
 
 // WithObservedGeneration sets the ObservedGeneration field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ObservedGeneration field is set to the value of the last call.
-func (b *InstasliceOperatorStatusApplyConfiguration) WithObservedGeneration(value int64) *InstasliceOperatorStatusApplyConfiguration {
+func (b *DASOperatorStatusApplyConfiguration) WithObservedGeneration(value int64) *DASOperatorStatusApplyConfiguration {
 	b.OperatorStatusApplyConfiguration.ObservedGeneration = &value
 	return b
 }
@@ -43,7 +43,7 @@ func (b *InstasliceOperatorStatusApplyConfiguration) WithObservedGeneration(valu
 // WithConditions adds the given value to the Conditions field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Conditions field.
-func (b *InstasliceOperatorStatusApplyConfiguration) WithConditions(values ...*v1.OperatorConditionApplyConfiguration) *InstasliceOperatorStatusApplyConfiguration {
+func (b *DASOperatorStatusApplyConfiguration) WithConditions(values ...*v1.OperatorConditionApplyConfiguration) *DASOperatorStatusApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithConditions")
@@ -56,7 +56,7 @@ func (b *InstasliceOperatorStatusApplyConfiguration) WithConditions(values ...*v
 // WithVersion sets the Version field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Version field is set to the value of the last call.
-func (b *InstasliceOperatorStatusApplyConfiguration) WithVersion(value string) *InstasliceOperatorStatusApplyConfiguration {
+func (b *DASOperatorStatusApplyConfiguration) WithVersion(value string) *DASOperatorStatusApplyConfiguration {
 	b.OperatorStatusApplyConfiguration.Version = &value
 	return b
 }
@@ -64,7 +64,7 @@ func (b *InstasliceOperatorStatusApplyConfiguration) WithVersion(value string) *
 // WithReadyReplicas sets the ReadyReplicas field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ReadyReplicas field is set to the value of the last call.
-func (b *InstasliceOperatorStatusApplyConfiguration) WithReadyReplicas(value int32) *InstasliceOperatorStatusApplyConfiguration {
+func (b *DASOperatorStatusApplyConfiguration) WithReadyReplicas(value int32) *DASOperatorStatusApplyConfiguration {
 	b.OperatorStatusApplyConfiguration.ReadyReplicas = &value
 	return b
 }
@@ -72,7 +72,7 @@ func (b *InstasliceOperatorStatusApplyConfiguration) WithReadyReplicas(value int
 // WithLatestAvailableRevision sets the LatestAvailableRevision field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the LatestAvailableRevision field is set to the value of the last call.
-func (b *InstasliceOperatorStatusApplyConfiguration) WithLatestAvailableRevision(value int32) *InstasliceOperatorStatusApplyConfiguration {
+func (b *DASOperatorStatusApplyConfiguration) WithLatestAvailableRevision(value int32) *DASOperatorStatusApplyConfiguration {
 	b.OperatorStatusApplyConfiguration.LatestAvailableRevision = &value
 	return b
 }
@@ -80,7 +80,7 @@ func (b *InstasliceOperatorStatusApplyConfiguration) WithLatestAvailableRevision
 // WithGenerations adds the given value to the Generations field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Generations field.
-func (b *InstasliceOperatorStatusApplyConfiguration) WithGenerations(values ...*v1.GenerationStatusApplyConfiguration) *InstasliceOperatorStatusApplyConfiguration {
+func (b *DASOperatorStatusApplyConfiguration) WithGenerations(values ...*v1.GenerationStatusApplyConfiguration) *DASOperatorStatusApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithGenerations")

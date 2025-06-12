@@ -30,59 +30,59 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
-// InstasliceOperatorInformer provides access to a shared informer and lister for
-// InstasliceOperators.
-type InstasliceOperatorInformer interface {
+// DASOperatorInformer provides access to a shared informer and lister for
+// DASOperators.
+type DASOperatorInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() instasliceoperatorv1alpha1.InstasliceOperatorLister
+	Lister() instasliceoperatorv1alpha1.DASOperatorLister
 }
 
-type instasliceOperatorInformer struct {
+type dASOperatorInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	namespace        string
 }
 
-// NewInstasliceOperatorInformer constructs a new informer for InstasliceOperator type.
+// NewDASOperatorInformer constructs a new informer for DASOperator type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewInstasliceOperatorInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredInstasliceOperatorInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewDASOperatorInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredDASOperatorInformer(client, namespace, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredInstasliceOperatorInformer constructs a new informer for InstasliceOperator type.
+// NewFilteredDASOperatorInformer constructs a new informer for DASOperator type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredInstasliceOperatorInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredDASOperatorInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.OpenShiftOperatorV1alpha1().InstasliceOperators(namespace).List(context.TODO(), options)
+				return client.OpenShiftOperatorV1alpha1().DASOperators(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.OpenShiftOperatorV1alpha1().InstasliceOperators(namespace).Watch(context.TODO(), options)
+				return client.OpenShiftOperatorV1alpha1().DASOperators(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&apisinstasliceoperatorv1alpha1.InstasliceOperator{},
+		&apisinstasliceoperatorv1alpha1.DASOperator{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *instasliceOperatorInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredInstasliceOperatorInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *dASOperatorInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredDASOperatorInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *instasliceOperatorInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisinstasliceoperatorv1alpha1.InstasliceOperator{}, f.defaultInformer)
+func (f *dASOperatorInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&apisinstasliceoperatorv1alpha1.DASOperator{}, f.defaultInformer)
 }
 
-func (f *instasliceOperatorInformer) Lister() instasliceoperatorv1alpha1.InstasliceOperatorLister {
-	return instasliceoperatorv1alpha1.NewInstasliceOperatorLister(f.Informer().GetIndexer())
+func (f *dASOperatorInformer) Lister() instasliceoperatorv1alpha1.DASOperatorLister {
+	return instasliceoperatorv1alpha1.NewDASOperatorLister(f.Informer().GetIndexer())
 }

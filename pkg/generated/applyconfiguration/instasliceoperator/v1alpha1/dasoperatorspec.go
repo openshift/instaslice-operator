@@ -23,24 +23,24 @@ import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
-// InstasliceOperatorSpecApplyConfiguration represents a declarative configuration of the InstasliceOperatorSpec type for use
+// DASOperatorSpecApplyConfiguration represents a declarative configuration of the DASOperatorSpec type for use
 // with apply.
-type InstasliceOperatorSpecApplyConfiguration struct {
+type DASOperatorSpecApplyConfiguration struct {
 	v1.OperatorSpecApplyConfiguration `json:",inline"`
 	EmulatedMode                      *instasliceoperatorv1alpha1.EmulatedMode `json:"emulatedMode,omitempty"`
 	NodeSelector                      map[string]string                        `json:"nodeSelector,omitempty"`
 }
 
-// InstasliceOperatorSpecApplyConfiguration constructs a declarative configuration of the InstasliceOperatorSpec type for use with
+// DASOperatorSpecApplyConfiguration constructs a declarative configuration of the DASOperatorSpec type for use with
 // apply.
-func InstasliceOperatorSpec() *InstasliceOperatorSpecApplyConfiguration {
-	return &InstasliceOperatorSpecApplyConfiguration{}
+func DASOperatorSpec() *DASOperatorSpecApplyConfiguration {
+	return &DASOperatorSpecApplyConfiguration{}
 }
 
 // WithManagementState sets the ManagementState field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ManagementState field is set to the value of the last call.
-func (b *InstasliceOperatorSpecApplyConfiguration) WithManagementState(value operatorv1.ManagementState) *InstasliceOperatorSpecApplyConfiguration {
+func (b *DASOperatorSpecApplyConfiguration) WithManagementState(value operatorv1.ManagementState) *DASOperatorSpecApplyConfiguration {
 	b.OperatorSpecApplyConfiguration.ManagementState = &value
 	return b
 }
@@ -48,7 +48,7 @@ func (b *InstasliceOperatorSpecApplyConfiguration) WithManagementState(value ope
 // WithLogLevel sets the LogLevel field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the LogLevel field is set to the value of the last call.
-func (b *InstasliceOperatorSpecApplyConfiguration) WithLogLevel(value operatorv1.LogLevel) *InstasliceOperatorSpecApplyConfiguration {
+func (b *DASOperatorSpecApplyConfiguration) WithLogLevel(value operatorv1.LogLevel) *DASOperatorSpecApplyConfiguration {
 	b.OperatorSpecApplyConfiguration.LogLevel = &value
 	return b
 }
@@ -56,7 +56,7 @@ func (b *InstasliceOperatorSpecApplyConfiguration) WithLogLevel(value operatorv1
 // WithOperatorLogLevel sets the OperatorLogLevel field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the OperatorLogLevel field is set to the value of the last call.
-func (b *InstasliceOperatorSpecApplyConfiguration) WithOperatorLogLevel(value operatorv1.LogLevel) *InstasliceOperatorSpecApplyConfiguration {
+func (b *DASOperatorSpecApplyConfiguration) WithOperatorLogLevel(value operatorv1.LogLevel) *DASOperatorSpecApplyConfiguration {
 	b.OperatorSpecApplyConfiguration.OperatorLogLevel = &value
 	return b
 }
@@ -64,7 +64,7 @@ func (b *InstasliceOperatorSpecApplyConfiguration) WithOperatorLogLevel(value op
 // WithUnsupportedConfigOverrides sets the UnsupportedConfigOverrides field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the UnsupportedConfigOverrides field is set to the value of the last call.
-func (b *InstasliceOperatorSpecApplyConfiguration) WithUnsupportedConfigOverrides(value runtime.RawExtension) *InstasliceOperatorSpecApplyConfiguration {
+func (b *DASOperatorSpecApplyConfiguration) WithUnsupportedConfigOverrides(value runtime.RawExtension) *DASOperatorSpecApplyConfiguration {
 	b.OperatorSpecApplyConfiguration.UnsupportedConfigOverrides = &value
 	return b
 }
@@ -72,7 +72,7 @@ func (b *InstasliceOperatorSpecApplyConfiguration) WithUnsupportedConfigOverride
 // WithObservedConfig sets the ObservedConfig field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ObservedConfig field is set to the value of the last call.
-func (b *InstasliceOperatorSpecApplyConfiguration) WithObservedConfig(value runtime.RawExtension) *InstasliceOperatorSpecApplyConfiguration {
+func (b *DASOperatorSpecApplyConfiguration) WithObservedConfig(value runtime.RawExtension) *DASOperatorSpecApplyConfiguration {
 	b.OperatorSpecApplyConfiguration.ObservedConfig = &value
 	return b
 }
@@ -80,7 +80,7 @@ func (b *InstasliceOperatorSpecApplyConfiguration) WithObservedConfig(value runt
 // WithEmulatedMode sets the EmulatedMode field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the EmulatedMode field is set to the value of the last call.
-func (b *InstasliceOperatorSpecApplyConfiguration) WithEmulatedMode(value instasliceoperatorv1alpha1.EmulatedMode) *InstasliceOperatorSpecApplyConfiguration {
+func (b *DASOperatorSpecApplyConfiguration) WithEmulatedMode(value instasliceoperatorv1alpha1.EmulatedMode) *DASOperatorSpecApplyConfiguration {
 	b.EmulatedMode = &value
 	return b
 }
@@ -89,7 +89,7 @@ func (b *InstasliceOperatorSpecApplyConfiguration) WithEmulatedMode(value instas
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the NodeSelector field,
 // overwriting an existing map entries in NodeSelector field with the same key.
-func (b *InstasliceOperatorSpecApplyConfiguration) WithNodeSelector(entries map[string]string) *InstasliceOperatorSpecApplyConfiguration {
+func (b *DASOperatorSpecApplyConfiguration) WithNodeSelector(entries map[string]string) *DASOperatorSpecApplyConfiguration {
 	if b.NodeSelector == nil && len(entries) > 0 {
 		b.NodeSelector = make(map[string]string, len(entries))
 	}

@@ -24,8 +24,8 @@ import (
 type Interface interface {
 	// AllocationClaims returns a AllocationClaimInformer.
 	AllocationClaims() AllocationClaimInformer
-	// InstasliceOperators returns a InstasliceOperatorInformer.
-	InstasliceOperators() InstasliceOperatorInformer
+	// DASOperators returns a DASOperatorInformer.
+	DASOperators() DASOperatorInformer
 	// NodeAccelerators returns a NodeAcceleratorInformer.
 	NodeAccelerators() NodeAcceleratorInformer
 }
@@ -46,9 +46,9 @@ func (v *version) AllocationClaims() AllocationClaimInformer {
 	return &allocationClaimInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
-// InstasliceOperators returns a InstasliceOperatorInformer.
-func (v *version) InstasliceOperators() InstasliceOperatorInformer {
-	return &instasliceOperatorInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// DASOperators returns a DASOperatorInformer.
+func (v *version) DASOperators() DASOperatorInformer {
+	return &dASOperatorInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // NodeAccelerators returns a NodeAcceleratorInformer.

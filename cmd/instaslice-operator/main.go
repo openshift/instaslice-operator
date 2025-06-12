@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	command := NewInstasliceOperatorCommand(context.Background())
+	command := NewDASOperatorCommand(context.Background())
 	if err := command.Execute(); err != nil {
 		_, err := fmt.Fprintf(os.Stderr, "%v\n", err)
 		if err != nil {
@@ -22,7 +22,7 @@ func main() {
 	}
 }
 
-func NewInstasliceOperatorCommand(ctx context.Context) *cobra.Command {
+func NewDASOperatorCommand(ctx context.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "instaslice-operator",
 		Short:   "OpenShift cluster Instaslice operator",

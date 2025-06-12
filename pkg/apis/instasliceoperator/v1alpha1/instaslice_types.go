@@ -18,25 +18,25 @@ const (
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// InstasliceOperator is the Schema for the InstasliceOperator API
+// DASOperator is the Schema for the DASOperator API
 // +k8s:openapi-gen=true
 // +genclient
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
-type InstasliceOperator struct {
+type DASOperator struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
 
 	// spec holds user settable values for configuration
 	// +required
-	Spec InstasliceOperatorSpec `json:"spec"`
+	Spec DASOperatorSpec `json:"spec"`
 	// status holds observed values from the cluster. They may not be overridden.
 	// +optional
-	Status InstasliceOperatorStatus `json:"status"`
+	Status DASOperatorStatus `json:"status"`
 }
 
-// InstasliceOperatorSpec defines the desired state of InstasliceOperator
-type InstasliceOperatorSpec struct {
+// DASOperatorSpec defines the desired state of DASOperator
+type DASOperatorSpec struct {
 	operatorv1.OperatorSpec `json:",inline"`
 
 	// EmulatedMode true configures the operator to not use the GPU backend
@@ -48,16 +48,16 @@ type InstasliceOperatorSpec struct {
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }
 
-// InstasliceOperatorStatus defines the observed state of InstasliceOperator
-type InstasliceOperatorStatus struct {
+// DASOperatorStatus defines the observed state of DASOperator
+type DASOperatorStatus struct {
 	operatorv1.OperatorStatus `json:",inline"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// InstasliceOperatorList contains a list of InstasliceOperator
-type InstasliceOperatorList struct {
+// DASOperatorList contains a list of DASOperator
+type DASOperatorList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []InstasliceOperator `json:"items"`
+	Items           []DASOperator `json:"items"`
 }

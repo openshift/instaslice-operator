@@ -1,5 +1,5 @@
 apiVersion: inference.redhat.com/v1alpha1
-kind: InstasliceOperator
+kind: DASOperator
 metadata:
   name: cluster
   namespace: das-operator

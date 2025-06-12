@@ -24,13 +24,13 @@ type AllocationClaimListerExpansion interface{}
 // AllocationClaimNamespaceLister.
 type AllocationClaimNamespaceListerExpansion interface{}
 
-// InstasliceOperatorListerExpansion allows custom methods to be added to
-// InstasliceOperatorLister.
-type InstasliceOperatorListerExpansion interface{}
+// DASOperatorListerExpansion allows custom methods to be added to
+// DASOperatorLister.
+type DASOperatorListerExpansion interface{}
 
-// InstasliceOperatorNamespaceListerExpansion allows custom methods to be added to
-// InstasliceOperatorNamespaceLister.
-type InstasliceOperatorNamespaceListerExpansion interface{}
+// DASOperatorNamespaceListerExpansion allows custom methods to be added to
+// DASOperatorNamespaceLister.
+type DASOperatorNamespaceListerExpansion interface{}
 
 // NodeAcceleratorListerExpansion allows custom methods to be added to
 // NodeAcceleratorLister.

@@ -25,58 +25,58 @@ import (
 	v1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
-// InstasliceOperatorApplyConfiguration represents a declarative configuration of the InstasliceOperator type for use
+// DASOperatorApplyConfiguration represents a declarative configuration of the DASOperator type for use
 // with apply.
-type InstasliceOperatorApplyConfiguration struct {
+type DASOperatorApplyConfiguration struct {
 	v1.TypeMetaApplyConfiguration    `json:",inline"`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	Spec                             *InstasliceOperatorSpecApplyConfiguration   `json:"spec,omitempty"`
-	Status                           *InstasliceOperatorStatusApplyConfiguration `json:"status,omitempty"`
+	Spec                             *DASOperatorSpecApplyConfiguration   `json:"spec,omitempty"`
+	Status                           *DASOperatorStatusApplyConfiguration `json:"status,omitempty"`
 }
 
-// InstasliceOperator constructs a declarative configuration of the InstasliceOperator type for use with
+// DASOperator constructs a declarative configuration of the DASOperator type for use with
 // apply.
-func InstasliceOperator(name, namespace string) *InstasliceOperatorApplyConfiguration {
-	b := &InstasliceOperatorApplyConfiguration{}
+func DASOperator(name, namespace string) *DASOperatorApplyConfiguration {
+	b := &DASOperatorApplyConfiguration{}
 	b.WithName(name)
 	b.WithNamespace(namespace)
-	b.WithKind("InstasliceOperator")
+	b.WithKind("DASOperator")
 	b.WithAPIVersion("inference.redhat.com/v1alpha1")
 	return b
 }
 
-// ExtractInstasliceOperator extracts the applied configuration owned by fieldManager from
-// instasliceOperator. If no managedFields are found in instasliceOperator for fieldManager, a
-// InstasliceOperatorApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// ExtractDASOperator extracts the applied configuration owned by fieldManager from
+// dASOperator. If no managedFields are found in dASOperator for fieldManager, a
+// DASOperatorApplyConfiguration is returned with only the Name, Namespace (if applicable),
 // APIVersion and Kind populated. It is possible that no managed fields were found for because other
 // field managers have taken ownership of all the fields previously owned by fieldManager, or because
 // the fieldManager never owned fields any fields.
-// instasliceOperator must be a unmodified InstasliceOperator API object that was retrieved from the Kubernetes API.
-// ExtractInstasliceOperator provides a way to perform a extract/modify-in-place/apply workflow.
+// dASOperator must be a unmodified DASOperator API object that was retrieved from the Kubernetes API.
+// ExtractDASOperator provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 // Experimental!
-func ExtractInstasliceOperator(instasliceOperator *instasliceoperatorv1alpha1.InstasliceOperator, fieldManager string) (*InstasliceOperatorApplyConfiguration, error) {
-	return extractInstasliceOperator(instasliceOperator, fieldManager, "")
+func ExtractDASOperator(dASOperator *instasliceoperatorv1alpha1.DASOperator, fieldManager string) (*DASOperatorApplyConfiguration, error) {
+	return extractDASOperator(dASOperator, fieldManager, "")
 }
 
-// ExtractInstasliceOperatorStatus is the same as ExtractInstasliceOperator except
+// ExtractDASOperatorStatus is the same as ExtractDASOperator except
 // that it extracts the status subresource applied configuration.
 // Experimental!
-func ExtractInstasliceOperatorStatus(instasliceOperator *instasliceoperatorv1alpha1.InstasliceOperator, fieldManager string) (*InstasliceOperatorApplyConfiguration, error) {
-	return extractInstasliceOperator(instasliceOperator, fieldManager, "status")
+func ExtractDASOperatorStatus(dASOperator *instasliceoperatorv1alpha1.DASOperator, fieldManager string) (*DASOperatorApplyConfiguration, error) {
+	return extractDASOperator(dASOperator, fieldManager, "status")
 }
 
-func extractInstasliceOperator(instasliceOperator *instasliceoperatorv1alpha1.InstasliceOperator, fieldManager string, subresource string) (*InstasliceOperatorApplyConfiguration, error) {
-	b := &InstasliceOperatorApplyConfiguration{}
-	err := managedfields.ExtractInto(instasliceOperator, internal.Parser().Type("com.github.openshift.instaslice-operator.pkg.apis.instasliceoperator.v1alpha1.InstasliceOperator"), fieldManager, b, subresource)
+func extractDASOperator(dASOperator *instasliceoperatorv1alpha1.DASOperator, fieldManager string, subresource string) (*DASOperatorApplyConfiguration, error) {
+	b := &DASOperatorApplyConfiguration{}
+	err := managedfields.ExtractInto(dASOperator, internal.Parser().Type("com.github.openshift.instaslice-operator.pkg.apis.instasliceoperator.v1alpha1.DASOperator"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}
-	b.WithName(instasliceOperator.Name)
-	b.WithNamespace(instasliceOperator.Namespace)
+	b.WithName(dASOperator.Name)
+	b.WithNamespace(dASOperator.Namespace)
 
-	b.WithKind("InstasliceOperator")
+	b.WithKind("DASOperator")
 	b.WithAPIVersion("inference.redhat.com/v1alpha1")
 	return b, nil
 }
@@ -84,7 +84,7 @@ func extractInstasliceOperator(instasliceOperator *instasliceoperatorv1alpha1.In
 // WithKind sets the Kind field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Kind field is set to the value of the last call.
-func (b *InstasliceOperatorApplyConfiguration) WithKind(value string) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithKind(value string) *DASOperatorApplyConfiguration {
 	b.TypeMetaApplyConfiguration.Kind = &value
 	return b
 }
@@ -92,7 +92,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithKind(value string) *Instaslic
 // WithAPIVersion sets the APIVersion field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the APIVersion field is set to the value of the last call.
-func (b *InstasliceOperatorApplyConfiguration) WithAPIVersion(value string) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithAPIVersion(value string) *DASOperatorApplyConfiguration {
 	b.TypeMetaApplyConfiguration.APIVersion = &value
 	return b
 }
@@ -100,7 +100,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithAPIVersion(value string) *Ins
 // WithName sets the Name field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Name field is set to the value of the last call.
-func (b *InstasliceOperatorApplyConfiguration) WithName(value string) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithName(value string) *DASOperatorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Name = &value
 	return b
@@ -109,7 +109,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithName(value string) *Instaslic
 // WithGenerateName sets the GenerateName field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the GenerateName field is set to the value of the last call.
-func (b *InstasliceOperatorApplyConfiguration) WithGenerateName(value string) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithGenerateName(value string) *DASOperatorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.GenerateName = &value
 	return b
@@ -118,7 +118,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithGenerateName(value string) *I
 // WithNamespace sets the Namespace field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Namespace field is set to the value of the last call.
-func (b *InstasliceOperatorApplyConfiguration) WithNamespace(value string) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithNamespace(value string) *DASOperatorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Namespace = &value
 	return b
@@ -127,7 +127,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithNamespace(value string) *Inst
 // WithUID sets the UID field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the UID field is set to the value of the last call.
-func (b *InstasliceOperatorApplyConfiguration) WithUID(value types.UID) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithUID(value types.UID) *DASOperatorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.UID = &value
 	return b
@@ -136,7 +136,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithUID(value types.UID) *Instasl
 // WithResourceVersion sets the ResourceVersion field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ResourceVersion field is set to the value of the last call.
-func (b *InstasliceOperatorApplyConfiguration) WithResourceVersion(value string) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithResourceVersion(value string) *DASOperatorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.ResourceVersion = &value
 	return b
@@ -145,7 +145,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithResourceVersion(value string)
 // WithGeneration sets the Generation field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Generation field is set to the value of the last call.
-func (b *InstasliceOperatorApplyConfiguration) WithGeneration(value int64) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithGeneration(value int64) *DASOperatorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Generation = &value
 	return b
@@ -154,7 +154,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithGeneration(value int64) *Inst
 // WithCreationTimestamp sets the CreationTimestamp field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the CreationTimestamp field is set to the value of the last call.
-func (b *InstasliceOperatorApplyConfiguration) WithCreationTimestamp(value metav1.Time) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithCreationTimestamp(value metav1.Time) *DASOperatorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.CreationTimestamp = &value
 	return b
@@ -163,7 +163,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithCreationTimestamp(value metav
 // WithDeletionTimestamp sets the DeletionTimestamp field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DeletionTimestamp field is set to the value of the last call.
-func (b *InstasliceOperatorApplyConfiguration) WithDeletionTimestamp(value metav1.Time) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithDeletionTimestamp(value metav1.Time) *DASOperatorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.DeletionTimestamp = &value
 	return b
@@ -172,7 +172,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithDeletionTimestamp(value metav
 // WithDeletionGracePeriodSeconds sets the DeletionGracePeriodSeconds field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DeletionGracePeriodSeconds field is set to the value of the last call.
-func (b *InstasliceOperatorApplyConfiguration) WithDeletionGracePeriodSeconds(value int64) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithDeletionGracePeriodSeconds(value int64) *DASOperatorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.DeletionGracePeriodSeconds = &value
 	return b
@@ -182,7 +182,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithDeletionGracePeriodSeconds(va
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the Labels field,
 // overwriting an existing map entries in Labels field with the same key.
-func (b *InstasliceOperatorApplyConfiguration) WithLabels(entries map[string]string) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithLabels(entries map[string]string) *DASOperatorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	if b.ObjectMetaApplyConfiguration.Labels == nil && len(entries) > 0 {
 		b.ObjectMetaApplyConfiguration.Labels = make(map[string]string, len(entries))
@@ -197,7 +197,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithLabels(entries map[string]str
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the Annotations field,
 // overwriting an existing map entries in Annotations field with the same key.
-func (b *InstasliceOperatorApplyConfiguration) WithAnnotations(entries map[string]string) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithAnnotations(entries map[string]string) *DASOperatorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	if b.ObjectMetaApplyConfiguration.Annotations == nil && len(entries) > 0 {
 		b.ObjectMetaApplyConfiguration.Annotations = make(map[string]string, len(entries))
@@ -211,7 +211,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithAnnotations(entries map[strin
 // WithOwnerReferences adds the given value to the OwnerReferences field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the OwnerReferences field.
-func (b *InstasliceOperatorApplyConfiguration) WithOwnerReferences(values ...*v1.OwnerReferenceApplyConfiguration) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithOwnerReferences(values ...*v1.OwnerReferenceApplyConfiguration) *DASOperatorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	for i := range values {
 		if values[i] == nil {
@@ -225,7 +225,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithOwnerReferences(values ...*v1
 // WithFinalizers adds the given value to the Finalizers field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Finalizers field.
-func (b *InstasliceOperatorApplyConfiguration) WithFinalizers(values ...string) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithFinalizers(values ...string) *DASOperatorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	for i := range values {
 		b.ObjectMetaApplyConfiguration.Finalizers = append(b.ObjectMetaApplyConfiguration.Finalizers, values[i])
@@ -233,7 +233,7 @@ func (b *InstasliceOperatorApplyConfiguration) WithFinalizers(values ...string) 
 	return b
 }
 
-func (b *InstasliceOperatorApplyConfiguration) ensureObjectMetaApplyConfigurationExists() {
+func (b *DASOperatorApplyConfiguration) ensureObjectMetaApplyConfigurationExists() {
 	if b.ObjectMetaApplyConfiguration == nil {
 		b.ObjectMetaApplyConfiguration = &v1.ObjectMetaApplyConfiguration{}
 	}
@@ -242,7 +242,7 @@ func (b *InstasliceOperatorApplyConfiguration) ensureObjectMetaApplyConfiguratio
 // WithSpec sets the Spec field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Spec field is set to the value of the last call.
-func (b *InstasliceOperatorApplyConfiguration) WithSpec(value *InstasliceOperatorSpecApplyConfiguration) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithSpec(value *DASOperatorSpecApplyConfiguration) *DASOperatorApplyConfiguration {
 	b.Spec = value
 	return b
 }
@@ -250,13 +250,13 @@ func (b *InstasliceOperatorApplyConfiguration) WithSpec(value *InstasliceOperato
 // WithStatus sets the Status field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Status field is set to the value of the last call.
-func (b *InstasliceOperatorApplyConfiguration) WithStatus(value *InstasliceOperatorStatusApplyConfiguration) *InstasliceOperatorApplyConfiguration {
+func (b *DASOperatorApplyConfiguration) WithStatus(value *DASOperatorStatusApplyConfiguration) *DASOperatorApplyConfiguration {
 	b.Status = value
 	return b
 }
 
 // GetName retrieves the value of the Name field in the declarative configuration.
-func (b *InstasliceOperatorApplyConfiguration) GetName() *string {
+func (b *DASOperatorApplyConfiguration) GetName() *string {
 	b.ensureObjectMetaApplyConfigurationExists()
 	return b.ObjectMetaApplyConfiguration.Name
 }

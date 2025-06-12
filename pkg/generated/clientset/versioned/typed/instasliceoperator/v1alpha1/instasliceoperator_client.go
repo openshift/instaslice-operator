@@ -27,7 +27,7 @@ import (
 type OpenShiftOperatorV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	AllocationClaimsGetter
-	InstasliceOperatorsGetter
+	DASOperatorsGetter
 	NodeAcceleratorsGetter
 }
 
@@ -40,8 +40,8 @@ func (c *OpenShiftOperatorV1alpha1Client) AllocationClaims(namespace string) All
 	return newAllocationClaims(c, namespace)
 }
 
-func (c *OpenShiftOperatorV1alpha1Client) InstasliceOperators(namespace string) InstasliceOperatorInterface {
-	return newInstasliceOperators(c, namespace)
+func (c *OpenShiftOperatorV1alpha1Client) DASOperators(namespace string) DASOperatorInterface {
+	return newDASOperators(c, namespace)
 }
 
 func (c *OpenShiftOperatorV1alpha1Client) NodeAccelerators(namespace string) NodeAcceleratorInterface {

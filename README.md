@@ -92,11 +92,11 @@ This can be configured in your controller Deployment. When enabled:
 
 ### Custom DaemonSet NodeSelector
 
-In addition to node labeling, you can restrict where the Instaslice daemonset runs by setting the `nodeSelector` field in your InstasliceOperator CR. These labels are merged with the default `nvidia.com/mig.capable=true` filter. For example:
+In addition to node labeling, you can restrict where the Instaslice daemonset runs by setting the `nodeSelector` field in your DASOperator CR. These labels are merged with the default `nvidia.com/mig.capable=true` filter. For example:
 
 ```yaml
 apiVersion: inference.redhat.com/v1alpha1
-kind: InstasliceOperator
+kind: DASOperator
 metadata:
   name: cluster
   namespace: das-operator

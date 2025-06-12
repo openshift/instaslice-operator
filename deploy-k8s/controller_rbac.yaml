@@ -15,9 +15,9 @@ rules:
       - nodeaccelerators
       - nodeaccelerators/status
       - nodeaccelerators/finalizers
-      - instasliceoperators
-      - instasliceoperators/status
-      - instasliceoperators/finalizers
+      - dasoperators
+      - dasoperators/status
+      - dasoperators/finalizers
       - allocationclaims
       - allocationclaims/status
       - allocationclaims/finalizers

@@ -54,10 +54,10 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 		klog.ErrorS(err, "Failed to create operator client", "node", nodeName)
 		return err
 	}
-	opClient := csOp.OpenShiftOperatorV1alpha1().InstasliceOperators(instasliceNamespace)
-	instOp, err := opClient.Get(ctx, "cluster", metav1.GetOptions{})
+       opClient := csOp.OpenShiftOperatorV1alpha1().DASOperators(instasliceNamespace)
+       instOp, err := opClient.Get(ctx, "cluster", metav1.GetOptions{})
 	if err != nil {
-		klog.ErrorS(err, "Failed to get InstasliceOperator", "node", nodeName)
+               klog.ErrorS(err, "Failed to get DASOperator", "node", nodeName)
 		return err
 	}
 

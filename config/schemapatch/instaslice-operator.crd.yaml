@@ -3,20 +3,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.17.2
-  name: instasliceoperators.inference.redhat.com
+  name: dasoperators.inference.redhat.com
 spec:
   group: inference.redhat.com
   names:
-    kind: InstasliceOperator
-    listKind: InstasliceOperatorList
-    plural: instasliceoperators
-    singular: instasliceoperator
+    kind: DASOperator
+    listKind: DASOperatorList
+    plural: dasoperators
+    singular: dasoperator
   scope: Namespaced
   versions:
     - name: v1alpha1
       schema:
         openAPIV3Schema:
-          description: InstasliceOperator is the Schema for the InstasliceOperator API
+          description: DASOperator is the Schema for the DASOperator API
           type: object
           required:
             - spec

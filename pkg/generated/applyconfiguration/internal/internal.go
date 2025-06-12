@@ -47,7 +47,7 @@ var schemaYAML = typed.YAMLObject(`types:
     elementType:
       namedType: __untyped_deduced_
     elementRelationship: separable
-- name: com.github.openshift.instaslice-operator.pkg.apis.instasliceoperator.v1alpha1.InstasliceOperator
+- name: com.github.openshift.instaslice-operator.pkg.apis.instasliceoperator.v1alpha1.DASOperator
   scalar: untyped
   list:
     elementType:

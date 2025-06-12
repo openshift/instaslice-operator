@@ -23,26 +23,26 @@ import (
 	gentype "k8s.io/client-go/gentype"
 )
 
-// fakeInstasliceOperators implements InstasliceOperatorInterface
-type fakeInstasliceOperators struct {
-	*gentype.FakeClientWithListAndApply[*v1alpha1.InstasliceOperator, *v1alpha1.InstasliceOperatorList, *instasliceoperatorv1alpha1.InstasliceOperatorApplyConfiguration]
+// fakeDASOperators implements DASOperatorInterface
+type fakeDASOperators struct {
+	*gentype.FakeClientWithListAndApply[*v1alpha1.DASOperator, *v1alpha1.DASOperatorList, *instasliceoperatorv1alpha1.DASOperatorApplyConfiguration]
 	Fake *FakeOpenShiftOperatorV1alpha1
 }
 
-func newFakeInstasliceOperators(fake *FakeOpenShiftOperatorV1alpha1, namespace string) typedinstasliceoperatorv1alpha1.InstasliceOperatorInterface {
-	return &fakeInstasliceOperators{
-		gentype.NewFakeClientWithListAndApply[*v1alpha1.InstasliceOperator, *v1alpha1.InstasliceOperatorList, *instasliceoperatorv1alpha1.InstasliceOperatorApplyConfiguration](
+func newFakeDASOperators(fake *FakeOpenShiftOperatorV1alpha1, namespace string) typedinstasliceoperatorv1alpha1.DASOperatorInterface {
+	return &fakeDASOperators{
+		gentype.NewFakeClientWithListAndApply[*v1alpha1.DASOperator, *v1alpha1.DASOperatorList, *instasliceoperatorv1alpha1.DASOperatorApplyConfiguration](
 			fake.Fake,
 			namespace,
-			v1alpha1.SchemeGroupVersion.WithResource("instasliceoperators"),
-			v1alpha1.SchemeGroupVersion.WithKind("InstasliceOperator"),
-			func() *v1alpha1.InstasliceOperator { return &v1alpha1.InstasliceOperator{} },
-			func() *v1alpha1.InstasliceOperatorList { return &v1alpha1.InstasliceOperatorList{} },
-			func(dst, src *v1alpha1.InstasliceOperatorList) { dst.ListMeta = src.ListMeta },
-			func(list *v1alpha1.InstasliceOperatorList) []*v1alpha1.InstasliceOperator {
+			v1alpha1.SchemeGroupVersion.WithResource("dasoperators"),
+			v1alpha1.SchemeGroupVersion.WithKind("DASOperator"),
+			func() *v1alpha1.DASOperator { return &v1alpha1.DASOperator{} },
+			func() *v1alpha1.DASOperatorList { return &v1alpha1.DASOperatorList{} },
+			func(dst, src *v1alpha1.DASOperatorList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.DASOperatorList) []*v1alpha1.DASOperator {
 				return gentype.ToPointerSlice(list.Items)
 			},
-			func(list *v1alpha1.InstasliceOperatorList, items []*v1alpha1.InstasliceOperator) {
+			func(list *v1alpha1.DASOperatorList, items []*v1alpha1.DASOperator) {
 				list.Items = gentype.FromPointerSlice(items)
 			},
 		),

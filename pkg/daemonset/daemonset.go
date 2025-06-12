@@ -62,10 +62,10 @@ func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) erro
 		operatorNamespace = "das-operator"
 	}
 	opInformerFactory := instainformers.NewSharedInformerFactory(opClientset, 10*time.Minute)
-	opClient := &operatorclient.InstasliceOperatorSetClient{
+	opClient := &operatorclient.DASOperatorSetClient{
 		Ctx:               ctx,
-		SharedInformer:    opInformerFactory.OpenShiftOperator().V1alpha1().InstasliceOperators().Informer(),
-		Lister:            opInformerFactory.OpenShiftOperator().V1alpha1().InstasliceOperators().Lister(),
+		SharedInformer:    opInformerFactory.OpenShiftOperator().V1alpha1().DASOperators().Informer(),
+		Lister:            opInformerFactory.OpenShiftOperator().V1alpha1().DASOperators().Lister(),
 		OperatorClient:    opClientset.OpenShiftOperatorV1alpha1(),
 		OperatorNamespace: operatorNamespace,
 	}

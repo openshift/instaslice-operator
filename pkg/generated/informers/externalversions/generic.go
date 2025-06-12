@@ -53,8 +53,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=inference.redhat.com, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("allocationclaims"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.OpenShiftOperator().V1alpha1().AllocationClaims().Informer()}, nil
-	case v1alpha1.SchemeGroupVersion.WithResource("instasliceoperators"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.OpenShiftOperator().V1alpha1().InstasliceOperators().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("dasoperators"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.OpenShiftOperator().V1alpha1().DASOperators().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("nodeaccelerators"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.OpenShiftOperator().V1alpha1().NodeAccelerators().Informer()}, nil
 

@@ -76,10 +76,10 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	// KubeInformer for Instaslice namespace
 	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(kubeClient, "", namespace)
 
-	instasliceClient := &operatorclient.InstasliceOperatorSetClient{
+	instasliceClient := &operatorclient.DASOperatorSetClient{
 		Ctx:               ctx,
-		SharedInformer:    operatorConfigInformers.OpenShiftOperator().V1alpha1().InstasliceOperators().Informer(),
-		Lister:            operatorConfigInformers.OpenShiftOperator().V1alpha1().InstasliceOperators().Lister(),
+		SharedInformer:    operatorConfigInformers.OpenShiftOperator().V1alpha1().DASOperators().Informer(),
+		Lister:            operatorConfigInformers.OpenShiftOperator().V1alpha1().DASOperators().Lister(),
 		OperatorClient:    operatorConfigClient.OpenShiftOperatorV1alpha1(),
 		OperatorNamespace: namespace,
 	}
@@ -88,8 +88,8 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		os.Getenv("RELATED_IMAGE_DAEMONSET_IMAGE"),
 		os.Getenv("RELATED_IMAGE_WEBHOOK_IMAGE"),
 		namespace,
-		operatorConfigClient.OpenShiftOperatorV1alpha1().InstasliceOperators(namespace),
-		operatorConfigInformers.OpenShiftOperator().V1alpha1().InstasliceOperators(),
+		operatorConfigClient.OpenShiftOperatorV1alpha1().DASOperators(namespace),
+		operatorConfigInformers.OpenShiftOperator().V1alpha1().DASOperators(),
 		kubeInformersForNamespaces,
 		appsClient,
 		instasliceClient,
