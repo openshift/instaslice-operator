@@ -131,7 +131,7 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 	if val, ok := node.Labels["nvidia.com/mig.capable"]; !ok || val != "true" {
 		return framework.NewStatus(framework.Unschedulable, "node not MIG capable")
 	}
-	klog.V(5).InfoS("checking MIG availability", "pod", klog.KObj(pod), "node", node.Name)
+	klog.V(4).InfoS("checking MIG availability", "pod", klog.KObj(pod), "node", node.Name)
 
 	instObj, err := p.instasliceLister.NodeAccelerators(p.namespace).Get(node.Name)
 	if err != nil {
@@ -151,7 +151,7 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 		return nil
 	}
 	for _, prof := range profiles {
-		klog.V(6).InfoS("searching GPUs for profile", "profile", prof, "node", node.Name)
+		klog.V(4).InfoS("searching GPUs for profile", "profile", prof, "node", node.Name)
 		found := false
 		for _, gpu := range resources.NodeGPUs {
 			gpuAllocated, err := gpuAllocatedSlices(p.allocationIndexer, node.Name, gpu.GPUUUID)
@@ -160,13 +160,13 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 			}
 			newStart := getStartIndexFromAllocationResults(resources, prof, gpuAllocated)
 			if newStart != int32(9) {
-				klog.V(6).InfoS("found candidate GPU", "uuid", gpu.GPUUUID, "profile", prof, "node", node.Name)
+				klog.V(4).InfoS("found candidate GPU", "uuid", gpu.GPUUUID, "profile", prof, "node", node.Name)
 				found = true
 				break
 			}
 		}
 		if !found {
-			klog.V(5).InfoS("no suitable GPU found", "profile", prof, "node", node.Name)
+			klog.V(4).InfoS("no suitable GPU found", "profile", prof, "node", node.Name)
 			return framework.NewStatus(framework.Unschedulable, "no GPU available")
 		}
 	}
@@ -176,7 +176,7 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 // Score returns a score based on the number of available MIG slices on the node.
 // Score evaluates how many GPUs on the node can satisfy all requested profiles.
 func (p *Plugin) Score(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) (int64, *framework.Status) {
-	klog.V(5).InfoS("scoring node", "pod", klog.KObj(pod), "node", nodeName)
+	klog.V(4).InfoS("scoring node", "pod", klog.KObj(pod), "node", nodeName)
 	instObj, err := p.instasliceLister.NodeAccelerators(p.namespace).Get(nodeName)
 	if err != nil {
 		return 0, framework.AsStatus(err)
@@ -193,7 +193,7 @@ func (p *Plugin) Score(ctx context.Context, state *framework.CycleState, pod *co
 	}
 	var minAvailable int64 = math.MaxInt64
 	for _, profileName := range profiles {
-		klog.V(6).InfoS("counting GPUs for profile", "profile", profileName, "node", nodeName)
+		klog.V(4).InfoS("counting GPUs for profile", "profile", profileName, "node", nodeName)
 		available := int64(0)
 		for _, gpu := range resources.NodeGPUs {
 			gpuAllocated, err := gpuAllocatedSlices(p.allocationIndexer, nodeName, gpu.GPUUUID)
@@ -208,12 +208,12 @@ func (p *Plugin) Score(ctx context.Context, state *framework.CycleState, pod *co
 		if available < minAvailable {
 			minAvailable = available
 		}
-		klog.V(6).InfoS("available GPUs for profile", "profile", profileName, "available", available, "node", nodeName)
+		klog.V(4).InfoS("available GPUs for profile", "profile", profileName, "available", available, "node", nodeName)
 	}
 	if minAvailable == math.MaxInt64 {
 		minAvailable = 0
 	}
-	klog.V(5).InfoS("node score computed", "node", nodeName, "score", minAvailable)
+	klog.V(4).InfoS("node score computed", "node", nodeName, "score", minAvailable)
 	return minAvailable, nil
 }
 
@@ -223,7 +223,7 @@ func (p *Plugin) ScoreExtensions() framework.ScoreExtensions {
 
 // PreBind selects a GPU and updates the NodeAccelerator object for the chosen node.
 func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) *framework.Status {
-	klog.V(5).InfoS("prebind selecting GPU", "pod", klog.KObj(pod), "node", nodeName)
+	klog.V(4).InfoS("prebind selecting GPU", "pod", klog.KObj(pod), "node", nodeName)
 	instObj, err := p.instasliceLister.NodeAccelerators(p.namespace).Get(nodeName)
 	if err != nil {
 		return framework.AsStatus(err)
@@ -240,6 +240,7 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 	var selectedGPU string
 	var alloc *instav1alpha1.AllocationClaim
 	for _, gpu := range resources.NodeGPUs {
+		klog.V(4).InfoS("evaluating GPU", "uuid", gpu.GPUUUID, "node", nodeName)
 		gpuAllocated, err := gpuAllocatedSlices(p.allocationIndexer, nodeName, gpu.GPUUUID)
 		if err != nil {
 			return framework.AsStatus(err)
@@ -266,9 +267,11 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 			types.UID(pod.GetUID()),
 		)
 		selectedGPU = gpu.GPUUUID
+		klog.V(4).InfoS("selected GPU", "uuid", gpu.GPUUUID, "profile", profileName, "node", nodeName)
 		break
 	}
 	if selectedGPU == "" {
+		klog.V(4).InfoS("no GPU available", "pod", klog.KObj(pod), "node", nodeName)
 		return framework.NewStatus(framework.Unschedulable, "no GPU available")
 	}
 	created, err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims("das-operator").Create(ctx, alloc, metav1.CreateOptions{})
@@ -278,7 +281,7 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 	if _, err := deviceplugins.UpdateAllocationStatus(ctx, p.instaClient, created, instav1alpha1.AllocationClaimStatusCreated); err != nil {
 		return framework.AsStatus(err)
 	}
-	klog.InfoS("instaslice GPU selected ", "pod", klog.KObj(pod), "node", nodeName, "gpu", selectedGPU)
+	klog.V(4).InfoS("instaslice GPU selected", "pod", klog.KObj(pod), "node", nodeName, "gpu", selectedGPU)
 	return nil
 }
 

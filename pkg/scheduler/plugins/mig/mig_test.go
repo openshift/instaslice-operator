@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
@@ -133,126 +134,161 @@ func newPlugin(objs ...runtime.Object) *Plugin {
 	}
 }
 
-func TestPreBindAllocatesGPU(t *testing.T) {
+func TestPreBind(t *testing.T) {
+	cases := []struct {
+		name   string
+		setup  func() (*Plugin, *corev1.Pod, string)
+		expect framework.Code
+		allocs int
+	}{
+		{
+			name: "success",
+			// Node has a free slice and the pod requests one 1g.5gb
+			// profile. PreBind should create a new AllocationClaim
+			// and return success.
+			setup: func() (*Plugin, *corev1.Pod, string) {
+				inst := utils.GenerateFakeCapacity("node1")
+				p := newPlugin(inst)
+				pod := newTestPod("s", "1g.5gb")
+				return p, pod, "node1"
+			},
+			expect: framework.Success,
+			allocs: 1,
+		},
+		{
+			name: "all gpus allocated",
+			// Two existing allocations consume all GPU capacity on
+			// the node. PreBind should return Unschedulable and not
+			// create a new claim.
+			setup: func() (*Plugin, *corev1.Pod, string) {
+				inst := utils.GenerateFakeCapacity("node1")
+				var res instav1.DiscoveredNodeResources
+				_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
+				ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+				ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+				p := newPlugin(inst, ex1, ex2)
+				pod := newTestPod("u", "1g.5gb")
+				return p, pod, "node1"
+			},
+			expect: framework.Unschedulable,
+			allocs: 2,
+		},
+		{
+			name: "unsupported accelerator",
+			// NodeAccelerator advertises a non-MIG accelerator type
+			// so the pod cannot be scheduled.
+			setup: func() (*Plugin, *corev1.Pod, string) {
+				inst := utils.GenerateFakeCapacity("node1")
+				inst.Spec.AcceleratorType = "foo"
+				p := newPlugin(inst)
+				pod := newTestPod("ua", "1g.5gb")
+				return p, pod, "node1"
+			},
+			expect: framework.Unschedulable,
+			allocs: 0,
+		},
+		{
+			name: "instaslice not found",
+			// Lister returns not found which should surface as an
+			// error status and create no allocation.
+			setup: func() (*Plugin, *corev1.Pod, string) {
+				p := newPlugin()
+				pod := newTestPod("nf", "1g.5gb")
+				return p, pod, "node1"
+			},
+			expect: framework.Error,
+			allocs: 0,
+		},
+		{
+			name: "unmarshal error",
+			// Corrupted NodeResources field causes JSON unmarshal
+			// to fail and PreBind should return an error.
+			setup: func() (*Plugin, *corev1.Pod, string) {
+				inst := utils.GenerateFakeCapacity("node1")
+				inst.Status.NodeResources.Raw = []byte("{bad}")
+				p := newPlugin(inst)
+				pod := newTestPod("um", "1g.5gb")
+				return p, pod, "node1"
+			},
+			expect: framework.Error,
+			allocs: 0,
+		},
+		{
+			name: "indexer nil",
+			// The allocation indexer is nil which triggers an error
+			// while checking existing claims.
+			setup: func() (*Plugin, *corev1.Pod, string) {
+				inst := utils.GenerateFakeCapacity("node1")
+				p := newPlugin(inst)
+				p.allocationIndexer = nil
+				pod := newTestPod("ni", "1g.5gb")
+				return p, pod, "node1"
+			},
+			expect: framework.Error,
+			allocs: 0,
+		},
+		{
+			name: "create error",
+			// API server fails on AllocationClaim creation. PreBind
+			// should return an error and no claims are persisted.
+			setup: func() (*Plugin, *corev1.Pod, string) {
+				inst := utils.GenerateFakeCapacity("node1")
+				p := newPlugin(inst)
+				if c, ok := p.instaClient.(*fakeclient.Clientset); ok {
+					c.PrependReactor("create", "allocationclaims", func(action k8stesting.Action) (bool, runtime.Object, error) {
+						return true, nil, fmt.Errorf("boom")
+					})
+				}
+				pod := newTestPod("ce", "1g.5gb")
+				return p, pod, "node1"
+			},
+			expect: framework.Error,
+			allocs: 0,
+		},
+		{
+			name: "update error",
+			// Allocation creation succeeds but updating its status
+			// fails. PreBind should return an error and one claim
+			// should exist.
+			setup: func() (*Plugin, *corev1.Pod, string) {
+				inst := utils.GenerateFakeCapacity("node1")
+				p := newPlugin(inst)
+				if c, ok := p.instaClient.(*fakeclient.Clientset); ok {
+					c.PrependReactor("update", "allocationclaims", func(action k8stesting.Action) (bool, runtime.Object, error) {
+						if ua, ok := action.(k8stesting.UpdateAction); ok && ua.GetSubresource() == "status" {
+							return true, nil, fmt.Errorf("boom")
+						}
+						return false, nil, nil
+					})
+				}
+				pod := newTestPod("ue", "1g.5gb")
+				return p, pod, "node1"
+			},
+			expect: framework.Error,
+			allocs: 1,
+		},
+	}
+
 	ctx := context.Background()
-	inst := utils.GenerateFakeCapacity("node1")
-	client := fakeclient.NewSimpleClientset(inst)
-	instIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
-	_ = instIndexer.Add(inst)
-	allocIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
-		"node-gpu": func(obj interface{}) ([]string, error) {
-			a := obj.(*instav1.AllocationClaim)
-			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.GPUUUID)
-			return []string{key}, nil
-		},
-	})
-
-	lister := instalisters.NewNodeAcceleratorLister(instIndexer)
-	p := &Plugin{instaClient: client, namespace: inst.Namespace, instasliceLister: lister, allocationIndexer: allocIndexer}
-	pod := newTestPod("p1", "1g.5gb")
-
-	st := p.PreBind(ctx, framework.NewCycleState(), pod, "node1")
-	if st != nil && !st.IsSuccess() {
-		t.Fatalf("unexpected status: %v", st)
-	}
-
-	allocs, err := client.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		t.Fatalf("failed to list allocations: %v", err)
-	}
-	if len(allocs.Items) != 1 {
-		t.Fatalf("expected one allocation, got %d", len(allocs.Items))
-	}
-	alloc := allocs.Items[0]
-	if alloc.Spec.GPUUUID == "" {
-		t.Fatalf("allocation not populated")
-	}
-	if alloc.Status != instav1.AllocationClaimStatusCreated {
-		t.Fatalf("expected allocation status created, got %s", alloc.Status)
-	}
-}
-
-func TestPreBindUnschedulable(t *testing.T) {
-	ctx := context.Background()
-	inst := utils.GenerateFakeCapacity("node1")
-	var resources instav1.DiscoveredNodeResources
-	_ = json.Unmarshal(inst.Status.NodeResources.Raw, &resources)
-	existing := &instav1.AllocationClaim{
-		ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "existing"},
-		Spec: instav1.AllocationClaimSpec{
-			GPUUUID:      resources.NodeGPUs[0].GPUUUID,
-			Nodename:     types.NodeName("node1"),
-			MigPlacement: instav1.Placement{Start: 0, Size: 8},
-		},
-	}
-	client := fakeclient.NewSimpleClientset(inst, existing)
-
-	instIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
-	_ = instIndexer.Add(inst)
-	allocIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
-		"node-gpu": func(obj interface{}) ([]string, error) {
-			a := obj.(*instav1.AllocationClaim)
-			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.GPUUUID)
-			return []string{key}, nil
-		},
-	})
-	_ = allocIndexer.Add(existing)
-
-	lister := instalisters.NewNodeAcceleratorLister(instIndexer)
-	p := &Plugin{instaClient: client, namespace: inst.Namespace, instasliceLister: lister, allocationIndexer: allocIndexer}
-	pod := newTestPod("p2", "1g.5gb")
-
-	st := p.PreBind(ctx, framework.NewCycleState(), pod, "node1")
-	if st != nil && !st.IsSuccess() {
-		t.Fatalf("unexpected status: %v", st)
-	}
-	allocs, err := client.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		t.Fatalf("failed to list allocations: %v", err)
-	}
-	if len(allocs.Items) != 2 {
-		t.Fatalf("expected two allocations, got %d", len(allocs.Items))
-	}
-	var created *instav1.AllocationClaim
-	for i := range allocs.Items {
-		if allocs.Items[i].Name == "p2" {
-			created = &allocs.Items[i]
-			break
-		}
-	}
-	if created == nil {
-		t.Fatalf("new allocation not found")
-	}
-	if created.Status != instav1.AllocationClaimStatusCreated {
-		t.Fatalf("expected new allocation status created, got %s", created.Status)
-	}
-}
-
-func TestPreBindInstasliceNotFound(t *testing.T) {
-	ctx := context.Background()
-	client := fakeclient.NewSimpleClientset() // no objects
-	instIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
-	allocIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
-		"node-gpu": func(obj interface{}) ([]string, error) {
-			a := obj.(*instav1.AllocationClaim)
-			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.GPUUUID)
-			return []string{key}, nil
-		},
-	})
-	lister := instalisters.NewNodeAcceleratorLister(instIndexer)
-	p := &Plugin{instaClient: client, namespace: "das-operator", instasliceLister: lister, allocationIndexer: allocIndexer}
-	pod := newTestPod("p3", "1g.5gb")
-
-	st := p.PreBind(ctx, framework.NewCycleState(), pod, "node1")
-	if st == nil || st.Code() != framework.Error {
-		t.Fatalf("expected error status when instaslice missing, got %v", st)
-	}
-	allocs, err := client.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		t.Fatalf("failed to list allocations: %v", err)
-	}
-	if len(allocs.Items) != 0 {
-		t.Fatalf("expected no allocations, got %d", len(allocs.Items))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p, pod, node := tc.setup()
+			st := p.PreBind(ctx, framework.NewCycleState(), pod, node)
+			code := framework.Success
+			if st != nil {
+				code = st.Code()
+			}
+			if code != tc.expect {
+				t.Fatalf("expected %v, got %v", tc.expect, code)
+			}
+			allocs, err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).List(ctx, metav1.ListOptions{})
+			if err != nil {
+				t.Fatalf("failed to list allocations: %v", err)
+			}
+			if len(allocs.Items) != tc.allocs {
+				t.Fatalf("expected %d allocations, got %d", tc.allocs, len(allocs.Items))
+			}
+		})
 	}
 }
 
