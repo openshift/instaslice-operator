@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"regexp"
 	"strings"
@@ -42,7 +43,11 @@ type Args struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
-var _ framework.PreBindPlugin = &Plugin{}
+var (
+	_ framework.PreBindPlugin = &Plugin{}
+	_ framework.FilterPlugin  = &Plugin{}
+	_ framework.ScorePlugin   = &Plugin{}
+)
 
 // Name returns the plugin name.
 func (p *Plugin) Name() string { return Name }
@@ -117,8 +122,108 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 	}, nil
 }
 
+// Filter checks if the given node has an available MIG slice for the pod.
+func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
+	node := nodeInfo.Node()
+	if node == nil {
+		return framework.NewStatus(framework.Error, "node not found")
+	}
+	if val, ok := node.Labels["nvidia.com/mig.capable"]; !ok || val != "true" {
+		return framework.NewStatus(framework.Unschedulable, "node not MIG capable")
+	}
+	klog.V(5).InfoS("checking MIG availability", "pod", klog.KObj(pod), "node", node.Name)
+
+	instObj, err := p.instasliceLister.NodeAccelerators(p.namespace).Get(node.Name)
+	if err != nil {
+		return framework.NewStatus(framework.Unschedulable, err.Error())
+	}
+	if instObj.Spec.AcceleratorType != "" && instObj.Spec.AcceleratorType != "nvidia-mig" {
+		return framework.NewStatus(framework.Unschedulable, fmt.Sprintf("unsupported acceleratorType %s", instObj.Spec.AcceleratorType))
+	}
+	var resources instav1alpha1.DiscoveredNodeResources
+	if len(instObj.Status.NodeResources.Raw) > 0 {
+		if err := json.Unmarshal(instObj.Status.NodeResources.Raw, &resources); err != nil {
+			return framework.AsStatus(err)
+		}
+	}
+	profiles := getPodProfileNames(pod)
+	if len(profiles) == 0 {
+		return nil
+	}
+	for _, prof := range profiles {
+		klog.V(6).InfoS("searching GPUs for profile", "profile", prof, "node", node.Name)
+		found := false
+		for _, gpu := range resources.NodeGPUs {
+			gpuAllocated, err := gpuAllocatedSlices(p.allocationIndexer, node.Name, gpu.GPUUUID)
+			if err != nil {
+				return framework.AsStatus(err)
+			}
+			newStart := getStartIndexFromAllocationResults(resources, prof, gpuAllocated)
+			if newStart != int32(9) {
+				klog.V(6).InfoS("found candidate GPU", "uuid", gpu.GPUUUID, "profile", prof, "node", node.Name)
+				found = true
+				break
+			}
+		}
+		if !found {
+			klog.V(5).InfoS("no suitable GPU found", "profile", prof, "node", node.Name)
+			return framework.NewStatus(framework.Unschedulable, "no GPU available")
+		}
+	}
+	return nil
+}
+
+// Score returns a score based on the number of available MIG slices on the node.
+// Score evaluates how many GPUs on the node can satisfy all requested profiles.
+func (p *Plugin) Score(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) (int64, *framework.Status) {
+	klog.V(5).InfoS("scoring node", "pod", klog.KObj(pod), "node", nodeName)
+	instObj, err := p.instasliceLister.NodeAccelerators(p.namespace).Get(nodeName)
+	if err != nil {
+		return 0, framework.AsStatus(err)
+	}
+	var resources instav1alpha1.DiscoveredNodeResources
+	if len(instObj.Status.NodeResources.Raw) > 0 {
+		if err := json.Unmarshal(instObj.Status.NodeResources.Raw, &resources); err != nil {
+			return 0, framework.AsStatus(err)
+		}
+	}
+	profiles := getPodProfileNames(pod)
+	if len(profiles) == 0 {
+		return 0, nil
+	}
+	var minAvailable int64 = math.MaxInt64
+	for _, profileName := range profiles {
+		klog.V(6).InfoS("counting GPUs for profile", "profile", profileName, "node", nodeName)
+		available := int64(0)
+		for _, gpu := range resources.NodeGPUs {
+			gpuAllocated, err := gpuAllocatedSlices(p.allocationIndexer, nodeName, gpu.GPUUUID)
+			if err != nil {
+				return 0, framework.AsStatus(err)
+			}
+			newStart := getStartIndexFromAllocationResults(resources, profileName, gpuAllocated)
+			if newStart != int32(9) {
+				available++
+			}
+		}
+		if available < minAvailable {
+			minAvailable = available
+		}
+		klog.V(6).InfoS("available GPUs for profile", "profile", profileName, "available", available, "node", nodeName)
+	}
+	if minAvailable == math.MaxInt64 {
+		minAvailable = 0
+	}
+	klog.V(5).InfoS("node score computed", "node", nodeName, "score", minAvailable)
+	return minAvailable, nil
+}
+
+func (p *Plugin) ScoreExtensions() framework.ScoreExtensions {
+	return nil
+}
+
 // PreBind selects a GPU and updates the NodeAccelerator object for the chosen node.
 func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) *framework.Status {
+	klog.V(5).InfoS("prebind selecting GPU", "pod", klog.KObj(pod), "node", nodeName)
 	instObj, err := p.instasliceLister.NodeAccelerators(p.namespace).Get(nodeName)
 	if err != nil {
 		return framework.AsStatus(err)
@@ -193,6 +298,28 @@ func extractProfileName(limits corev1.ResourceList) string {
 	return profileName
 }
 
+// getPodProfileNames gathers all requested MIG profiles from regular,
+// init and ephemeral containers.
+func getPodProfileNames(pod *corev1.Pod) []string {
+	var profiles []string
+	for _, c := range pod.Spec.Containers {
+		if p := extractProfileName(c.Resources.Limits); p != "" {
+			profiles = append(profiles, p)
+		}
+	}
+	for _, c := range pod.Spec.InitContainers {
+		if p := extractProfileName(c.Resources.Limits); p != "" {
+			profiles = append(profiles, p)
+		}
+	}
+	for _, c := range pod.Spec.EphemeralContainers {
+		if p := extractProfileName(c.Resources.Limits); p != "" {
+			profiles = append(profiles, p)
+		}
+	}
+	return profiles
+}
+
 func SetAllocationDetails(profileName string, newStart, size int32, podUUID types.UID, nodename types.NodeName,
 	allocationStatus instav1alpha1.AllocationClaimStatus, discoveredGiprofile int32, Ciprofileid int32, Ciengprofileid int32,
 	namespace string, podName string, gpuUuid string, resourceIdentifier types.UID) *instav1alpha1.AllocationClaim {
@@ -239,6 +366,8 @@ func extractGpuProfile(resources instav1alpha1.DiscoveredNodeResources, profileN
 	return size, discoveredGiprofile, Ciprofileid, Ciengprofileid
 }
 
+// getStartIndexFromAllocationResults finds a free placement index on the GPU
+// that satisfies the requested MIG profile. It returns 9 when no slot exists.
 func getStartIndexFromAllocationResults(resources instav1alpha1.DiscoveredNodeResources, profileName string, gpuAllocatedIndex [8]int32) int32 {
 	allAllocated := true
 	for _, allocated := range gpuAllocatedIndex {
