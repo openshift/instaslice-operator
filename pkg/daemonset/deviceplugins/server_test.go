@@ -2,6 +2,7 @@ package deviceplugins
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 	"tags.cncf.io/container-device-interface/pkg/cdi"
+	cdispec "tags.cncf.io/container-device-interface/specs-go"
 
 	"os"
 
@@ -57,7 +59,7 @@ func TestListAndWatchInitialSpecs(t *testing.T) {
 		t.Fatalf("failed to configure cdi: %v", err)
 	}
 
-	specPath, _, err := WriteCDISpecForResource("vendor/class", "id1", nil)
+	specPath, _, err := WriteCDISpecForResource("vendor/class", "id1", nil, "")
 	if err != nil {
 		t.Fatalf("failed to write spec: %v", err)
 	}
@@ -233,5 +235,30 @@ func TestGetAllocationsByNodeGPU(t *testing.T) {
 	}
 	if alloc.Status != instav1.AllocationClaimStatusProcessing {
 		t.Fatalf("expected allocation status updated, got %s", alloc.Status)
+	}
+}
+
+func TestWriteCDISpecForResourceEnv(t *testing.T) {
+	dir := t.TempDir()
+	if err := cdi.Configure(cdi.WithSpecDirs(dir), cdi.WithAutoRefresh(false)); err != nil {
+		t.Fatalf("failed to configure cdi: %v", err)
+	}
+
+	path, _, err := WriteCDISpecForResource("vendor/class", "id-env", nil, "MIG_UUID=foo")
+	if err != nil {
+		t.Fatalf("failed to write spec: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read spec: %v", err)
+	}
+	var spec cdispec.Spec
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatalf("failed to unmarshal spec: %v", err)
+	}
+	env := spec.Devices[0].ContainerEdits.Env
+	if len(env) != 1 || env[0] != "MIG_UUID=foo" {
+		t.Fatalf("unexpected env %v", env)
 	}
 }

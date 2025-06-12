@@ -19,6 +19,8 @@ import (
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	"k8s.io/client-go/rest"
 
+	nvml "github.com/NVIDIA/go-nvml/pkg/nvml"
+
 	"tags.cncf.io/container-device-interface/pkg/cdi"
 	parser "tags.cncf.io/container-device-interface/pkg/parser"
 	cdispec "tags.cncf.io/container-device-interface/specs-go"
@@ -164,15 +166,29 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 		id := utiluuid.NewUUID()
 
 		var annotations map[string]string
+		var envVar string
 		if i < len(allocations) {
-			if data, err := json.Marshal(allocations[i]); err == nil {
+			alloc := allocations[i]
+			if s.EmulatedMode == instav1.EmulatedModeDisabled {
+				uuid, err := s.createMigSlice(ctx, alloc)
+				if err != nil {
+					klog.ErrorS(err, "failed to create MIG slice")
+					return nil, err
+				}
+				envVar = fmt.Sprintf("MIG_UUID=%s", uuid)
+			} else {
+				envVar = "ABCD=test"
+			}
+			if data, err := json.Marshal(alloc); err == nil {
 				annotations = map[string]string{allocationAnnotationKey: string(data)}
 			} else {
 				klog.ErrorS(err, "failed to marshal allocation")
 			}
+		} else {
+			envVar = "ABCD=test"
 		}
 
-		_, cdiDevices, err := WriteCDISpecForResource(s.Manager.ResourceName, string(id), annotations)
+		_, cdiDevices, err := WriteCDISpecForResource(s.Manager.ResourceName, string(id), annotations, envVar)
 		if err != nil {
 			return nil, err
 		}
@@ -184,6 +200,64 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 
 func (s *Server) PreStartContainer(ctx context.Context, req *pluginapi.PreStartContainerRequest) (*pluginapi.PreStartContainerResponse, error) {
 	return &pluginapi.PreStartContainerResponse{}, nil
+}
+
+// createMigSlice uses the NVML library to create a MIG slice as specified by
+// the AllocationClaim. It looks up the GI and CI profile IDs from the
+// discovered node resources stored in the Manager.
+func (s *Server) createMigSlice(ctx context.Context, alloc *instav1.AllocationClaim) (string, error) {
+	mig, ok := s.Manager.resources.MigPlacement[alloc.Spec.Profile]
+	if !ok {
+		return "", fmt.Errorf("profile %s not found", alloc.Spec.Profile)
+	}
+
+	if ret := nvml.Init(); ret != nvml.SUCCESS {
+		return "", fmt.Errorf("nvml init failed: %v", ret)
+	}
+	defer nvml.Shutdown()
+
+	dev, ret := nvml.DeviceGetHandleByUUID(alloc.Spec.GPUUUID)
+	if ret != nvml.SUCCESS {
+		return "", fmt.Errorf("get device %s: %v", alloc.Spec.GPUUUID, ret)
+	}
+
+	giInfo, ret := dev.GetGpuInstanceProfileInfo(int(mig.GIProfileID))
+	if ret != nvml.SUCCESS {
+		return "", fmt.Errorf("get GI profile info: %v", ret)
+	}
+
+	placement := nvml.GpuInstancePlacement{Start: uint32(alloc.Spec.MigPlacement.Start), Size: uint32(alloc.Spec.MigPlacement.Size)}
+	gpuInst, ret := dev.CreateGpuInstanceWithPlacement(&giInfo, &placement)
+	if ret != nvml.SUCCESS {
+		return "", fmt.Errorf("create GPU instance: %v", ret)
+	}
+
+	ciInfo, ret := gpuInst.GetComputeInstanceProfileInfo(int(mig.CIProfileID), 0)
+	if ret != nvml.SUCCESS {
+		gpuInst.Destroy()
+		return "", fmt.Errorf("get CI profile info: %v", ret)
+	}
+
+	ci, ret := gpuInst.CreateComputeInstance(&ciInfo)
+	if ret != nvml.SUCCESS {
+		gpuInst.Destroy()
+		return "", fmt.Errorf("create compute instance: %v", ret)
+	}
+
+	info, ret := ci.GetInfo()
+	if ret != nvml.SUCCESS {
+		gpuInst.Destroy()
+		return "", fmt.Errorf("get compute instance info: %v", ret)
+	}
+
+	uuid, ret := info.Device.GetUUID()
+	if ret != nvml.SUCCESS {
+		gpuInst.Destroy()
+		return "", fmt.Errorf("get MIG UUID: %v", ret)
+	}
+
+	klog.InfoS("Created MIG slice", "gpu", alloc.Spec.GPUUUID, "profile", alloc.Spec.Profile, "migUUID", uuid)
+	return uuid, nil
 }
 
 func profileFromResourceName(res string) string {
@@ -263,7 +337,7 @@ func (s *Server) getAllocationsByNodeGPU(ctx context.Context, nodeName, profileN
 // BuildCDIDevices builds a CDI spec and returns the spec object, spec name,
 // spec path, and the corresponding CDIDevice slice. This helper is exported so
 // that other packages (and tests) can generate CDI specs in a consistent way.
-func BuildCDIDevices(kind, sanitizedClass, id string, annotations map[string]string) (*cdispec.Spec, string, string, []*pluginapi.CDIDevice) {
+func BuildCDIDevices(kind, sanitizedClass, id string, annotations map[string]string, envVar string) (*cdispec.Spec, string, string, []*pluginapi.CDIDevice) {
 	specNameBase := fmt.Sprintf("%s_%s", sanitizedClass, id)
 	specName := specNameBase + ".cdi.json"
 
@@ -275,6 +349,10 @@ func BuildCDIDevices(kind, sanitizedClass, id string, annotations map[string]str
 	specPath := filepath.Join(dynamicDir, specName)
 
 	// TODO - Do we need to create a CDI spec for each device Allocate request? can we not use a single spec for all devices of the same kind?
+	env := []string{"ABCD=test"}
+	if envVar != "" {
+		env = []string{envVar}
+	}
 	specObj := &cdispec.Spec{
 		Version: cdispec.CurrentVersion,
 		Kind:    kind,
@@ -283,7 +361,7 @@ func BuildCDIDevices(kind, sanitizedClass, id string, annotations map[string]str
 				Name:        "dev0",
 				Annotations: annotations,
 				ContainerEdits: cdispec.ContainerEdits{
-					Env: []string{"ABCD=test"},
+					Env: env,
 					Hooks: []*cdispec.Hook{
 						{
 							HookName: "poststop",
@@ -308,7 +386,7 @@ func BuildCDIDevices(kind, sanitizedClass, id string, annotations map[string]str
 // WriteCDISpecForResource parses the given resource name, generates a CDI spec
 // using BuildCDIDevices and writes it to the CDI cache. It returns the path to
 // the written spec along with the generated CDIDevices.
-func WriteCDISpecForResource(resourceName string, id string, annotations map[string]string) (string, []*pluginapi.CDIDevice, error) {
+func WriteCDISpecForResource(resourceName string, id string, annotations map[string]string, envVar string) (string, []*pluginapi.CDIDevice, error) {
 	vendor, class := parser.ParseQualifier(resourceName)
 	sanitizedClass := class
 	if err := parser.ValidateClassName(sanitizedClass); err != nil {
@@ -319,7 +397,7 @@ func WriteCDISpecForResource(resourceName string, id string, annotations map[str
 		kind = vendor + "/" + sanitizedClass
 	}
 
-	specObj, specName, specPath, cdiDevices := BuildCDIDevices(kind, sanitizedClass, id, annotations)
+	specObj, specName, specPath, cdiDevices := BuildCDIDevices(kind, sanitizedClass, id, annotations, envVar)
 	if err := cdi.GetDefaultCache().WriteSpec(specObj, specName); err != nil {
 		klog.ErrorS(err, "failed to write CDI spec", "name", specName)
 		return "", nil, fmt.Errorf("failed to write CDI spec %q: %w", specName, err)
@@ -333,6 +411,6 @@ func WriteCDISpecForResource(resourceName string, id string, annotations map[str
 // It simply calls the exported WriteCDISpecForResource function and discards the
 // returned spec path.
 func (s *Server) writeCDISpecForResource(resourceName string, id string) ([]*pluginapi.CDIDevice, error) {
-	_, devices, err := WriteCDISpecForResource(resourceName, id, nil)
+	_, devices, err := WriteCDISpecForResource(resourceName, id, nil, "")
 	return devices, err
 }

@@ -56,7 +56,7 @@ func TestCDIWatcherLifecycle(t *testing.T) {
 
 	data, _ := json.Marshal(alloc)
 	annotations := map[string]string{allocationAnnotationKey: string(data)}
-	path, _, err := deviceplugins.WriteCDISpecForResource("vendor/class", "test", annotations)
+	path, _, err := deviceplugins.WriteCDISpecForResource("vendor/class", "test", annotations, "")
 	if err != nil {
 		t.Fatalf("failed to write spec: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestCDIWatcherLifecycle(t *testing.T) {
 		{
 			name: "add device",
 			action: func() {
-				base, _, _, _ := deviceplugins.BuildCDIDevices("vendor/class", "class", "test", annotations)
+				base, _, _, _ := deviceplugins.BuildCDIDevices("vendor/class", "class", "test", annotations, "")
 				d := base.Devices[0]
 				d.Name = "dev1"
 				base.Devices = append(base.Devices, d)
@@ -97,7 +97,7 @@ func TestCDIWatcherLifecycle(t *testing.T) {
 		{
 			name: "remove device",
 			action: func() {
-				base, _, _, _ := deviceplugins.BuildCDIDevices("vendor/class", "class", "test", annotations)
+				base, _, _, _ := deviceplugins.BuildCDIDevices("vendor/class", "class", "test", annotations, "")
 				if err := os.WriteFile(path, mustJSON(t, base), 0644); err != nil {
 					t.Fatalf("failed to update spec: %v", err)
 				}

@@ -173,7 +173,6 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 	return nil
 }
 
-// Score returns a score based on the number of available MIG slices on the node.
 // Score evaluates how many GPUs on the node can satisfy all requested profiles.
 func (p *Plugin) Score(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) (int64, *framework.Status) {
 	klog.V(4).InfoS("scoring node", "pod", klog.KObj(pod), "node", nodeName)
