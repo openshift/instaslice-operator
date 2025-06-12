@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/fsnotify/fsnotify"
@@ -16,6 +17,8 @@ import (
 
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
 	versioned "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
+
+	nvml "github.com/NVIDIA/go-nvml/pkg/nvml"
 
 	cdiapi "tags.cncf.io/container-device-interface/pkg/cdi"
 	cdispec "tags.cncf.io/container-device-interface/specs-go"
@@ -70,7 +73,7 @@ func SetupCDIDeletionWatcher(ctx context.Context, dir string, cache *CDICache, c
 	if err := w.Add(dir); err != nil {
 		return fmt.Errorf("failed to watch directory %s: %w", dir, err)
 	}
-	klog.InfoS("Starting CDI watcher 9999", "dir", dir)
+	klog.InfoS("Starting CDI watcher ", "dir", dir)
 
 	// Preload existing specs.
 	entries, err := os.ReadDir(dir)
@@ -114,6 +117,21 @@ func SetupCDIDeletionWatcher(ctx context.Context, dir string, cache *CDICache, c
 							if alloc.Name == "" {
 								continue
 							}
+
+							// Check env for MIG UUID to delete slice
+							var migUUID string
+							for _, e := range dev.ContainerEdits.Env {
+								if strings.HasPrefix(e, "MIG_UUID=") {
+									migUUID = strings.TrimPrefix(e, "MIG_UUID=")
+									break
+								}
+							}
+							if migUUID != "" && os.Getenv("EMULATED_MODE") != string(instav1.EmulatedModeEnabled) {
+								if err := deleteMigSlice(migUUID); err != nil {
+									klog.ErrorS(err, "failed to delete MIG slice", "uuid", migUUID)
+								}
+							}
+
 							if err := client.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Delete(ctx, alloc.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 								klog.ErrorS(err, "failed to delete AllocationClaim", "namespace", alloc.Namespace, "name", alloc.Name)
 							} else {
@@ -152,4 +170,57 @@ func loadSpec(path string, cache *CDICache) {
 	}
 	cache.set(path, spec.Spec)
 	klog.V(4).InfoS("loaded CDI spec", "path", path)
+}
+
+// deleteMigSlice destroys the MIG slice identified by the given UUID. The MIG
+// UUID is expected to refer to a valid MIG device on the node. Errors are
+// returned so callers can log failures.
+func deleteMigSlice(uuid string) error {
+	if uuid == "" {
+		return nil
+	}
+
+	if ret := nvml.Init(); ret != nvml.SUCCESS {
+		return fmt.Errorf("nvml init failed: %v", ret)
+	}
+	defer nvml.Shutdown()
+
+	migDev, ret := nvml.DeviceGetHandleByUUID(uuid)
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("get mig device by uuid: %v", ret)
+	}
+
+	parent, ret := nvml.DeviceGetDeviceHandleFromMigDeviceHandle(migDev)
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("get parent device: %v", ret)
+	}
+
+	giID, ret := nvml.DeviceGetGpuInstanceId(migDev)
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("get gi id: %v", ret)
+	}
+	ciID, ret := nvml.DeviceGetComputeInstanceId(migDev)
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("get ci id: %v", ret)
+	}
+
+	gi, ret := parent.GetGpuInstanceById(giID)
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("get gpu instance: %v", ret)
+	}
+
+	ci, ret := gi.GetComputeInstanceById(ciID)
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("get compute instance: %v", ret)
+	}
+
+	if ret := ci.Destroy(); ret != nvml.SUCCESS {
+		return fmt.Errorf("destroy compute instance: %v", ret)
+	}
+	if ret := gi.Destroy(); ret != nvml.SUCCESS {
+		return fmt.Errorf("destroy gpu instance: %v", ret)
+	}
+
+	klog.InfoS("Deleted MIG slice", "UUID", uuid)
+	return nil
 }
