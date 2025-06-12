@@ -3,6 +3,7 @@ package webhook
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	admissionctl "sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -15,6 +16,7 @@ const (
 	ReadinessEndpointURI string = "/readyz"
 	HealthzEndpointURI   string = "/healthz"
 	WebhookName          string = "instaslice-webhook"
+	secondaryScheduler   string = "instaslice-scheduler"
 )
 
 // Webhook interface
@@ -56,35 +58,71 @@ func (s *InstasliceWebhook) Validate(req admissionctl.Request) bool {
 
 // Authorized implements Webhook interface
 func (s *InstasliceWebhook) Authorized(request admissionctl.Request) admissionctl.Response {
-   var ret admissionctl.Response
-   klog.InfoS("Webhook Authorized called", "uid", request.AdmissionRequest.UID, "kind", request.Kind.Kind)
+	var ret admissionctl.Response
+	klog.InfoS("Webhook Authorized called", "uid", request.AdmissionRequest.UID, "kind", request.Kind.Kind)
 
 	pod, err := s.renderPod(request)
-   if err != nil {
-       klog.ErrorS(err, "Failed to render Pod from request", "uid", request.AdmissionRequest.UID)
-       ret = admissionctl.Errored(http.StatusBadRequest, err)
-       ret.UID = request.AdmissionRequest.UID
-       return ret
-   }
+	if err != nil {
+		klog.ErrorS(err, "Failed to render Pod from request", "uid", request.AdmissionRequest.UID)
+		ret = admissionctl.Errored(http.StatusBadRequest, err)
+		ret.UID = request.AdmissionRequest.UID
+		return ret
+	}
 
 	mutatePod, err := s.mutatePod(pod)
-   if err != nil {
-       klog.ErrorS(err, "Pod mutation failed", "uid", request.AdmissionRequest.UID)
-       ret = admissionctl.Errored(http.StatusBadRequest, err)
-       ret.UID = request.AdmissionRequest.UID
-       return ret
-   }
+	if err != nil {
+		klog.ErrorS(err, "Pod mutation failed", "uid", request.AdmissionRequest.UID)
+		ret = admissionctl.Errored(http.StatusBadRequest, err)
+		ret.UID = request.AdmissionRequest.UID
+		return ret
+	}
 
-   klog.V(4).InfoS("Returning patch response for Pod", "uid", request.AdmissionRequest.UID)
-   ret = admissionctl.PatchResponseFromRaw(request.Object.Raw, mutatePod)
-   ret.UID = request.AdmissionRequest.UID
-   return ret
+	klog.V(4).InfoS("Returning patch response for Pod", "uid", request.AdmissionRequest.UID)
+	ret = admissionctl.PatchResponseFromRaw(request.Object.Raw, mutatePod)
+	ret.UID = request.AdmissionRequest.UID
+	return ret
 }
 
 func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
-   klog.V(4).InfoS("Mutating Pod structure", "name", pod.Name, "namespace", pod.Namespace)
-   mutatedPod := pod.DeepCopy()
-	// TODO mutate pod
+	klog.V(4).InfoS("Mutating Pod structure", "name", pod.Name, "namespace", pod.Namespace)
+	mutatedPod := pod.DeepCopy()
+	needsScheduler := false
+
+	mutateResources := func(c *corev1.Container) {
+		if c.Resources.Limits == nil {
+			return
+		}
+		newLimits := corev1.ResourceList{}
+		for name, qty := range c.Resources.Limits {
+			key := string(name)
+			switch {
+			case strings.HasPrefix(key, "nvidia.com/mig-"):
+				newKey := corev1.ResourceName(strings.Replace(key, "nvidia.com/", "instaslice.com/", 1))
+				newLimits[newKey] = qty
+				needsScheduler = true
+			default:
+				newLimits[name] = qty
+				if strings.HasPrefix(key, "instaslice.com/mig-") {
+					needsScheduler = true
+				}
+			}
+		}
+		if len(newLimits) > 0 {
+			c.Resources.Limits = newLimits
+		}
+	}
+
+	for i := range mutatedPod.Spec.Containers {
+		mutateResources(&mutatedPod.Spec.Containers[i])
+	}
+	for i := range mutatedPod.Spec.InitContainers {
+		mutateResources(&mutatedPod.Spec.InitContainers[i])
+	}
+
+	if needsScheduler {
+		mutatedPod.Spec.SchedulerName = secondaryScheduler
+	}
+
 	return json.Marshal(mutatedPod)
 }
 
@@ -92,8 +130,8 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 // If the request includes an OldObject (from an update or deletion), it will be
 // preferred, otherwise, the Object will be preferred.
 func (s *InstasliceWebhook) renderPod(request admissionctl.Request) (*corev1.Pod, error) {
-   var err error
-   klog.V(4).InfoS("Rendering Pod from request", "uid", request.AdmissionRequest.UID)
+	var err error
+	klog.V(4).InfoS("Rendering Pod from request", "uid", request.AdmissionRequest.UID)
 	decoder := admissionctl.NewDecoder(scheme)
 	pod := &corev1.Pod{}
 	if len(request.OldObject.Raw) > 0 {

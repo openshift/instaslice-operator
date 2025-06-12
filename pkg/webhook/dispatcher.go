@@ -11,8 +11,10 @@ import (
 	admissionctl "sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/klog/v2"
 )
 
@@ -22,6 +24,11 @@ var (
 	scheme          = runtime.NewScheme()
 	admissionCodecs = serializer.NewCodecFactory(scheme)
 )
+
+func init() {
+	utilruntime.Must(admissionv1.AddToScheme(scheme))
+	utilruntime.Must(corev1.AddToScheme(scheme))
+}
 
 // Dispatcher struct
 type Dispatcher struct {
@@ -37,23 +44,23 @@ func NewDispatcher(hook Webhook) *Dispatcher {
 
 // HandleRequest http request
 func (d *Dispatcher) HandleRequest(w http.ResponseWriter, r *http.Request) {
-   klog.InfoS("Handling webhook request", "requestURI", r.RequestURI)
+	klog.InfoS("Handling webhook request", "requestURI", r.RequestURI)
 	_, err := url.Parse(r.RequestURI)
-   if err != nil {
-       w.WriteHeader(http.StatusBadRequest)
-       klog.ErrorS(err, "Failed to parse request URL", "requestURI", r.RequestURI)
-       SendResponse(w, admissionctl.Errored(http.StatusBadRequest, err))
-       return
-   }
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		klog.ErrorS(err, "Failed to parse request URL", "requestURI", r.RequestURI)
+		SendResponse(w, admissionctl.Errored(http.StatusBadRequest, err))
+		return
+	}
 
 	request, _, err := ParseHTTPRequest(r)
 	// Problem parsing an AdmissionReview, so use BadRequest HTTP status code
-   if err != nil {
-       w.WriteHeader(http.StatusBadRequest)
-       klog.ErrorS(err, "Error parsing HTTP request body")
-       SendResponse(w, admissionctl.Errored(http.StatusBadRequest, err))
-       return
-   }
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		klog.ErrorS(err, "Error parsing HTTP request body")
+		SendResponse(w, admissionctl.Errored(http.StatusBadRequest, err))
+		return
+	}
 
 	SendResponse(w, d.hook.Authorized(request))
 }
@@ -66,11 +73,11 @@ func SendResponse(w io.Writer, resp admissionctl.Response) {
 	}
 	responseAdmissionReview.APIVersion = admissionv1.SchemeGroupVersion.String()
 	responseAdmissionReview.Kind = "AdmissionReview"
-   err := encoder.Encode(responseAdmissionReview)
-   if err != nil {
-       klog.ErrorS(err, "Failed to encode response", "response", resp)
-       SendResponse(w, admissionctl.Errored(http.StatusInternalServerError, err))
-   }
+	err := encoder.Encode(responseAdmissionReview)
+	if err != nil {
+		klog.ErrorS(err, "Failed to encode response", "response", resp)
+		SendResponse(w, admissionctl.Errored(http.StatusInternalServerError, err))
+	}
 }
 
 func ParseHTTPRequest(r *http.Request) (admissionctl.Request, admissionctl.Response, error) {
