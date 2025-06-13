@@ -50,24 +50,7 @@ spec:
               and health of the NodeAccelerator object
             properties:
               conditions:
-                description: |-
-                  conditions represent the observed state of the Instaslice object
-                  For example:
-                    conditions:
-                    - type: Ready
-                      status: "True"
-                      lastTransitionTime: "2025-01-22T12:34:56Z"
-                      reason: "GPUsAccessible"
-                      message: "All discovered GPUs are accessible and the driver is healthy."
-
-                  Or, in an error scenario (driver not responding):
-                    conditions:
-                    - type: Ready
-                      status: "False"
-                      lastTransitionTime: "2025-01-22T12:34:56Z"
-                      reason: "DriverError"
-                      message: "Could not communicate with the GPU driver on the node."
-                  kubebuilder:validation:Optional
+                description: kubebuilder:validation:Optional
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

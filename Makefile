@@ -73,16 +73,6 @@ regen-crd:
 	cp manifests/instaslice-operator.crd.yaml deploy/00_instaslice-operator.crd.yaml
 		cp manifests/inference.redhat.com_nodeaccelerators.yaml deploy/00_nodeaccelerators.crd.yaml
 
-.PHONY: regen-crd-kind
-regen-crd-kind:
-	@echo "Generating CRDs into deploy-kind directory"
-	go build -o _output/tools/bin/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
-	rm -f deploy-kind/00_instaslice-operator.crd.yaml
-	rm -f deploy-kind/00_nodeaccelerators.crd.yaml
-	./_output/tools/bin/controller-gen crd paths=./pkg/apis/instasliceoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./deploy-kind
-	mv deploy-kind/inference.redhat.com_dasoperators.yaml deploy-kind/00_instaslice-operator.crd.yaml
-	mv deploy-kind/inference.redhat.com_nodeaccelerators.yaml deploy-kind/00_nodeaccelerators.crd.yaml
-
 .PHONY: regen-crd-k8s
 regen-crd-k8s:
 	@echo "Generating CRDs into deploy-k8s directory"
@@ -105,7 +95,7 @@ build-push-images:
 	podman push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
 	podman push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
 
-generate: regen-crd regen-crd-kind regen-crd-k8s generate-clients
+generate: regen-crd regen-crd-k8s generate-clients
 .PHONY: generate
 
 generate-clients:
@@ -119,11 +109,6 @@ verify-codegen:
 clean:
 	$(RM) -r ./_tmp
 .PHONY: clean
-
-.PHONY: cleanup-kind
-cleanup-kind:
-	@echo "=== Deleting Kind cluster 'instaslice-test' ==="
-	kind delete cluster --name instaslice-test
 
 
 .PHONY: build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
