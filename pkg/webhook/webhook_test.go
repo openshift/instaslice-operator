@@ -44,7 +44,7 @@ func TestMutatePodNvidiaResource(t *testing.T) {
 	if _, ok := limits[corev1.ResourceName("nvidia.com/mig-1g.5gb")]; ok {
 		t.Fatalf("nvidia resource still present")
 	}
-	q, ok := limits[corev1.ResourceName("mig.das.com/mig-1g.5gb")]
+	q, ok := limits[corev1.ResourceName("mig.das.com/1g.5gb")]
 	if !ok || q.Value() != 1 {
 		t.Fatalf("expected instaslice resource quantity 1")
 	}
@@ -60,7 +60,7 @@ func TestMutatePodInstaResource(t *testing.T) {
 					Image: "ubuntu:20.04",
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
-							corev1.ResourceName("mig.das.com/mig-1g.5gb"): resource.MustParse("1"),
+							corev1.ResourceName("mig.das.com/1g.5gb"): resource.MustParse("1"),
 						},
 					},
 				},
@@ -79,7 +79,7 @@ func TestMutatePodInstaResource(t *testing.T) {
 	if mutated.Spec.SchedulerName != secondaryScheduler {
 		t.Fatalf("expected scheduler set")
 	}
-	if _, ok := mutated.Spec.Containers[0].Resources.Limits[corev1.ResourceName("mig.das.com/mig-1g.5gb")]; !ok {
+	if _, ok := mutated.Spec.Containers[0].Resources.Limits[corev1.ResourceName("mig.das.com/1g.5gb")]; !ok {
 		t.Fatalf("instaslice resource missing")
 	}
 }

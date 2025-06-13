@@ -150,7 +150,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 	var resourceNames []string
 	for profile := range discovered.MigPlacement {
 		sanitizedProfile := sanitizeProfileName(profile)
-		resourceNames = append(resourceNames, fmt.Sprintf("mig.das.com/mig-%s", sanitizedProfile))
+		resourceNames = append(resourceNames, fmt.Sprintf("mig.das.com/%s", sanitizedProfile))
 	}
 	// ensure deterministic ordering for stable socket names
 	sort.Strings(resourceNames)

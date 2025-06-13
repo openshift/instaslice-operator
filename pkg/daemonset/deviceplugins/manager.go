@@ -13,7 +13,7 @@ import (
 // Manager tracks and monitors devices for a specific extended-resource.
 // It drives discovery and health monitoring and pushes device updates.
 type Manager struct {
-	// ResourceName is the extended-resource string (e.g. "mig.das.com/mig-1g.5gb").
+	// ResourceName is the extended-resource string (e.g. "mig.das.com/1g.5gb").
 	ResourceName string
 	// resources contains the discovered node information used to determine
 	// the number of devices to advertise for the resource.
@@ -55,7 +55,7 @@ func (m *Manager) Updates() <-chan []*pluginapi.Device {
 func (m *Manager) Start(ctx context.Context) {
 	klog.InfoS("Starting device manager", "resource", m.ResourceName)
 	parts := strings.SplitN(m.ResourceName, "/", 2)
-	profile := strings.TrimPrefix(parts[len(parts)-1], "mig-")
+	profile := parts[len(parts)-1]
 	profile = unsanitizeProfileName(profile)
 	num := countDevices(m.resources, profile)
 	devs := make([]*pluginapi.Device, 0, num)

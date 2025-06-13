@@ -262,8 +262,7 @@ func (s *Server) createMigSlice(ctx context.Context, alloc *instav1.AllocationCl
 
 func profileFromResourceName(res string) string {
 	parts := strings.Split(res, "/")
-	last := parts[len(parts)-1]
-	return strings.TrimPrefix(last, "mig-")
+	return parts[len(parts)-1]
 }
 
 func (s *Server) getAllocationsByNodeGPU(ctx context.Context, nodeName, profileName string, count int) ([]*instav1.AllocationClaim, error) {

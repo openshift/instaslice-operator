@@ -330,9 +330,10 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 func extractProfileName(limits corev1.ResourceList) string {
 	profileName := ""
 	for k := range limits {
-		if strings.Contains(k.String(), "mig-") {
+		key := k.String()
+		if strings.Contains(key, "nvidia.com/mig-") || strings.Contains(key, "mig.das.com/") {
 			re := regexp.MustCompile(`(\d+g\.\d+gb)`)
-			match := re.FindStringSubmatch(k.String())
+			match := re.FindStringSubmatch(key)
 			if len(match) > 1 {
 				profileName = match[1]
 			}
