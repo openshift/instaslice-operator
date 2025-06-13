@@ -1,34 +1,9 @@
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/runtime"
 )
-
-// AllocationClaimSpec defines the desired state for a GPU slice allocation. It
-// combines fields from AllocationRequest excluding Resources.
-type AllocationClaimSpec struct {
-	// profile specifies the MIG slice profile for allocation
-	// +optional
-	Profile string `json:"profile,omitempty"`
-
-	// podRef is a reference to the gated Pod requesting the allocation
-	// +optional
-	PodRef corev1.ObjectReference `json:"podRef,omitempty"`
-
-	// migPlacement specifies the MIG placement details
-	// +required
-	MigPlacement Placement `json:"migPlacement"`
-
-	// gpuUUID represents the UUID of the selected GPU
-	// +required
-	GPUUUID string `json:"gpuUUID"`
-
-	// nodename represents the name of the selected node
-	// +required
-	Nodename types.NodeName `json:"nodename"`
-}
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +genclient
@@ -39,9 +14,11 @@ type AllocationClaim struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// spec defines the desired allocation
+	// spec defines the desired allocation. This is a runtime.RawExtension to
+	// allow different accelerator vendors to define their own spec objects.
+	// For NVIDIA MIG the object is an AllocationClaimSpec struct.
 	// +optional
-	Spec AllocationClaimSpec `json:"spec,omitempty"`
+	Spec runtime.RawExtension `json:"spec,omitempty"`
 
 	// status describes the current allocation state
 	// +optional

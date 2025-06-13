@@ -32,8 +32,6 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 	// Group=inference.redhat.com, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithKind("AllocationClaim"):
 		return &instasliceoperatorv1alpha1.AllocationClaimApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("AllocationClaimSpec"):
-		return &instasliceoperatorv1alpha1.AllocationClaimSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("DASOperator"):
 		return &instasliceoperatorv1alpha1.DASOperatorApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("DASOperatorSpec"):
@@ -46,8 +44,6 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &instasliceoperatorv1alpha1.NodeAcceleratorSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("NodeAcceleratorStatus"):
 		return &instasliceoperatorv1alpha1.NodeAcceleratorStatusApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("Placement"):
-		return &instasliceoperatorv1alpha1.PlacementApplyConfiguration{}
 
 	}
 	return nil

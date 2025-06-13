@@ -206,9 +206,13 @@ func (s *Server) PreStartContainer(ctx context.Context, req *pluginapi.PreStartC
 // the AllocationClaim. It looks up the GI and CI profile IDs from the
 // discovered node resources stored in the Manager.
 func (s *Server) createMigSlice(ctx context.Context, alloc *instav1.AllocationClaim) (string, error) {
-	mig, ok := s.Manager.resources.MigPlacement[alloc.Spec.Profile]
+	spec, err := getAllocationClaimSpec(alloc)
+	if err != nil {
+		return "", err
+	}
+	mig, ok := s.Manager.resources.MigPlacement[spec.Profile]
 	if !ok {
-		return "", fmt.Errorf("profile %s not found", alloc.Spec.Profile)
+		return "", fmt.Errorf("profile %s not found", spec.Profile)
 	}
 
 	if ret := nvml.Init(); ret != nvml.SUCCESS {
@@ -216,9 +220,9 @@ func (s *Server) createMigSlice(ctx context.Context, alloc *instav1.AllocationCl
 	}
 	defer nvml.Shutdown()
 
-	dev, ret := nvml.DeviceGetHandleByUUID(alloc.Spec.GPUUUID)
+	dev, ret := nvml.DeviceGetHandleByUUID(spec.GPUUUID)
 	if ret != nvml.SUCCESS {
-		return "", fmt.Errorf("get device %s: %v", alloc.Spec.GPUUUID, ret)
+		return "", fmt.Errorf("get device %s: %v", spec.GPUUUID, ret)
 	}
 
 	giInfo, ret := dev.GetGpuInstanceProfileInfo(int(mig.GIProfileID))
@@ -226,7 +230,7 @@ func (s *Server) createMigSlice(ctx context.Context, alloc *instav1.AllocationCl
 		return "", fmt.Errorf("get GI profile info: %v", ret)
 	}
 
-	placement := nvml.GpuInstancePlacement{Start: uint32(alloc.Spec.MigPlacement.Start), Size: uint32(alloc.Spec.MigPlacement.Size)}
+	placement := nvml.GpuInstancePlacement{Start: uint32(spec.MigPlacement.Start), Size: uint32(spec.MigPlacement.Size)}
 	gpuInst, ret := dev.CreateGpuInstanceWithPlacement(&giInfo, &placement)
 	if ret != nvml.SUCCESS {
 		return "", fmt.Errorf("create GPU instance: %v", ret)
@@ -256,7 +260,7 @@ func (s *Server) createMigSlice(ctx context.Context, alloc *instav1.AllocationCl
 		return "", fmt.Errorf("get MIG UUID: %v", ret)
 	}
 
-	klog.InfoS("Created MIG slice", "gpu", alloc.Spec.GPUUUID, "profile", alloc.Spec.Profile, "migUUID", uuid)
+	klog.InfoS("Created MIG slice", "gpu", spec.GPUUUID, "profile", spec.Profile, "migUUID", uuid)
 	return uuid, nil
 }
 
@@ -292,7 +296,12 @@ func (s *Server) getAllocationsByNodeGPU(ctx context.Context, nodeName, profileN
 		out := make([]*instav1.AllocationClaim, 0, len(objs))
 		for _, obj := range objs {
 			if a, ok := obj.(*instav1.AllocationClaim); ok {
-				if a.Spec.Profile == migProfile && a.Status == instav1.AllocationClaimStatusCreated {
+				spec, err := getAllocationClaimSpec(a)
+				if err != nil {
+					klog.ErrorS(err, "failed to decode allocation spec")
+					continue
+				}
+				if spec.Profile == migProfile && a.Status == instav1.AllocationClaimStatusCreated {
 					out = append(out, a)
 					if len(out) == count {
 						break

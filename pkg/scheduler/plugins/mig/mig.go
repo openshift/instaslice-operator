@@ -38,6 +38,19 @@ type Plugin struct {
 	allocationIndexer cache.Indexer
 }
 
+func getAllocationClaimSpec(a *instav1alpha1.AllocationClaim) (instav1alpha1.AllocationClaimSpec, error) {
+	var spec instav1alpha1.AllocationClaimSpec
+	if a == nil {
+		return spec, fmt.Errorf("allocation claim is nil")
+	}
+	if len(a.Spec.Raw) > 0 {
+		if err := json.Unmarshal(a.Spec.Raw, &spec); err != nil {
+			return spec, err
+		}
+	}
+	return spec, nil
+}
+
 // Args holds the scheduler plugin configuration.
 type Args struct {
 	Namespace string `json:"namespace,omitempty"`
@@ -99,8 +112,12 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 			if !ok {
 				return nil, nil
 			}
+			spec, err := getAllocationClaimSpec(a)
+			if err != nil {
+				return nil, err
+			}
 			// composite key: "<nodename>/<gpuuuid>"
-			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.GPUUUID)
+			key := fmt.Sprintf("%s/%s", spec.Nodename, spec.GPUUUID)
 			return []string{key}, nil
 		},
 	})
@@ -271,26 +288,28 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 				continue
 			}
 			size, _, _, _ := extractGpuProfile(resources, profileName)
+			specObj := instav1alpha1.AllocationClaimSpec{
+				Profile: profileName,
+				PodRef: corev1.ObjectReference{
+					Kind:      "Pod",
+					Namespace: pod.GetNamespace(),
+					Name:      pod.GetName(),
+					UID:       pod.GetUID(),
+				},
+				MigPlacement: instav1alpha1.Placement{
+					Size:  size,
+					Start: newStart,
+				},
+				GPUUUID:  gpu.GPUUUID,
+				Nodename: types.NodeName(instObj.GetName()),
+			}
+			rawSpec, _ := json.Marshal(&specObj)
 			alloc := &instav1alpha1.AllocationClaim{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      fmt.Sprintf("%s-%s", pod.GetUID(), c.Name),
 					Namespace: "das-operator",
 				},
-				Spec: instav1alpha1.AllocationClaimSpec{
-					Profile: profileName,
-					PodRef: corev1.ObjectReference{
-						Kind:      "Pod",
-						Namespace: pod.GetNamespace(),
-						Name:      pod.GetName(),
-						UID:       pod.GetUID(),
-					},
-					MigPlacement: instav1alpha1.Placement{
-						Size:  size,
-						Start: newStart,
-					},
-					GPUUUID:  gpu.GPUUUID,
-					Nodename: types.NodeName(instObj.GetName()),
-				},
+				Spec:   runtime.RawExtension{Raw: rawSpec},
 				Status: instav1alpha1.AllocationClaimStatusCreated,
 			}
 			// mark slices as used
@@ -466,8 +485,13 @@ func gpuAllocatedSlices(indexer cache.Indexer, nodeName, gpuUUID string) ([8]int
 		if !ok {
 			continue
 		}
-		for i := 0; i < int(alloc.Spec.MigPlacement.Size); i++ {
-			gpuAllocatedIndex[int(alloc.Spec.MigPlacement.Start)+i] = 1
+		spec, err := getAllocationClaimSpec(alloc)
+		if err != nil {
+			klog.ErrorS(err, "unable to decode allocation spec")
+			continue
+		}
+		for i := 0; i < int(spec.MigPlacement.Size); i++ {
+			gpuAllocatedIndex[int(spec.MigPlacement.Start)+i] = 1
 		}
 	}
 	return gpuAllocatedIndex, nil

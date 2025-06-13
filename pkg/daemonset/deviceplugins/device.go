@@ -38,6 +38,19 @@ func unsanitizeProfileName(profile string) string {
 	return strings.ReplaceAll(profile, "-plus-", "+")
 }
 
+func getAllocationClaimSpec(a *instav1.AllocationClaim) (instav1.AllocationClaimSpec, error) {
+	var spec instav1.AllocationClaimSpec
+	if a == nil {
+		return spec, fmt.Errorf("allocation claim is nil")
+	}
+	if len(a.Spec.Raw) > 0 {
+		if err := json.Unmarshal(a.Spec.Raw, &spec); err != nil {
+			return spec, err
+		}
+	}
+	return spec, nil
+}
+
 // StartDevicePlugins starts device managers, gRPC servers, and registrars for each resource.
 func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 
@@ -97,14 +110,22 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 			if !ok {
 				return []string{}, nil
 			}
-			return []string{string(a.Spec.Nodename)}, nil
+			spec, err := getAllocationClaimSpec(a)
+			if err != nil {
+				return nil, err
+			}
+			return []string{string(spec.Nodename)}, nil
 		},
 		"node-gpu": func(obj interface{}) ([]string, error) {
 			a, ok := obj.(*instav1.AllocationClaim)
 			if !ok {
 				return nil, nil
 			}
-			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.GPUUUID)
+			spec, err := getAllocationClaimSpec(a)
+			if err != nil {
+				return nil, err
+			}
+			key := fmt.Sprintf("%s/%s", spec.Nodename, spec.GPUUUID)
 			return []string{key}, nil
 		},
 		"node-MigProfile": func(obj interface{}) ([]string, error) {
@@ -112,7 +133,11 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 			if !ok {
 				return nil, nil
 			}
-			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.Profile)
+			spec, err := getAllocationClaimSpec(a)
+			if err != nil {
+				return nil, err
+			}
+			key := fmt.Sprintf("%s/%s", spec.Nodename, spec.Profile)
 			return []string{key}, nil
 		},
 	})
@@ -127,8 +152,13 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 			if !ok {
 				return
 			}
+			spec, err := getAllocationClaimSpec(a)
+			if err != nil {
+				klog.ErrorS(err, "failed to decode allocation spec")
+				return
+			}
 			// Perform a simple action on AllocationClaim creation. For now we just log it.
-			klog.InfoS("AllocationClaim created", "name", a.Name, "node", a.Spec.Nodename, "Spec", a.Spec)
+			klog.InfoS("AllocationClaim created", "name", a.Name, "node", spec.Nodename, "Spec", spec)
 		},
 	})
 

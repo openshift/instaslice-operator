@@ -20,6 +20,7 @@ import (
 	instasliceoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
 	internal "github.com/openshift/instaslice-operator/pkg/generated/applyconfiguration/internal"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 	types "k8s.io/apimachinery/pkg/types"
 	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
 	v1 "k8s.io/client-go/applyconfigurations/meta/v1"
@@ -30,7 +31,7 @@ import (
 type AllocationClaimApplyConfiguration struct {
 	v1.TypeMetaApplyConfiguration    `json:",inline"`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	Spec                             *AllocationClaimSpecApplyConfiguration            `json:"spec,omitempty"`
+	Spec                             *runtime.RawExtension                             `json:"spec,omitempty"`
 	Status                           *instasliceoperatorv1alpha1.AllocationClaimStatus `json:"status,omitempty"`
 }
 
@@ -242,8 +243,8 @@ func (b *AllocationClaimApplyConfiguration) ensureObjectMetaApplyConfigurationEx
 // WithSpec sets the Spec field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Spec field is set to the value of the last call.
-func (b *AllocationClaimApplyConfiguration) WithSpec(value *AllocationClaimSpecApplyConfiguration) *AllocationClaimApplyConfiguration {
-	b.Spec = value
+func (b *AllocationClaimApplyConfiguration) WithSpec(value runtime.RawExtension) *AllocationClaimApplyConfiguration {
+	b.Spec = &value
 	return b
 }
 

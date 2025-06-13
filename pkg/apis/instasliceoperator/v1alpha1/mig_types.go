@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 type DiscoveredGPU struct {
@@ -59,4 +60,28 @@ type Placement struct {
 	// start represents the starting index driven by size for a profile
 	// +required
 	Start int32 `json:"start"`
+}
+
+// AllocationClaimSpec defines the desired state for a GPU slice allocation. It
+// combines fields from AllocationRequest excluding Resources.
+type AllocationClaimSpec struct {
+	// profile specifies the MIG slice profile for allocation
+	// +optional
+	Profile string `json:"profile,omitempty"`
+
+	// podRef is a reference to the gated Pod requesting the allocation
+	// +optional
+	PodRef corev1.ObjectReference `json:"podRef,omitempty"`
+
+	// migPlacement specifies the MIG placement details
+	// +required
+	MigPlacement Placement `json:"migPlacement"`
+
+	// gpuUUID represents the UUID of the selected GPU
+	// +required
+	GPUUUID string `json:"gpuUUID"`
+
+	// nodename represents the name of the selected node
+	// +required
+	Nodename types.NodeName `json:"nodename"`
 }
