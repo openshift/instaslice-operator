@@ -120,53 +120,6 @@ clean:
 	$(RM) -r ./_tmp
 .PHONY: clean
 
-## test-kind: quick smoke-test on a Kind cluster
-.PHONY: test-kind
-test-kind:
-	@echo "=== Creating Kind cluster 'instaslice-test' ==="
-	kind create cluster --name instaslice-test
-
-	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') nvidia.com/mig.capable=true --overwrite
-
-	@echo "=== Building container images ==="
-	docker build -f Dockerfile.scheduler.ocp -t das-scheduler:dev .
-	docker build -f Dockerfile.daemonset.ocp -t das-daemonset:dev .
-	docker build -f Dockerfile.ocp -t instaslice-operator:dev .
-	docker build -f Dockerfile.webhook.ocp -t das-webhook:dev .
-
-	@echo "=== Loading images into Kind ==="
-	kind load docker-image das-scheduler:dev --name instaslice-test
-	kind load docker-image das-daemonset:dev --name instaslice-test
-	kind load docker-image instaslice-operator:dev --name instaslice-test
-	kind load docker-image das-webhook:dev --name instaslice-test
-
-	@echo "=== Deploying Cert Manager ==="
-	$(MAKE) deploy-cert-manager
-	@echo "=== Generating CRDs for Kind ==="
-	$(MAKE) regen-crd-kind
-
-
-	@echo "=== Applying Kind CRDs ==="
-	kubectl apply \
-       -f deploy-kind/00_instaslice-operator.crd.yaml \
-       -f deploy-kind/00_nodeaccelerators.crd.yaml
-
-	@echo "=== Waiting for CRDs to be established ==="
-       kubectl wait --for=condition=established --timeout=60s crd dasoperators.inference.redhat.com
-
-	@echo "=== Applying Kind core manifests ==="
-	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
-	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' deploy-kind/09_instaslice_operator.cr.yaml
-	kubectl apply -f deploy-kind/
-
-
-	@echo "=== Deploying das-scheduler ==="
-	kubectl apply -f deploy-kind/06_scheduler_deployment.yaml
-
-	sleep 5
-	@echo "=== Deploying test pod ==="
-	kubectl apply -f deploy-kind/07_test_pod.yaml
-
 .PHONY: cleanup-kind
 cleanup-kind:
 	@echo "=== Deleting Kind cluster 'instaslice-test' ==="
