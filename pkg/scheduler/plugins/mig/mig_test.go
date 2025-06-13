@@ -14,6 +14,8 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
+	"strconv"
+	"strings"
 
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
 	fakeclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/fake"
@@ -122,6 +124,28 @@ func newTwoContainerPod(uid, profile1, profile2 string) *corev1.Pod {
 	}
 }
 
+func newMultiContainerPod(uid string, profiles []string) *corev1.Pod {
+	containers := make([]corev1.Container, len(profiles))
+	for i, p := range profiles {
+		containers[i] = corev1.Container{
+			Name: fmt.Sprintf("c%d", i),
+			Resources: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceName("nvidia.com/mig-" + p): resource.MustParse("1"),
+				},
+			},
+		}
+	}
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:       types.UID(uid),
+			Name:      "pod-" + uid,
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{Containers: containers},
+	}
+}
+
 func newNoProfilePod(uid string) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -133,6 +157,18 @@ func newNoProfilePod(uid string) *corev1.Pod {
 			Containers: []corev1.Container{{Name: "c1"}},
 		},
 	}
+}
+
+// singleGPU trims the NodeAccelerator object to expose only one GPU.
+func singleGPU(inst *instav1.NodeAccelerator) *instav1.NodeAccelerator {
+	var res instav1.DiscoveredNodeResources
+	_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
+	if len(res.NodeGPUs) > 1 {
+		res.NodeGPUs = res.NodeGPUs[:1]
+	}
+	raw, _ := json.Marshal(&res)
+	inst.Status.NodeResources.Raw = raw
+	return inst
 }
 
 func newPlugin(objs ...runtime.Object) *Plugin {
@@ -745,6 +781,209 @@ func TestScore(t *testing.T) {
 			}
 			if score != tc.expect {
 				t.Fatalf("expected score %d, got %d", tc.expect, score)
+			}
+		})
+	}
+}
+
+func TestFilterValidCombinations(t *testing.T) {
+	combos := []string{
+		"1x1g.10gb + 1x1g.5gb+me + 5x1g.5gb",
+		"1x1g.10gb + 6x1g.5gb",
+		"1x2g.10gb + 1x1g.10gb + 1x1g.5gb+me + 3x1g.5gb",
+		"1x2g.10gb + 1x1g.10gb + 4x1g.5gb",
+		"1x2g.10gb + 2x1g.10gb + 1x1g.5gb+me + 1x1g.5gb",
+		"1x2g.10gb + 2x1g.10gb + 2x1g.5gb",
+		"1x2g.10gb + 3x1g.10gb",
+		"1x3g.20gb + 1x1g.10gb + 1x1g.5gb+me + 1x1g.5gb",
+		"1x3g.20gb + 1x1g.10gb + 2x1g.5gb",
+		"1x3g.20gb + 1x1g.5gb+me + 3x1g.5gb",
+		"1x3g.20gb + 1x2g.10gb + 1x1g.10gb",
+		"1x3g.20gb + 1x2g.10gb + 1x1g.5gb+me + 1x1g.5gb",
+		"1x3g.20gb + 1x2g.10gb + 2x1g.5gb",
+		"1x3g.20gb + 2x1g.10gb",
+		"1x3g.20gb + 2x2g.10gb",
+		"1x3g.20gb + 4x1g.5gb",
+		"1x4g.20gb + 1x1g.10gb + 1x1g.5gb+me + 1x1g.5gb",
+		"1x4g.20gb + 1x1g.10gb + 2x1g.5gb",
+		"1x4g.20gb + 1x2g.10gb + 1x1g.10gb",
+		"1x4g.20gb + 1x3g.20gb",
+		"1x4g.20gb + 2x1g.10gb",
+		"1x7g.40gb",
+		"2x1g.10gb + 1x1g.5gb+me + 3x1g.5gb",
+		"2x1g.10gb + 4x1g.5gb",
+		"2x2g.10gb + 1x1g.10gb + 1x1g.5gb+me + 1x1g.5gb",
+		"2x2g.10gb + 1x1g.10gb + 2x1g.5gb",
+		"2x2g.10gb + 2x1g.10gb",
+		"2x3g.20gb",
+		"3x1g.10gb + 1x1g.5gb+me + 1x1g.5gb",
+		"3x1g.10gb + 2x1g.5gb",
+		"3x2g.10gb + 1x1g.10gb",
+		"4x1g.10gb",
+	}
+
+	parse := func(s string) []string {
+		var profiles []string
+		for _, part := range strings.Split(s, " + ") {
+			fields := strings.SplitN(part, "x", 2)
+			if len(fields) != 2 {
+				continue
+			}
+			n, err := strconv.Atoi(fields[0])
+			if err != nil {
+				continue
+			}
+			for i := 0; i < n; i++ {
+				profiles = append(profiles, fields[1])
+			}
+		}
+		return profiles
+	}
+
+	ctx := context.Background()
+	for i, cmb := range combos {
+		t.Run(fmt.Sprintf("combo-%d", i), func(t *testing.T) {
+			inst := utils.GenerateFakeCapacity("node1")
+			p := newPlugin(inst)
+			pod := newMultiContainerPod(fmt.Sprintf("cmb-%d", i), parse(cmb))
+			ni := framework.NewNodeInfo()
+			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
+			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
+			if st != nil {
+				if st.Code() != framework.Success {
+					t.Fatalf("expected success, got %v", st.Code())
+				}
+			}
+		})
+	}
+}
+func TestFilterMaxProfileCounts(t *testing.T) {
+	cases := []struct {
+		profile string
+		max     int
+	}{
+		{"1g.5gb", 7},
+		{"1g.5gb+me", 1},
+		{"1g.10gb", 4},
+		{"2g.10gb", 3},
+		{"3g.20gb", 2},
+		{"4g.20gb", 1},
+		{"7g.40gb", 1},
+	}
+	ctx := context.Background()
+	for _, tc := range cases {
+		t.Run(tc.profile, func(t *testing.T) {
+			inst := utils.GenerateFakeCapacity("node1")
+			p := newPlugin(inst)
+			var profiles []string
+			for i := 0; i < tc.max; i++ {
+				profiles = append(profiles, tc.profile)
+			}
+			pod := newMultiContainerPod(tc.profile+"-max", profiles)
+			ni := framework.NewNodeInfo()
+			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
+			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
+			if st != nil && st.Code() != framework.Success {
+				t.Fatalf("expected success, got %v", st.Code())
+			}
+		})
+		t.Run(tc.profile+"-exceed", func(t *testing.T) {
+			inst := utils.GenerateFakeCapacity("node1")
+			var res instav1.DiscoveredNodeResources
+			_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
+			ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+			ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+			p := newPlugin(inst, ex1, ex2)
+			var profiles []string
+			for i := 0; i < tc.max+1; i++ {
+				profiles = append(profiles, tc.profile)
+			}
+			pod := newMultiContainerPod(tc.profile+"-ex", profiles)
+			ni := framework.NewNodeInfo()
+			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
+			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
+			if st == nil || st.Code() != framework.Unschedulable {
+				if st == nil {
+					t.Fatalf("expected unschedulable, got success")
+				} else {
+					t.Fatalf("expected unschedulable, got %v", st.Code())
+				}
+			}
+		})
+	}
+}
+
+func TestFilterInvalidCombinations(t *testing.T) {
+	combos := []string{
+		"1x1g.10gb + 1x1g.5gb+me + 5x1g.5gb",
+		"1x1g.10gb + 6x1g.5gb",
+		"1x2g.10gb + 1x1g.10gb + 1x1g.5gb+me + 3x1g.5gb",
+		"1x2g.10gb + 1x1g.10gb + 4x1g.5gb",
+		"1x2g.10gb + 2x1g.10gb + 1x1g.5gb+me + 1x1g.5gb",
+		"1x2g.10gb + 2x1g.10gb + 2x1g.5gb",
+		"1x2g.10gb + 3x1g.10gb",
+		"1x3g.20gb + 1x1g.10gb + 1x1g.5gb+me + 1x1g.5gb",
+		"1x3g.20gb + 1x1g.10gb + 2x1g.5gb",
+		"1x3g.20gb + 1x1g.5gb+me + 3x1g.5gb",
+		"1x3g.20gb + 1x2g.10gb + 1x1g.10gb",
+		"1x3g.20gb + 1x2g.10gb + 1x1g.5gb+me + 1x1g.5gb",
+		"1x3g.20gb + 1x2g.10gb + 2x1g.5gb",
+		"1x3g.20gb + 2x1g.10gb",
+		"1x3g.20gb + 2x2g.10gb",
+		"1x3g.20gb + 4x1g.5gb",
+		"1x4g.20gb + 1x1g.10gb + 1x1g.5gb+me + 1x1g.5gb",
+		"1x4g.20gb + 1x1g.10gb + 2x1g.5gb",
+		"1x4g.20gb + 1x2g.10gb + 1x1g.10gb",
+		"1x4g.20gb + 1x3g.20gb",
+		"1x4g.20gb + 2x1g.10gb",
+		"1x7g.40gb",
+		"2x1g.10gb + 1x1g.5gb+me + 3x1g.5gb",
+		"2x1g.10gb + 4x1g.5gb",
+		"2x2g.10gb + 1x1g.10gb + 1x1g.5gb+me + 1x1g.5gb",
+		"2x2g.10gb + 1x1g.10gb + 2x1g.5gb",
+		"2x2g.10gb + 2x1g.10gb",
+		"2x3g.20gb",
+		"3x1g.10gb + 1x1g.5gb+me + 1x1g.5gb",
+		"3x1g.10gb + 2x1g.5gb",
+		"3x2g.10gb + 1x1g.10gb",
+		"4x1g.10gb",
+	}
+	parse := func(s string) []string {
+		var profiles []string
+		for _, part := range strings.Split(s, " + ") {
+			fields := strings.SplitN(part, "x", 2)
+			if len(fields) != 2 {
+				continue
+			}
+			n, err := strconv.Atoi(fields[0])
+			if err != nil {
+				continue
+			}
+			for i := 0; i < n; i++ {
+				profiles = append(profiles, fields[1])
+			}
+		}
+		return profiles
+	}
+	ctx := context.Background()
+	for i, cmb := range combos {
+		t.Run(fmt.Sprintf("inv-%d", i), func(t *testing.T) {
+			inst := utils.GenerateFakeCapacity("node1")
+			var res instav1.DiscoveredNodeResources
+			_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
+			ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+			ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+			p := newPlugin(inst, ex1, ex2)
+			pod := newMultiContainerPod(fmt.Sprintf("inv-%d", i), parse(cmb))
+			ni := framework.NewNodeInfo()
+			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
+			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
+			if st == nil || st.Code() != framework.Unschedulable {
+				if st == nil {
+					t.Fatalf("expected unschedulable, got success")
+				} else {
+					t.Fatalf("expected unschedulable, got %v", st.Code())
+				}
 			}
 		})
 	}
