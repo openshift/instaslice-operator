@@ -31,17 +31,17 @@ spec:
           path: /etc/cdi
           type: DirectoryOrCreate
       containers:
-      - name: instaslice-daemonset
+      - name: das-daemonset
         securityContext:
           allowPrivilegeEscalation: true
           privileged: true
           readOnlyRootFilesystem: false
           capabilities:
             drop: [ "ALL" ]
-        image: quay.io/ryan.phillips/instaslice-daemonset
+        image: quay.io/ryan.phillips/das-daemonset
         imagePullPolicy: Always
         command:
-          - /usr/bin/instaslice-daemonset
+          - /usr/bin/das-daemonset
         args:
           - "daemonset"
         volumeMounts:

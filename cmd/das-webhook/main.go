@@ -27,7 +27,7 @@ func main() {
 
 func NewInstasliceWebhookCommand(ctx context.Context) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "instaslice-webhook",
+		Use:     "das-webhook",
 		Short:   "OpenShift cluster Instaslice operator webhook",
 		Version: version.Get().GitVersion,
 		Run: func(cmd *cobra.Command, args []string) {

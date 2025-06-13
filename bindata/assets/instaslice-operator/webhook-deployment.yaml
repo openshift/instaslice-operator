@@ -43,14 +43,14 @@ spec:
       automountServiceAccountToken: false
       containers:
       - command:
-          - /usr/bin/instaslice-webhook
+          - /usr/bin/das-webhook
         args:
           - serve
           - --tls=true
           - --tlskey=/tmp/k8s-webhook-server/serving-certs/tls.key
           - --tlscert=/tmp/k8s-webhook-server/serving-certs/tls.crt
           - --cacert=/tmp/k8s-webhook-server/serving-certs/ca.crt
-        image: quay.io/ryan.phillips/instaslice-webhook
+        image: quay.io/ryan.phillips/das-webhook
         name: das-operator-webhook
         livenessProbe:
           httpGet:

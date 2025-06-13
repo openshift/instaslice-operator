@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	WebhookName string = "instaslice-webhook"
+	WebhookName string = "das-webhook"
 )
 
 var (

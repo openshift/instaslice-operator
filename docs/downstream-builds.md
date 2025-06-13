@@ -5,7 +5,7 @@
 1. Set the image urls for your test repos, i.e
 ```console
 $ export IMG=quay.io/<username>/instaslice-operator:test
-$ export IMG_DMST=quay.io/<username>/instaslice-daemonset:test
+$ export IMG_DMST=quay.io/<username>/das-daemonset:test
 $ export BUNDLE_IMG=quay.io/<username>/instaslice-bundle:test
 ```
 1. Build operator and daemonset using OpenShift specifig containerfiles

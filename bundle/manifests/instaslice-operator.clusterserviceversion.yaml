@@ -185,13 +185,11 @@ spec:
                 command:
                 - /usr/bin/instaslice-operator
                 env:
-                - name: OPERATOR_NAME
-                  value: instaslice-operator
-                - name: RELATED_IMAGE_DAEMONSET_IMAGE
-                  value: quay.io/ryan.phillips/instaslice-daemonset
-                - name: RELATED_IMAGE_WEBHOOK_IMAGE
-                  value: quay.io/ryan.phillips/instaslice-webhook
-                image: quay.io/ryan.phillips/instaslice-operator
+                - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
+                  value: quay.io/ibm/das-daemonset:kubecon
+                - name: EMULATOR_MODE
+                  value: "false"
+                image: quay.io/ibm/instaslice-controller:kubecon
                 imagePullPolicy: Always
                 name: instaslice-operator
                 ports:
@@ -238,8 +236,26 @@ spec:
     name: Provider Name
     url: https://your.domain
   relatedImages:
-  - image: quay.io/ryan.phillips/instaslice-daemonset
-    name: daemonset-image
-  - image: quay.io/ryan.phillips/instaslice-webhook
-    name: webhook-image
-  version: 0.1.0
+  - image: quay.io/ibm/das-daemonset:kubecon
+    name: das-daemonset
+  version: 0.0.2
+  webhookdefinitions:
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: instaslice-operator-controller-manager
+    failurePolicy: Ignore
+    generateName: instaslice.redhat.com
+    rules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      resources:
+      - pods
+    sideEffects: None
+    targetPort: 9443
+    type: MutatingAdmissionWebhook
+    webhookPath: /mutate-v1-pod

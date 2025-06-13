@@ -49,9 +49,9 @@ spec:
             - name: OPERATOR_NAME
               value: "das-operator"
             - name: RELATED_IMAGE_DAEMONSET_IMAGE
-              value: quay.io/ryan.phillips/instaslice-daemonset
+              value: quay.io/ryan.phillips/das-daemonset
             - name: RELATED_IMAGE_WEBHOOK_IMAGE
-              value: quay.io/ryan.phillips/instaslice-webhook
+              value: quay.io/ryan.phillips/das-webhook
       serviceAccountName: das-operator
       volumes:
         - name: tmp

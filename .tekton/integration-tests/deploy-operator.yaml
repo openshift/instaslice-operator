@@ -103,9 +103,9 @@ spec:
                   - source: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator
                     mirrors:
                       - quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator
-                  - source: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9
+                  - source: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/das-daemonset-rhel9
                     mirrors:
-                      - quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset
+                      - quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/das-daemonset
     - name: install-cert-manager
       runAfter:
         - provision-cluster

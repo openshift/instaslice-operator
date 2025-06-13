@@ -24,7 +24,7 @@ func main() {
 
 func NewInstasliceDaemonsetCommand(ctx context.Context) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "instaslice-daemonset",
+		Use:     "das-daemonset",
 		Short:   "Instaslice Daemonset",
 		Version: version.Get().GitVersion,
 		Run: func(cmd *cobra.Command, args []string) {

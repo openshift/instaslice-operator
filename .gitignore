@@ -33,6 +33,6 @@ go.work.sum
 report.json
 report.xml
 
-instaslice-daemonset
+das-daemonset
 instaslice-operator
-instaslice-webhook
+das-webhook

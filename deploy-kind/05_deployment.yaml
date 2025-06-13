@@ -49,9 +49,9 @@ spec:
             - name: OPERATOR_NAME
               value: "das-operator"
             - name: RELATED_IMAGE_DAEMONSET_IMAGE
-              value: localhost/instaslice-daemonset:dev
+              value: localhost/das-daemonset:dev
             - name: RELATED_IMAGE_WEBHOOK_IMAGE
-              value: localhost/instaslice-webhook:dev
+              value: localhost/das-webhook:dev
       serviceAccountName: das-operator
       volumes:
         - name: tmp

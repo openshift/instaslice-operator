@@ -35,15 +35,15 @@ EMULATED_MODE ?= disabled
 # $4 - context directory for image build
 ifdef OSS
 $(call build-image,instaslice-operator,$(IMAGE_REGISTRY)/instaslice-operator:$(IMAGE_TAG), ./Dockerfile,.)
-$(call build-image,instaslice-daemonset,$(IMAGE_REGISTRY)/instaslice-daemonset:$(IMAGE_TAG), ./Dockerfile.daemonset,.)
-$(call build-image,instaslice-webhook,$(IMAGE_REGISTRY)/instaslice-webhook:$(IMAGE_TAG), ./Dockerfile.webhook,.)
+$(call build-image,das-daemonset,$(IMAGE_REGISTRY)/das-daemonset:$(IMAGE_TAG), ./Dockerfile.daemonset,.)
+$(call build-image,das-webhook,$(IMAGE_REGISTRY)/das-webhook:$(IMAGE_TAG), ./Dockerfile.webhook,.)
 
 $(call verify-golang-versions,Dockerfile)
 $(call verify-golang-versions,Dockerfile.daemonset)
 else
 $(call build-image,instaslice-operator,$(IMAGE_REGISTRY)/instaslice-operator:$(IMAGE_TAG), ./Dockerfile.ocp,.)
-$(call build-image,instaslice-daemonset,$(IMAGE_REGISTRY)/instaslice-daemonset:$(IMAGE_TAG), ./Dockerfile.daemonset.ocp,.)
-$(call build-image,instaslice-webhook,$(IMAGE_REGISTRY)/instaslice-webhook:$(IMAGE_TAG), ./Dockerfile.webhook.ocp,.)
+$(call build-image,das-daemonset,$(IMAGE_REGISTRY)/das-daemonset:$(IMAGE_TAG), ./Dockerfile.daemonset.ocp,.)
+$(call build-image,das-webhook,$(IMAGE_REGISTRY)/das-webhook:$(IMAGE_TAG), ./Dockerfile.webhook.ocp,.)
 
 $(call verify-golang-versions,Dockerfile.ocp)
 $(call verify-golang-versions,Dockerfile.daemonset.ocp)
@@ -95,15 +95,15 @@ regen-crd-k8s:
 
 build-images:
 	podman build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
-	podman build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/instaslice-scheduler:${IMAGE_TAG} .
-	podman build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/instaslice-daemonset:${IMAGE_TAG} .
-	podman build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/instaslice-webhook:${IMAGE_TAG} .
+	podman build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG} .
+	podman build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG} .
+	podman build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
 
 build-push-images:
 	podman push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
-	podman push ${IMAGE_REGISTRY}/instaslice-scheduler:${IMAGE_TAG}
-	podman push ${IMAGE_REGISTRY}/instaslice-daemonset:${IMAGE_TAG}
-	podman push ${IMAGE_REGISTRY}/instaslice-webhook:${IMAGE_TAG}
+	podman push ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
+	podman push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
+	podman push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
 
 generate: regen-crd regen-crd-kind regen-crd-k8s generate-clients
 .PHONY: generate
@@ -129,16 +129,16 @@ test-kind:
 	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') nvidia.com/mig.capable=true --overwrite
 
 	@echo "=== Building container images ==="
-	docker build -f Dockerfile.scheduler.ocp -t instaslice-scheduler:dev .
-	docker build -f Dockerfile.daemonset.ocp -t instaslice-daemonset:dev .
+	docker build -f Dockerfile.scheduler.ocp -t das-scheduler:dev .
+	docker build -f Dockerfile.daemonset.ocp -t das-daemonset:dev .
 	docker build -f Dockerfile.ocp -t instaslice-operator:dev .
-	docker build -f Dockerfile.webhook.ocp -t instaslice-webhook:dev .
+	docker build -f Dockerfile.webhook.ocp -t das-webhook:dev .
 
 	@echo "=== Loading images into Kind ==="
-	kind load docker-image instaslice-scheduler:dev --name instaslice-test
-	kind load docker-image instaslice-daemonset:dev --name instaslice-test
+	kind load docker-image das-scheduler:dev --name instaslice-test
+	kind load docker-image das-daemonset:dev --name instaslice-test
 	kind load docker-image instaslice-operator:dev --name instaslice-test
-	kind load docker-image instaslice-webhook:dev --name instaslice-test
+	kind load docker-image das-webhook:dev --name instaslice-test
 
 	@echo "=== Deploying Cert Manager ==="
 	$(MAKE) deploy-cert-manager
@@ -160,7 +160,7 @@ test-kind:
 	kubectl apply -f deploy-kind/
 
 
-	@echo "=== Deploying instaslice-scheduler ==="
+	@echo "=== Deploying das-scheduler ==="
 	kubectl apply -f deploy-kind/06_scheduler_deployment.yaml
 
 	sleep 5
@@ -176,20 +176,20 @@ cleanup-kind:
 .PHONY: build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
 
 build-push-scheduler:
-	docker build -f Dockerfile.scheduler.ocp -t localhost:5000/instaslice-scheduler:dev .
-	docker push localhost:5000/instaslice-scheduler:dev
+	docker build -f Dockerfile.scheduler.ocp -t localhost:5000/das-scheduler:dev .
+	docker push localhost:5000/das-scheduler:dev
 
 build-push-daemonset:
-	docker build -f Dockerfile.daemonset.ocp -t localhost:5000/instaslice-daemonset:dev .
-	docker push localhost:5000/instaslice-daemonset:dev
+	docker build -f Dockerfile.daemonset.ocp -t localhost:5000/das-daemonset:dev .
+	docker push localhost:5000/das-daemonset:dev
 
 build-push-operator:
 	docker build -f Dockerfile.ocp -t localhost:5000/instaslice-operator:dev .
 	docker push localhost:5000/instaslice-operator:dev
 
 build-push-webhook:
-	docker build -f Dockerfile.webhook.ocp -t localhost:5000/instaslice-webhook:dev .
-	docker push localhost:5000/instaslice-webhook:dev
+	docker build -f Dockerfile.webhook.ocp -t localhost:5000/das-webhook:dev .
+	docker push localhost:5000/das-webhook:dev
 
 .PHONY: test-k8s
 test-k8s:
@@ -221,7 +221,7 @@ test-k8s:
 	      deploy-k8s/09_instaslice_operator.cr.yaml
 	kubectl apply -f deploy-k8s/
 
-	@echo "=== Deploying instaslice-scheduler ==="
+	@echo "=== Deploying das-scheduler ==="
 	kubectl apply -f deploy-k8s/06_scheduler_deployment.yaml
 
 	sleep 5

@@ -15,8 +15,8 @@ const (
 	URI                  string = "/mutate-pod"
 	ReadinessEndpointURI string = "/readyz"
 	HealthzEndpointURI   string = "/healthz"
-	WebhookName          string = "instaslice-webhook"
-	secondaryScheduler   string = "instaslice-scheduler"
+	WebhookName          string = "das-webhook"
+	secondaryScheduler   string = "das-scheduler"
 )
 
 // Webhook interface

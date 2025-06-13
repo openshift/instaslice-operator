@@ -848,7 +848,7 @@ spec:
         - /manager
         env:
         - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
-          value: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:1c25ca4d442a74b3f9606b8d855aeef576d77a7688d3f1223134c142bec96729
+          value: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/das-daemonset-rhel9@sha256:1c25ca4d442a74b3f9606b8d855aeef576d77a7688d3f1223134c142bec96729
         - name: EMULATOR_MODE
           value: "false"
         - name: AUTO_LABEL_MANAGED_NODES
@@ -1063,10 +1063,10 @@ spec:
     name: Codeflare
     url: https://github.com/openshift/instaslice-operator
   relatedImages:
-  - image: quay.io/openshift-instaslice/instaslice-daemonset-next:latest
-    name: instaslice-daemonset-next
-  - image: quay.io/openshift-instaslice/instaslice-webhook-next:latest
-    name: instaslice-webhook-next
+  - image: quay.io/openshift-instaslice/das-daemonset-next:latest
+    name: das-daemonset-next
+  - image: quay.io/openshift-instaslice/das-webhook-next:latest
+    name: das-webhook-next
   - image: quay.io/openshift-instaslice/instaslice-operator:latest
     name: instaslice-operator-next
   version: 0.0.0

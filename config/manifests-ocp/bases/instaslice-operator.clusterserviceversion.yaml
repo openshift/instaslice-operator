@@ -126,9 +126,9 @@ spec:
     url: https://github.com/openshift/instaslice-operator
   version: 0.0.0
   relatedImages:
-    - name: instaslice-daemonset-next
-      image: quay.io/openshift-instaslice/instaslice-daemonset-next:latest
-    - name: instaslice-webhook-next
-      image: quay.io/openshift-instaslice/instaslice-webhook-next:latest
+    - name: das-daemonset-next
+      image: quay.io/openshift-instaslice/das-daemonset-next:latest
+    - name: das-webhook-next
+      image: quay.io/openshift-instaslice/das-webhook-next:latest
     - name: instaslice-operator-next
       image: quay.io/openshift-instaslice/instaslice-operator:latest

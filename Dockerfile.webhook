@@ -3,16 +3,16 @@ RUN apk upgrade --no-cache
 RUN apk add tzdata make git
 WORKDIR /workspace
 COPY . .
-RUN GO_BUILD_PACKAGES=./cmd/instaslice-webhook make
+RUN GO_BUILD_PACKAGES=./cmd/das-webhook make
 
 FROM docker.io/alpine:3.22
 RUN apk upgrade --no-cache
 RUN apk add tzdata make
 WORKDIR /
-COPY --from=build /workspace/instaslice-webhook /usr/bin
+COPY --from=build /workspace/das-webhook /usr/bin
 USER 65532:65532
 
-ARG NAME=instaslice-webhook
+ARG NAME=das-webhook
 ARG DESCRIPTION="The Instaslice webhook."
 
 # Licenses

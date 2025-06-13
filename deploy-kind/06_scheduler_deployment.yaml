@@ -16,9 +16,9 @@ spec:
       serviceAccountName: das-scheduler
       containers:
       - name: scheduler
-        image: localhost/instaslice-scheduler:dev
+        image: localhost/das-scheduler:dev
         imagePullPolicy: IfNotPresent
-        command: ["instaslice-scheduler"]
+        command: ["das-scheduler"]
         args:
         - "--config=/etc/das-scheduler/config.yaml"
         volumeMounts:
