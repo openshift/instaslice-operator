@@ -2,7 +2,13 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+)
+
+const (
+	AllocationClaimStatusCreated    AllocationClaimState = "created"
+	AllocationClaimStatusProcessing AllocationClaimState = "processing"
+	AllocationClaimStatusInUse      AllocationClaimState = "inUse"
+	AllocationClaimStatusOrphaned   AllocationClaimState = "orphaned"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -14,11 +20,10 @@ type AllocationClaim struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// spec defines the desired allocation. This is a runtime.RawExtension to
-	// allow different accelerator vendors to define their own spec objects.
+	// spec defines the desired allocation.
 	// For NVIDIA MIG the object is an AllocationClaimSpec struct.
 	// +optional
-	Spec runtime.RawExtension `json:"spec,omitempty"`
+	Spec AllocationClaimSpec `json:"spec,omitempty"`
 
 	// status describes the current allocation state
 	// +optional
@@ -36,12 +41,18 @@ type AllocationClaimList struct {
 	Items           []AllocationClaim `json:"items"`
 }
 
-// AllocationClaimStatus represents the state of an AllocationClaim.
-type AllocationClaimStatus string
+// AllocationClaimState represents the state of an AllocationClaim.
+type AllocationClaimState string
 
-const (
-	AllocationClaimStatusCreated    AllocationClaimStatus = "created"
-	AllocationClaimStatusProcessing AllocationClaimStatus = "processing"
-	AllocationClaimStatusInUse      AllocationClaimStatus = "inUse"
-	AllocationClaimStatusOrphaned   AllocationClaimStatus = "orphaned"
-)
+type AllocationClaimStatus struct {
+	// state describes the current allocation state
+	// +optional
+	State AllocationClaimState `json:"state,omitempty"`
+
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	// +patchStrategy=merge
+	// +patchMergeKey=type
+	Conditions []metav1.Condition `json:"conditions"`
+}

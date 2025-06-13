@@ -39,16 +39,10 @@ func unsanitizeProfileName(profile string) string {
 }
 
 func getAllocationClaimSpec(a *instav1.AllocationClaim) (instav1.AllocationClaimSpec, error) {
-	var spec instav1.AllocationClaimSpec
 	if a == nil {
-		return spec, fmt.Errorf("allocation claim is nil")
+		return instav1.AllocationClaimSpec{}, fmt.Errorf("allocation claim is nil")
 	}
-	if len(a.Spec.Raw) > 0 {
-		if err := json.Unmarshal(a.Spec.Raw, &spec); err != nil {
-			return spec, err
-		}
-	}
-	return spec, nil
+	return a.Spec, nil
 }
 
 // StartDevicePlugins starts device managers, gRPC servers, and registrars for each resource.
@@ -211,11 +205,11 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 // UpdateAllocationStatus safely updates the status of the given AllocationClaim using
 // the provided client while holding the allocation mutex. This prevents multiple
 // goroutines from updating the same object concurrently.
-func UpdateAllocationStatus(ctx context.Context, client versioned.Interface, alloc *instav1.AllocationClaim, status instav1.AllocationClaimStatus) (*instav1.AllocationClaim, error) {
+func UpdateAllocationStatus(ctx context.Context, client versioned.Interface, alloc *instav1.AllocationClaim, status instav1.AllocationClaimState) (*instav1.AllocationClaim, error) {
 	allocationMutex.Lock()
 	defer allocationMutex.Unlock()
 
 	copy := alloc.DeepCopy()
-	copy.Status = status
+	copy.Status.State = status
 	return client.OpenShiftOperatorV1alpha1().AllocationClaims(copy.Namespace).UpdateStatus(ctx, copy, metav1.UpdateOptions{})
 }

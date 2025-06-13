@@ -221,7 +221,7 @@ func TestGetAllocationsByNodeGPU(t *testing.T) {
 	alloc := &instav1.AllocationClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: "a1"},
 		Spec:       instav1.AllocationClaimSpec{Profile: "1g.5gb", Nodename: types.NodeName(nodeName)},
-		Status:     instav1.AllocationClaimStatusCreated,
+		Status:     instav1.AllocationClaimStatus{State: instav1.AllocationClaimStatusCreated},
 	}
 	_ = allocationIndexer.Add(alloc)
 
@@ -233,8 +233,8 @@ func TestGetAllocationsByNodeGPU(t *testing.T) {
 	if len(res) != 1 || res[0] != alloc {
 		t.Fatalf("expected returned allocation")
 	}
-	if alloc.Status != instav1.AllocationClaimStatusProcessing {
-		t.Fatalf("expected allocation status updated, got %s", alloc.Status)
+	if alloc.Status.State != instav1.AllocationClaimStatusProcessing {
+		t.Fatalf("expected allocation status updated, got %s", alloc.Status.State)
 	}
 }
 

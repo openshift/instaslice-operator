@@ -301,7 +301,7 @@ func (s *Server) getAllocationsByNodeGPU(ctx context.Context, nodeName, profileN
 					klog.ErrorS(err, "failed to decode allocation spec")
 					continue
 				}
-				if spec.Profile == migProfile && a.Status == instav1.AllocationClaimStatusCreated {
+				if spec.Profile == migProfile && a.Status.State == instav1.AllocationClaimStatusCreated {
 					out = append(out, a)
 					if len(out) == count {
 						break
@@ -322,7 +322,7 @@ func (s *Server) getAllocationsByNodeGPU(ctx context.Context, nodeName, profileN
 	// Update each claim status to Processing outside of the fetch loop so
 	// failures here don't masquerade as cache lookup errors.
 	for _, a := range result[:count] {
-		a.Status = instav1.AllocationClaimStatusProcessing
+		a.Status.State = instav1.AllocationClaimStatusProcessing
 		if s.InstasliceClient != nil {
 			if _, err := UpdateAllocationStatus(ctx, s.InstasliceClient, a, instav1.AllocationClaimStatusProcessing); err != nil {
 				klog.ErrorS(err, "failed to update allocation status", "allocation", a.Name, "status", instav1.AllocationClaimStatusProcessing)
@@ -336,7 +336,7 @@ func (s *Server) getAllocationsByNodeGPU(ctx context.Context, nodeName, profileN
 		}
 		s.allocMutex.Unlock()
 
-		klog.InfoS("Updated allocation status to Processing", "allocation", a.Name, "status", a.Status)
+		klog.InfoS("Updated allocation status to Processing", "allocation", a.Name, "status", a.Status.State)
 	}
 
 	return result[:count], nil

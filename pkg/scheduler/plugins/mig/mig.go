@@ -39,16 +39,10 @@ type Plugin struct {
 }
 
 func getAllocationClaimSpec(a *instav1alpha1.AllocationClaim) (instav1alpha1.AllocationClaimSpec, error) {
-	var spec instav1alpha1.AllocationClaimSpec
 	if a == nil {
-		return spec, fmt.Errorf("allocation claim is nil")
+		return instav1alpha1.AllocationClaimSpec{}, fmt.Errorf("allocation claim is nil")
 	}
-	if len(a.Spec.Raw) > 0 {
-		if err := json.Unmarshal(a.Spec.Raw, &spec); err != nil {
-			return spec, err
-		}
-	}
-	return spec, nil
+	return a.Spec, nil
 }
 
 // Args holds the scheduler plugin configuration.
@@ -303,14 +297,13 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 				GPUUUID:  gpu.GPUUUID,
 				Nodename: types.NodeName(instObj.GetName()),
 			}
-			rawSpec, _ := json.Marshal(&specObj)
 			alloc := &instav1alpha1.AllocationClaim{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      fmt.Sprintf("%s-%s", pod.GetUID(), c.Name),
 					Namespace: "das-operator",
 				},
-				Spec:   runtime.RawExtension{Raw: rawSpec},
-				Status: instav1alpha1.AllocationClaimStatusCreated,
+				Spec:   specObj,
+				Status: instav1alpha1.AllocationClaimStatus{State: instav1alpha1.AllocationClaimStatusCreated},
 			}
 			// mark slices as used
 			for i := int32(0); i < size; i++ {
