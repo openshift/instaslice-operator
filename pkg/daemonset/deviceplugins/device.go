@@ -42,7 +42,14 @@ func getAllocationClaimSpec(a *instav1.AllocationClaim) (instav1.AllocationClaim
 	if a == nil {
 		return instav1.AllocationClaimSpec{}, fmt.Errorf("allocation claim is nil")
 	}
-	return a.Spec, nil
+	var spec instav1.AllocationClaimSpec
+	if len(a.Spec.Raw) == 0 {
+		return spec, fmt.Errorf("allocation claim spec is empty")
+	}
+	if err := json.Unmarshal(a.Spec.Raw, &spec); err != nil {
+		return instav1.AllocationClaimSpec{}, fmt.Errorf("failed to decode allocation spec: %w", err)
+	}
+	return spec, nil
 }
 
 // StartDevicePlugins starts device managers, gRPC servers, and registrars for each resource.

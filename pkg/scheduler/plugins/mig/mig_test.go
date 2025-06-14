@@ -173,13 +173,17 @@ func singleGPU(inst *instav1.NodeAccelerator) *instav1.NodeAccelerator {
 
 func newPlugin(objs ...runtime.Object) *Plugin {
 	instIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
-	allocIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
-		"node-gpu": func(obj interface{}) ([]string, error) {
-			a := obj.(*instav1.AllocationClaim)
-			key := fmt.Sprintf("%s/%s", a.Spec.Nodename, a.Spec.GPUUUID)
-			return []string{key}, nil
-		},
-	})
+        allocIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
+                "node-gpu": func(obj interface{}) ([]string, error) {
+                        a := obj.(*instav1.AllocationClaim)
+                        spec, err := getAllocationClaimSpec(a)
+                        if err != nil {
+                                return nil, err
+                        }
+                        key := fmt.Sprintf("%s/%s", spec.Nodename, spec.GPUUUID)
+                        return []string{key}, nil
+                },
+        })
 	ns := "das-operator"
 	for _, obj := range objs {
 		switch o := obj.(type) {
@@ -230,8 +234,12 @@ func TestPreBind(t *testing.T) {
 				inst := utils.GenerateFakeCapacity("node1")
 				var res instav1.DiscoveredNodeResources
 				_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
-				ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
-				ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+                                spec1 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                                raw1, _ := json.Marshal(&spec1)
+                                ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: runtime.RawExtension{Raw: raw1}}
+                                spec2 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                                raw2, _ := json.Marshal(&spec2)
+                                ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: runtime.RawExtension{Raw: raw2}}
 				p := newPlugin(inst, ex1, ex2)
 				pod := newTestPod("u", "1g.5gb")
 				return p, pod, "node1"
@@ -434,8 +442,12 @@ func TestFilter(t *testing.T) {
 				inst := utils.GenerateFakeCapacity("node1")
 				var res instav1.DiscoveredNodeResources
 				_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
-				ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
-				ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+                                spec1 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                                raw1, _ := json.Marshal(&spec1)
+                                ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: runtime.RawExtension{Raw: raw1}}
+                                spec2 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                                raw2, _ := json.Marshal(&spec2)
+                                ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: runtime.RawExtension{Raw: raw2}}
 				p := newPlugin(inst, ex1, ex2)
 				pod := newTestPod("u", "1g.5gb")
 				ni := framework.NewNodeInfo()
@@ -581,8 +593,12 @@ func TestFilter(t *testing.T) {
 				node2 := utils.GenerateFakeCapacity("node2")
 				var res instav1.DiscoveredNodeResources
 				_ = json.Unmarshal(node2.Status.NodeResources.Raw, &res)
-				ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
-				ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+                                spec1 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                                raw1, _ := json.Marshal(&spec1)
+                                ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex1"}, Spec: runtime.RawExtension{Raw: raw1}}
+                                spec2 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                                raw2, _ := json.Marshal(&spec2)
+                                ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex2"}, Spec: runtime.RawExtension{Raw: raw2}}
 				p := newPlugin(node1, node2, ex1, ex2)
 				pod := newTestPod("mn1", "1g.5gb")
 				ni := framework.NewNodeInfo()
@@ -600,8 +616,12 @@ func TestFilter(t *testing.T) {
 				node2 := utils.GenerateFakeCapacity("node2")
 				var res instav1.DiscoveredNodeResources
 				_ = json.Unmarshal(node2.Status.NodeResources.Raw, &res)
-				ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
-				ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+                                spec1 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                                raw1, _ := json.Marshal(&spec1)
+                                ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex1"}, Spec: runtime.RawExtension{Raw: raw1}}
+                                spec2 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                                raw2, _ := json.Marshal(&spec2)
+                                ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex2"}, Spec: runtime.RawExtension{Raw: raw2}}
 				p := newPlugin(node1, node2, ex1, ex2)
 				pod := newTestPod("mn2", "1g.5gb")
 				ni := framework.NewNodeInfo()
@@ -738,8 +758,12 @@ func TestScore(t *testing.T) {
 				node2 := utils.GenerateFakeCapacity("node2")
 				var res instav1.DiscoveredNodeResources
 				_ = json.Unmarshal(node2.Status.NodeResources.Raw, &res)
-				ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
-				ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+                                spec1 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                                raw1, _ := json.Marshal(&spec1)
+                                ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex1"}, Spec: runtime.RawExtension{Raw: raw1}}
+                                spec2 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                                raw2, _ := json.Marshal(&spec2)
+                                ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex2"}, Spec: runtime.RawExtension{Raw: raw2}}
 				p := newPlugin(node1, node2, ex1, ex2)
 				pod := newTestPod("mn1", "1g.5gb")
 				return p, pod, "node1"
@@ -756,8 +780,12 @@ func TestScore(t *testing.T) {
 				node2 := utils.GenerateFakeCapacity("node2")
 				var res instav1.DiscoveredNodeResources
 				_ = json.Unmarshal(node2.Status.NodeResources.Raw, &res)
-				ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
-				ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+                                spec1 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                                raw1, _ := json.Marshal(&spec1)
+                                ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex1"}, Spec: runtime.RawExtension{Raw: raw1}}
+                                spec2 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node2"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                                raw2, _ := json.Marshal(&spec2)
+                                ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: node2.Namespace, Name: "ex2"}, Spec: runtime.RawExtension{Raw: raw2}}
 				p := newPlugin(node1, node2, ex1, ex2)
 				pod := newTestPod("mn2", "1g.5gb")
 				return p, pod, "node2"
@@ -891,8 +919,12 @@ func TestFilterMaxProfileCounts(t *testing.T) {
 			inst := utils.GenerateFakeCapacity("node1")
 			var res instav1.DiscoveredNodeResources
 			_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
-			ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
-			ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+                        spec1 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                        raw1, _ := json.Marshal(&spec1)
+                        ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: runtime.RawExtension{Raw: raw1}}
+                        spec2 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                        raw2, _ := json.Marshal(&spec2)
+                        ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: runtime.RawExtension{Raw: raw2}}
 			p := newPlugin(inst, ex1, ex2)
 			var profiles []string
 			for i := 0; i < tc.max+1; i++ {
@@ -971,8 +1003,12 @@ func TestFilterInvalidCombinations(t *testing.T) {
 			inst := utils.GenerateFakeCapacity("node1")
 			var res instav1.DiscoveredNodeResources
 			_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
-			ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
-			ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+                        spec1 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                        raw1, _ := json.Marshal(&spec1)
+                        ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: runtime.RawExtension{Raw: raw1}}
+                        spec2 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                        raw2, _ := json.Marshal(&spec2)
+                        ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: runtime.RawExtension{Raw: raw2}}
 			p := newPlugin(inst, ex1, ex2)
 			pod := newMultiContainerPod(fmt.Sprintf("inv-%d", i), parse(cmb))
 			ni := framework.NewNodeInfo()
@@ -1108,8 +1144,12 @@ func TestFilterMaxProfileCountsH100(t *testing.T) {
 			inst := utils.GenerateFakeCapacityH100PCIE80GB("node1")
 			var res instav1.DiscoveredNodeResources
 			_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
-			ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
-			ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+                        spec1 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                        raw1, _ := json.Marshal(&spec1)
+                        ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: runtime.RawExtension{Raw: raw1}}
+                        spec2 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                        raw2, _ := json.Marshal(&spec2)
+                        ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: runtime.RawExtension{Raw: raw2}}
 			p := newPlugin(inst, ex1, ex2)
 			var profiles []string
 			for i := 0; i < tc.max+1; i++ {
@@ -1201,8 +1241,12 @@ func TestFilterInvalidCombinationsH100(t *testing.T) {
 			inst := utils.GenerateFakeCapacityH100PCIE80GB("node1")
 			var res instav1.DiscoveredNodeResources
 			_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
-			ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
-			ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+                        spec1 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                        raw1, _ := json.Marshal(&spec1)
+                        ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: runtime.RawExtension{Raw: raw1}}
+                        spec2 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                        raw2, _ := json.Marshal(&spec2)
+                        ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: runtime.RawExtension{Raw: raw2}}
 			p := newPlugin(inst, ex1, ex2)
 			pod := newMultiContainerPod(fmt.Sprintf("h100-inv-%d", i), parse(cmb))
 			ni := framework.NewNodeInfo()
@@ -1336,8 +1380,12 @@ func TestFilterMaxProfileCountsH200(t *testing.T) {
 			inst := utils.GenerateFakeCapacityH200SXM5141GB("node1")
 			var res instav1.DiscoveredNodeResources
 			_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
-			ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
-			ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+                        spec1 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                        raw1, _ := json.Marshal(&spec1)
+                        ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: runtime.RawExtension{Raw: raw1}}
+                        spec2 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                        raw2, _ := json.Marshal(&spec2)
+                        ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: runtime.RawExtension{Raw: raw2}}
 			p := newPlugin(inst, ex1, ex2)
 			var profiles []string
 			for i := 0; i < tc.max+1; i++ {
@@ -1429,8 +1477,12 @@ func TestFilterInvalidCombinationsH200(t *testing.T) {
 			inst := utils.GenerateFakeCapacityH200SXM5141GB("node1")
 			var res instav1.DiscoveredNodeResources
 			_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
-			ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
-			ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}}
+                        spec1 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                        raw1, _ := json.Marshal(&spec1)
+                        ex1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"}, Spec: runtime.RawExtension{Raw: raw1}}
+                        spec2 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 8}}
+                        raw2, _ := json.Marshal(&spec2)
+                        ex2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"}, Spec: runtime.RawExtension{Raw: raw2}}
 			p := newPlugin(inst, ex1, ex2)
 			pod := newMultiContainerPod(fmt.Sprintf("h200-inv-%d", i), parse(cmb))
 			ni := framework.NewNodeInfo()

@@ -1,7 +1,8 @@
 package v1alpha1
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+        metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+        "k8s.io/apimachinery/pkg/runtime"
 )
 
 const (
@@ -20,10 +21,10 @@ type AllocationClaim struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// spec defines the desired allocation.
-	// For NVIDIA MIG the object is an AllocationClaimSpec struct.
-	// +optional
-	Spec AllocationClaimSpec `json:"spec,omitempty"`
+        // spec defines the desired allocation.
+        // For NVIDIA MIG the object is an AllocationClaimSpec struct.
+        // +optional
+        Spec runtime.RawExtension `json:"spec,omitempty"`
 
 	// status describes the current allocation state
 	// +optional
