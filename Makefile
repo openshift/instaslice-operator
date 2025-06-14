@@ -166,6 +166,10 @@ test-k8s:
 	@echo "=== Deploying test pod ==="
 	kubectl apply -f deploy-k8s/07_test_pod.yaml
 
+.PHONY: emulated-k8s
+emulated-k8s: EMULATED_MODE=enabled
+emulated-k8s: test-k8s
+
 .PHONY: cleanup-k8s
 cleanup-k8s:
 	@echo "=== Deleting K8s resources ==="
