@@ -3,7 +3,7 @@ package utils
 import (
 	"encoding/json"
 
-	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -22,9 +22,9 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/openshift/instaslice-operator/bindata"
-	slicev1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
-	instasliceoperatorv1alphaclientset "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/instasliceoperator/v1alpha1"
-	operatorclientv1alpha1informers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions/instasliceoperator/v1alpha1"
+	slicev1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
+       instasliceoperatorv1alphaclientset "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1"
+       operatorclientv1alpha1informers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions/dasoperator/v1alpha1"
 
 	"github.com/openshift/instaslice-operator/pkg/operator/operatorclient"
 	"github.com/openshift/library-go/pkg/controller/factory"
@@ -50,11 +50,11 @@ type TargetConfigReconciler struct {
 	eventRecorder              events.Recorder
 	generations                []operatorsv1.GenerationStatus
 	instasliceInformer         operatorclientv1alpha1informers.NodeAcceleratorInformer
-       instasliceoperatorClient   *operatorclient.DASOperatorSetClient
+	instasliceoperatorClient   *operatorclient.DASOperatorSetClient
 	kubeClient                 kubernetes.Interface
 	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces
 	namespace                  string
-       operatorClient             instasliceoperatorv1alphaclientset.DASOperatorInterface
+	operatorClient             instasliceoperatorv1alphaclientset.DASOperatorInterface
 	resourceCache              resourceapply.ResourceCache
 	secretLister               v1.SecretLister
 	targetDaemonsetImage       string
@@ -67,11 +67,11 @@ func NewTargetConfigReconciler(
 	targetDaemonsetImage string,
 	targetWebhookImage string,
 	namespace string,
-       operatorConfigClient instasliceoperatorv1alphaclientset.DASOperatorInterface,
-       operatorClientInformer operatorclientv1alpha1informers.DASOperatorInformer,
-       kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces,
-       appsClient appsv1client.DaemonSetsGetter,
-       instasliceoperatorClient *operatorclient.DASOperatorSetClient,
+	operatorConfigClient instasliceoperatorv1alphaclientset.DASOperatorInterface,
+	operatorClientInformer operatorclientv1alpha1informers.DASOperatorInformer,
+	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces,
+	appsClient appsv1client.DaemonSetsGetter,
+	instasliceoperatorClient *operatorclient.DASOperatorSetClient,
 	dynamicClient dynamic.Interface,
 	discoveryClient discovery.DiscoveryInterface,
 	kubeClient kubernetes.Interface,
@@ -109,8 +109,8 @@ func NewTargetConfigReconciler(
 		kubeInformersForNamespaces.InformersFor(namespace).Core().V1().Services().Informer(),
 	).ResyncEvery(time.Minute*5).
 		WithSync(c.sync).
-               WithSyncDegradedOnError(instasliceoperatorClient).
-               ToController("DASOperatorController", eventRecorder)
+		WithSyncDegradedOnError(instasliceoperatorClient).
+		ToController("DASOperatorController", eventRecorder)
 }
 
 func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncContext) error {
@@ -135,12 +135,12 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	c.emulatedMode = sliceOperator.Spec.EmulatedMode
 	c.nodeSelector = sliceOperator.Spec.NodeSelector
 
-       ownerReference := metav1.OwnerReference{
-               APIVersion: "inference.redhat.com/v1alpha1",
-               Kind:       "DASOperator",
-               Name:       sliceOperator.Name,
-               UID:        sliceOperator.UID,
-       }
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "inference.redhat.com/v1alpha1",
+		Kind:       "DASOperator",
+		Name:       sliceOperator.Name,
+		UID:        sliceOperator.UID,
+	}
 
 	klog.V(2).InfoS("Got operator config", "emulated_mode", c.emulatedMode)
 

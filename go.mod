@@ -28,6 +28,7 @@ require (
 	sigs.k8s.io/controller-tools v0.17.2
 	sigs.k8s.io/scheduler-plugins v0.32.5-devel
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0
+	sigs.k8s.io/yaml v1.4.0
 	tags.cncf.io/container-device-interface v0.8.1
 	tags.cncf.io/container-device-interface/specs-go v0.8.0
 )
@@ -146,5 +147,4 @@ require (
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/yaml v1.4.0 // indirect
 )

@@ -28,7 +28,7 @@ import (
 	// UUID generator for unique spec filenames
 	utiluuid "k8s.io/apimachinery/pkg/util/uuid"
 
-	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 )
 
 var _ pluginapi.DevicePluginServer = (*Server)(nil)

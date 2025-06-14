@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 )
 
 type genCase struct {

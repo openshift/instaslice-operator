@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	versioned "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	instainformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -57,7 +57,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 
 	nodeName := os.Getenv("NODE_NAME")
 
-	klog.InfoS("Starting discovery of MIG-enabled GPUs", "node", nodeName)
+	klog.InfoS("Starting discovery of MIG-enabled GPUs 333332222", "node", nodeName)
 	if nodeName == "" {
 		err := fmt.Errorf("NODE_NAME environment variable is required")
 		klog.ErrorS(err, "NODE_NAME environment variable is required")

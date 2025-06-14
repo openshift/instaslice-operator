@@ -20,7 +20,7 @@ import (
 	fmt "fmt"
 	http "net/http"
 
-	openshiftoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/instasliceoperator/v1alpha1"
+	openshiftoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"

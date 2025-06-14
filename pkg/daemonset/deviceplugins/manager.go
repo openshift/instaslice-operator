@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	"k8s.io/klog/v2"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )

@@ -17,8 +17,8 @@ limitations under the License.
 package applyconfiguration
 
 import (
-	v1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
-	instasliceoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/applyconfiguration/instasliceoperator/v1alpha1"
+	v1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
+	dasoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/applyconfiguration/dasoperator/v1alpha1"
 	internal "github.com/openshift/instaslice-operator/pkg/generated/applyconfiguration/internal"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -31,21 +31,21 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=inference.redhat.com, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithKind("AllocationClaim"):
-		return &instasliceoperatorv1alpha1.AllocationClaimApplyConfiguration{}
+		return &dasoperatorv1alpha1.AllocationClaimApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("AllocationClaimStatus"):
-		return &instasliceoperatorv1alpha1.AllocationClaimStatusApplyConfiguration{}
+		return &dasoperatorv1alpha1.AllocationClaimStatusApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("DASOperator"):
-		return &instasliceoperatorv1alpha1.DASOperatorApplyConfiguration{}
+		return &dasoperatorv1alpha1.DASOperatorApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("DASOperatorSpec"):
-		return &instasliceoperatorv1alpha1.DASOperatorSpecApplyConfiguration{}
+		return &dasoperatorv1alpha1.DASOperatorSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("DASOperatorStatus"):
-		return &instasliceoperatorv1alpha1.DASOperatorStatusApplyConfiguration{}
+		return &dasoperatorv1alpha1.DASOperatorStatusApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("NodeAccelerator"):
-		return &instasliceoperatorv1alpha1.NodeAcceleratorApplyConfiguration{}
+		return &dasoperatorv1alpha1.NodeAcceleratorApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("NodeAcceleratorSpec"):
-		return &instasliceoperatorv1alpha1.NodeAcceleratorSpecApplyConfiguration{}
+		return &dasoperatorv1alpha1.NodeAcceleratorSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("NodeAcceleratorStatus"):
-		return &instasliceoperatorv1alpha1.NodeAcceleratorStatusApplyConfiguration{}
+		return &dasoperatorv1alpha1.NodeAcceleratorStatusApplyConfiguration{}
 
 	}
 	return nil

@@ -17,7 +17,7 @@ limitations under the License.
 package fake
 
 import (
-	openshiftoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	openshiftoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

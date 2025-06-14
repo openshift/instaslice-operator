@@ -19,7 +19,7 @@ package externalversions
 import (
 	fmt "fmt"
 
-	v1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	v1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )

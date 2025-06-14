@@ -16,13 +16,13 @@ import (
 
 	"os"
 
-	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	fakeclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/fake"
-       utils "github.com/openshift/instaslice-operator/test/utils"
-       metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-       "k8s.io/apimachinery/pkg/types"
-       "k8s.io/apimachinery/pkg/runtime"
-       "k8s.io/client-go/tools/cache"
+	utils "github.com/openshift/instaslice-operator/test/utils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/cache"
 )
 
 // fakeListWatchServer implements pluginapi.DevicePlugin_ListAndWatchServer.
@@ -211,25 +211,25 @@ func TestGetAllocationsByNodeGPU(t *testing.T) {
 	nodeName := "node1"
 	resource := "mig.das.com/1g.5gb"
 
-        allocationIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
-                "node-MigProfile": func(obj interface{}) ([]string, error) {
-                        a := obj.(*instav1.AllocationClaim)
-                        spec, err := getAllocationClaimSpec(a)
-                        if err != nil {
-                                return nil, err
-                        }
-                        key := fmt.Sprintf("%s/%s", spec.Nodename, spec.Profile)
-                        return []string{key}, nil
-                },
-        })
+	allocationIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
+		"node-MigProfile": func(obj interface{}) ([]string, error) {
+			a := obj.(*instav1.AllocationClaim)
+			spec, err := getAllocationClaimSpec(a)
+			if err != nil {
+				return nil, err
+			}
+			key := fmt.Sprintf("%s/%s", spec.Nodename, spec.Profile)
+			return []string{key}, nil
+		},
+	})
 
-        specObj := instav1.AllocationClaimSpec{Profile: "1g.5gb", Nodename: types.NodeName(nodeName)}
-        raw, _ := json.Marshal(&specObj)
-        alloc := &instav1.AllocationClaim{
-                ObjectMeta: metav1.ObjectMeta{Name: "a1"},
-                Spec:       runtime.RawExtension{Raw: raw},
-                Status:     instav1.AllocationClaimStatus{State: instav1.AllocationClaimStatusCreated},
-        }
+	specObj := instav1.AllocationClaimSpec{Profile: "1g.5gb", Nodename: types.NodeName(nodeName)}
+	raw, _ := json.Marshal(&specObj)
+	alloc := &instav1.AllocationClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "a1"},
+		Spec:       runtime.RawExtension{Raw: raw},
+		Status:     instav1.AllocationClaimStatus{State: instav1.AllocationClaimStatusCreated},
+	}
 	_ = allocationIndexer.Add(alloc)
 
 	srv := &Server{}

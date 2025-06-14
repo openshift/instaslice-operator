@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	deviceplugins "github.com/openshift/instaslice-operator/pkg/daemonset/deviceplugins"
 	fakeclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/fake"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"

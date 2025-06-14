@@ -15,7 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
-	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	versioned "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 
 	nvml "github.com/NVIDIA/go-nvml/pkg/nvml"

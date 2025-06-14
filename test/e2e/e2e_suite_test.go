@@ -23,7 +23,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/yaml"
 
-	instav1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 
 	"github.com/openshift/instaslice-operator/test/utils"
 )
@@ -124,18 +124,18 @@ spec:
 			if err != nil {
 				return 0, err
 			}
-                        count := 0
-                        for _, c := range list.Items {
-                                var spec instav1.AllocationClaimSpec
-                                if err := json.Unmarshal(c.Spec.Raw, &spec); err != nil {
-                                        continue
-                                }
-                                for _, uid := range podUIDs {
-                                        if string(spec.PodRef.UID) == uid {
-                                                count++
-                                        }
-                                }
-                        }
+			count := 0
+			for _, c := range list.Items {
+				var spec instav1.AllocationClaimSpec
+				if err := json.Unmarshal(c.Spec.Raw, &spec); err != nil {
+					continue
+				}
+				for _, uid := range podUIDs {
+					if string(spec.PodRef.UID) == uid {
+						count++
+					}
+				}
+			}
 			return count, nil
 		}, 2*time.Minute, 5*time.Second).Should(Equal(len(pods)))
 	})
@@ -397,16 +397,16 @@ var _ = Describe("AllocationClaim lifecycle", Ordered, func() {
 			if err != nil {
 				return 0, err
 			}
-                        cnt := 0
-                        for _, item := range list.Items {
-                                var spec instav1.AllocationClaimSpec
-                                if err := json.Unmarshal(item.Spec.Raw, &spec); err != nil {
-                                        continue
-                                }
-                                if string(spec.PodRef.UID) == podUID {
-                                        cnt++
-                                }
-                        }
+			cnt := 0
+			for _, item := range list.Items {
+				var spec instav1.AllocationClaimSpec
+				if err := json.Unmarshal(item.Spec.Raw, &spec); err != nil {
+					continue
+				}
+				if string(spec.PodRef.UID) == podUID {
+					cnt++
+				}
+			}
 			return cnt, nil
 		}, 2*time.Minute, 5*time.Second).Should(Equal(1))
 	})
@@ -419,16 +419,16 @@ var _ = Describe("AllocationClaim lifecycle", Ordered, func() {
 			if err != nil {
 				return 0, err
 			}
-                        cnt := 0
-                        for _, item := range list.Items {
-                                var spec instav1.AllocationClaimSpec
-                                if err := json.Unmarshal(item.Spec.Raw, &spec); err != nil {
-                                        continue
-                                }
-                                if string(spec.PodRef.UID) == podUID {
-                                        cnt++
-                                }
-                        }
+			cnt := 0
+			for _, item := range list.Items {
+				var spec instav1.AllocationClaimSpec
+				if err := json.Unmarshal(item.Spec.Raw, &spec); err != nil {
+					continue
+				}
+				if string(spec.PodRef.UID) == podUID {
+					cnt++
+				}
+			}
 			return cnt, nil
 		}, 2*time.Minute, 5*time.Second).Should(Equal(0))
 	})
@@ -521,18 +521,18 @@ spec:
 			if err != nil {
 				return 0, err
 			}
-                        count := 0
-                        for _, c := range list.Items {
-                                var spec instav1.AllocationClaimSpec
-                                if err := json.Unmarshal(c.Spec.Raw, &spec); err != nil {
-                                        continue
-                                }
-                                for _, uid := range podUIDs {
-                                        if string(spec.PodRef.UID) == uid {
-                                                count++
-                                        }
-                                }
-                        }
+			count := 0
+			for _, c := range list.Items {
+				var spec instav1.AllocationClaimSpec
+				if err := json.Unmarshal(c.Spec.Raw, &spec); err != nil {
+					continue
+				}
+				for _, uid := range podUIDs {
+					if string(spec.PodRef.UID) == uid {
+						count++
+					}
+				}
+			}
 			return count, nil
 		}, 2*time.Minute, 5*time.Second).Should(Equal(podCount))
 	})

@@ -68,7 +68,7 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 regen-crd:
 	go build -o _output/tools/bin/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
 	rm -f manifests/instaslice-operator.crd.yaml
-	./_output/tools/bin/controller-gen crd paths=./pkg/apis/instasliceoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
+	./_output/tools/bin/controller-gen crd paths=./pkg/apis/dasoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
 	mv manifests/inference.redhat.com_dasoperators.yaml manifests/instaslice-operator.crd.yaml
 	cp manifests/instaslice-operator.crd.yaml deploy/00_instaslice-operator.crd.yaml
 		cp manifests/inference.redhat.com_nodeaccelerators.yaml deploy/00_nodeaccelerators.crd.yaml
@@ -79,7 +79,7 @@ regen-crd-k8s:
 	go build -o _output/tools/bin/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
 	rm -f deploy-k8s/00_instaslice-operator.crd.yaml
 	rm -f deploy-k8s/00_nodeaccelerators.crd.yaml
-	./_output/tools/bin/controller-gen crd paths=./pkg/apis/instasliceoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./deploy-k8s
+	./_output/tools/bin/controller-gen crd paths=./pkg/apis/dasoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./deploy-k8s
 	mv deploy-k8s/inference.redhat.com_dasoperators.yaml deploy-k8s/00_instaslice-operator.crd.yaml
 	mv deploy-k8s/inference.redhat.com_nodeaccelerators.yaml deploy-k8s/00_nodeaccelerators.crd.yaml
 
