@@ -14,6 +14,7 @@ import (
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	versioned "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	instainformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -57,7 +58,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 
 	nodeName := os.Getenv("NODE_NAME")
 
-	klog.InfoS("Starting discovery of MIG-enabled GPUs 333332222", "node", nodeName)
+	klog.InfoS("Starting discovery of MIG-enabled GPUs", "node", nodeName)
 	if nodeName == "" {
 		err := fmt.Errorf("NODE_NAME environment variable is required")
 		klog.ErrorS(err, "NODE_NAME environment variable is required")
@@ -218,5 +219,13 @@ func UpdateAllocationStatus(ctx context.Context, client versioned.Interface, all
 
 	copy := alloc.DeepCopy()
 	copy.Status.State = status
+	cond := metav1.Condition{
+		Type:               "State",
+		Status:             metav1.ConditionTrue,
+		Reason:             string(status),
+		Message:            fmt.Sprintf("Allocation is %s", status),
+		ObservedGeneration: copy.Generation,
+	}
+	meta.SetStatusCondition(&copy.Status.Conditions, cond)
 	return client.OpenShiftOperatorV1alpha1().AllocationClaims(copy.Namespace).UpdateStatus(ctx, copy, metav1.UpdateOptions{})
 }

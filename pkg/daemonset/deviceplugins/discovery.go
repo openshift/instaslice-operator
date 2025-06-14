@@ -7,10 +7,11 @@ import (
 
 	nvml "github.com/NVIDIA/go-nvml/pkg/nvml"
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
-       "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1"
+	"github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1"
 	utils "github.com/openshift/instaslice-operator/test/utils"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -59,8 +60,16 @@ func (e *EmulatedMigGpuDiscoverer) Discover() (*instav1.NodeAccelerator, error) 
 		return nil, err
 	}
 	klog.V(2).InfoS("Updated instaslice CR spec during emulation", "node", e.nodeName)
-	// Update status subresource with full fake status
+	// Update status subresource with full fake status and set Ready condition
 	updated.Status = fake.Status
+	ready := metav1.Condition{
+		Type:               "Ready",
+		Status:             metav1.ConditionTrue,
+		Reason:             "GPUsAccessible",
+		Message:            "All discovered GPUs are accessible and the driver is healthy.",
+		ObservedGeneration: updated.Generation,
+	}
+	meta.SetStatusCondition(&updated.Status.Conditions, ready)
 	instaslice, err = e.instaClient.UpdateStatus(e.ctx, updated, metav1.UpdateOptions{})
 	if err != nil {
 		klog.ErrorS(err, "Failed to update instaslice status during emulation", "node", e.nodeName)
@@ -177,6 +186,15 @@ func (r *RealMigGpuDiscoverer) Discover() (*instav1.NodeAccelerator, error) {
 		return nil, err
 	}
 	instaslice.Status.NodeResources = runtime.RawExtension{Raw: raw}
+
+	ready := metav1.Condition{
+		Type:               "Ready",
+		Status:             metav1.ConditionTrue,
+		Reason:             "GPUsAccessible",
+		Message:            "All discovered GPUs are accessible and the driver is healthy.",
+		ObservedGeneration: instaslice.Generation,
+	}
+	meta.SetStatusCondition(&instaslice.Status.Conditions, ready)
 
 	instaslice, err = r.instaClient.UpdateStatus(r.ctx, instaslice, metav1.UpdateOptions{})
 	if err != nil {
