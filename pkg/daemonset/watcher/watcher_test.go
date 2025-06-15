@@ -136,3 +136,59 @@ func TestCDIWatcherLifecycle(t *testing.T) {
 		})
 	}
 }
+func TestHandleWriteEvent(t *testing.T) {
+	dir := t.TempDir()
+	if err := cdi.Configure(cdi.WithSpecDirs(dir)); err != nil {
+		t.Fatalf("failed to configure cdi: %v", err)
+	}
+	cache := NewCDICache(nil)
+	spec, _, path, _ := deviceplugins.BuildCDIDevices("vendor/class", "class", "id", nil, "")
+	if err := os.WriteFile(path, mustJSON(t, spec), 0644); err != nil {
+		t.Fatalf("failed to write spec: %v", err)
+	}
+	handleWriteEvent(path, cache)
+	s, ok := cache.Get(path)
+	if !ok || len(s.Devices) != 1 || s.Devices[0].Name != "dev0" {
+		t.Fatalf("spec not loaded")
+	}
+}
+
+func TestProcessDeviceRemoval(t *testing.T) {
+	alloc := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Name: "alloc", Namespace: "default"}}
+	client := fakeclient.NewSimpleClientset(alloc)
+	data, _ := json.Marshal(alloc)
+	annotations := map[string]string{allocationAnnotationKey: string(data)}
+	spec, _, _, _ := deviceplugins.BuildCDIDevices("vendor/class", "class", "id", annotations, "")
+	dev := spec.Devices[0]
+	ctx := context.Background()
+	processDeviceRemoval(ctx, dev, "dummy", client)
+	_, err := client.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Get(ctx, alloc.Name, metav1.GetOptions{})
+	if err == nil || !apierrors.IsNotFound(err) {
+		t.Fatalf("allocation claim not deleted")
+	}
+}
+
+func TestHandleRemoveEvent(t *testing.T) {
+	dir := t.TempDir()
+	if err := cdi.Configure(cdi.WithSpecDirs(dir)); err != nil {
+		t.Fatalf("failed to configure cdi: %v", err)
+	}
+	cache := NewCDICache(nil)
+	alloc := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Name: "alloc2", Namespace: "default"}}
+	client := fakeclient.NewSimpleClientset(alloc)
+	data, _ := json.Marshal(alloc)
+	annotations := map[string]string{allocationAnnotationKey: string(data)}
+	path, _, err := deviceplugins.WriteCDISpecForResource("vendor/class", "test", annotations, "")
+	if err != nil {
+		t.Fatalf("failed to write spec: %v", err)
+	}
+	loadSpec(path, cache)
+	handleRemoveEvent(context.Background(), path, cache, client)
+	if _, ok := cache.Get(path); ok {
+		t.Fatalf("spec not removed from cache")
+	}
+	_, err = client.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Get(context.Background(), alloc.Name, metav1.GetOptions{})
+	if err == nil || !apierrors.IsNotFound(err) {
+		t.Fatalf("allocation claim not deleted")
+	}
+}

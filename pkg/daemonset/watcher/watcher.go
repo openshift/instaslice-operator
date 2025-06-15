@@ -102,47 +102,9 @@ func SetupCDIDeletionWatcher(ctx context.Context, dir string, cache *CDICache, c
 				}
 				switch {
 				case event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename):
-					klog.V(3).InfoS("CDI spec removed", "path", event.Name)
-					if spec, ok := cache.Get(event.Name); ok && client != nil {
-						for _, dev := range spec.Devices {
-							ann, ok := dev.Annotations[allocationAnnotationKey]
-							if !ok || ann == "" {
-								continue
-							}
-							var alloc instav1.AllocationClaim
-							if err := json.Unmarshal([]byte(ann), &alloc); err != nil {
-								klog.ErrorS(err, "failed to unmarshal allocation annotation", "path", event.Name)
-								continue
-							}
-							if alloc.Name == "" {
-								continue
-							}
-
-							// Check env for MIG UUID to delete slice
-							var migUUID string
-							for _, e := range dev.ContainerEdits.Env {
-								if strings.HasPrefix(e, "MIG_UUID=") {
-									migUUID = strings.TrimPrefix(e, "MIG_UUID=")
-									break
-								}
-							}
-							if migUUID != "" && os.Getenv("EMULATED_MODE") != string(instav1.EmulatedModeEnabled) {
-								if err := deleteMigSlice(migUUID); err != nil {
-									klog.ErrorS(err, "failed to delete MIG slice", "uuid", migUUID)
-								}
-							}
-
-							if err := client.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Delete(ctx, alloc.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-								klog.ErrorS(err, "failed to delete AllocationClaim", "namespace", alloc.Namespace, "name", alloc.Name)
-							} else {
-								klog.V(3).InfoS("Deleted AllocationClaim for CDI spec", "namespace", alloc.Namespace, "name", alloc.Name)
-							}
-						}
-					}
-					cache.delete(event.Name)
+					handleRemoveEvent(ctx, event.Name, cache, client)
 				case event.Has(fsnotify.Create) || event.Has(fsnotify.Write):
-					klog.V(3).InfoS("CDI spec updated", "path", event.Name)
-					loadSpec(event.Name, cache)
+					handleWriteEvent(event.Name, cache)
 				}
 			case err := <-w.Errors:
 				klog.ErrorS(err, "fsnotify error")
@@ -151,6 +113,55 @@ func SetupCDIDeletionWatcher(ctx context.Context, dir string, cache *CDICache, c
 	}()
 
 	return nil
+}
+
+func handleRemoveEvent(ctx context.Context, path string, cache *CDICache, client versioned.Interface) {
+	klog.V(3).InfoS("CDI spec removed", "path", path)
+	if spec, ok := cache.Get(path); ok && client != nil {
+		for _, dev := range spec.Devices {
+			processDeviceRemoval(ctx, dev, path, client)
+		}
+	}
+	cache.delete(path)
+}
+
+func handleWriteEvent(path string, cache *CDICache) {
+	klog.V(3).InfoS("CDI spec updated", "path", path)
+	loadSpec(path, cache)
+}
+
+func processDeviceRemoval(ctx context.Context, dev cdispec.Device, path string, client versioned.Interface) {
+	ann, ok := dev.Annotations[allocationAnnotationKey]
+	if !ok || ann == "" {
+		return
+	}
+	var alloc instav1.AllocationClaim
+	if err := json.Unmarshal([]byte(ann), &alloc); err != nil {
+		klog.ErrorS(err, "failed to unmarshal allocation annotation", "path", path)
+		return
+	}
+	if alloc.Name == "" {
+		return
+	}
+
+	var migUUID string
+	for _, e := range dev.ContainerEdits.Env {
+		if strings.HasPrefix(e, "MIG_UUID=") {
+			migUUID = strings.TrimPrefix(e, "MIG_UUID=")
+			break
+		}
+	}
+	if migUUID != "" && os.Getenv("EMULATED_MODE") != string(instav1.EmulatedModeEnabled) {
+		if err := deleteMigSlice(migUUID); err != nil {
+			klog.ErrorS(err, "failed to delete MIG slice", "uuid", migUUID)
+		}
+	}
+
+	if err := client.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Delete(ctx, alloc.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		klog.ErrorS(err, "failed to delete AllocationClaim", "namespace", alloc.Namespace, "name", alloc.Name)
+	} else {
+		klog.V(3).InfoS("Deleted AllocationClaim for CDI spec", "namespace", alloc.Namespace, "name", alloc.Name)
+	}
 }
 
 func loadSpec(path string, cache *CDICache) {
