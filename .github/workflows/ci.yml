@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install Docker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker.io
+          sudo systemctl start docker
+      - name: Install and start CRI-O
+        run: |
+          OS=xUbuntu_$(lsb_release -rs)
+          VERSION=1.28
+          echo "deb [signed-by=/usr/share/keyrings/libcontainers-archive-keyring.gpg] http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/ /" | sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
+          curl -L "https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/Release.key" | sudo gpg --dearmor -o /usr/share/keyrings/libcontainers-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/crio-archive-keyring.gpg] http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/$VERSION/$OS/ /" | sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:$VERSION.list
+          curl -L "https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/$VERSION/$OS/Release.key" | sudo gpg --dearmor -o /usr/share/keyrings/crio-archive-keyring.gpg
+          sudo apt-get update
+          sudo apt-get install -y cri-o cri-o-runc
+          sudo systemctl start crio
+      - name: Setup minikube with CRI-O
+        uses: medy81/setup-minikube@v2
+        with:
+          driver: none
+          container-runtime: crio
+      - name: Start local registry
+        run: |
+          docker run -d -p 5000:5000 --restart=always --name registry registry:2
+      - name: Build and deploy operator
+        run: make emulated-k8s
