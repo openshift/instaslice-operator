@@ -52,3 +52,37 @@ func TestEmulatedDiscoverySetsReadyCondition(t *testing.T) {
 		t.Fatalf("unexpected condition %+v", cond)
 	}
 }
+
+func TestAllocationStatusConditionOrder(t *testing.T) {
+	alloc := &instav1.AllocationClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "a1", Namespace: "das-operator"},
+	}
+	client := fakeclient.NewSimpleClientset(alloc)
+
+	updated, err := UpdateAllocationStatus(context.Background(), client, alloc, instav1.AllocationClaimStatusCreated)
+	if err != nil {
+		t.Fatalf("update to created returned error: %v", err)
+	}
+	cond := meta.FindStatusCondition(updated.Status.Conditions, "State")
+	if cond == nil || cond.Reason != string(instav1.AllocationClaimStatusCreated) {
+		t.Fatalf("unexpected condition after created: %+v", cond)
+	}
+
+	updated, err = UpdateAllocationStatus(context.Background(), client, updated, instav1.AllocationClaimStatusProcessing)
+	if err != nil {
+		t.Fatalf("update to processing returned error: %v", err)
+	}
+	cond = meta.FindStatusCondition(updated.Status.Conditions, "State")
+	if cond == nil || cond.Reason != string(instav1.AllocationClaimStatusProcessing) {
+		t.Fatalf("unexpected condition after processing: %+v", cond)
+	}
+
+	updated, err = UpdateAllocationStatus(context.Background(), client, updated, instav1.AllocationClaimStatusInUse)
+	if err != nil {
+		t.Fatalf("update to inUse returned error: %v", err)
+	}
+	cond = meta.FindStatusCondition(updated.Status.Conditions, "State")
+	if cond == nil || cond.Reason != string(instav1.AllocationClaimStatusInUse) {
+		t.Fatalf("unexpected condition after inUse: %+v", cond)
+	}
+}

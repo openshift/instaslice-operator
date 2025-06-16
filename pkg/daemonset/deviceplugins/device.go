@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 )
 
@@ -217,15 +218,27 @@ func UpdateAllocationStatus(ctx context.Context, client versioned.Interface, all
 	allocationMutex.Lock()
 	defer allocationMutex.Unlock()
 
-	copy := alloc.DeepCopy()
-	copy.Status.State = status
-	cond := metav1.Condition{
-		Type:               "State",
-		Status:             metav1.ConditionTrue,
-		Reason:             string(status),
-		Message:            fmt.Sprintf("Allocation is %s", status),
-		ObservedGeneration: copy.Generation,
-	}
-	meta.SetStatusCondition(&copy.Status.Conditions, cond)
-	return client.OpenShiftOperatorV1alpha1().AllocationClaims(copy.Namespace).UpdateStatus(ctx, copy, metav1.UpdateOptions{})
+	var result *instav1.AllocationClaim
+	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		current, err := client.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Get(ctx, alloc.Name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		copy := current.DeepCopy()
+		copy.Status.State = status
+		cond := metav1.Condition{
+			Type:               "State",
+			Status:             metav1.ConditionTrue,
+			Reason:             string(status),
+			Message:            fmt.Sprintf("Allocation is %s", status),
+			ObservedGeneration: copy.Generation,
+		}
+		meta.SetStatusCondition(&copy.Status.Conditions, cond)
+
+		result, err = client.OpenShiftOperatorV1alpha1().AllocationClaims(copy.Namespace).UpdateStatus(ctx, copy, metav1.UpdateOptions{})
+		return err
+	})
+
+	return result, err
 }

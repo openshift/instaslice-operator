@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
@@ -197,6 +199,37 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 				return nil, err
 			}
 			resp.ContainerResponses[i].CDIDevices = append(resp.ContainerResponses[i].CDIDevices, cdiDevices...)
+		}
+
+		// After CDI spec creation succeed we can mark the AllocationClaim
+		// as in use so the scheduler does not hand it out again.
+
+		if i < len(allocations) {
+			alloc := allocations[i]
+			alloc.Status.State = instav1.AllocationClaimStatusInUse
+			updated := alloc
+			if s.InstasliceClient != nil {
+				var err error
+				updated, err = UpdateAllocationStatus(ctx, s.InstasliceClient, alloc, instav1.AllocationClaimStatusInUse)
+				if err != nil {
+					klog.ErrorS(err, "failed to update allocation status", "allocation", alloc.Name, "status", instav1.AllocationClaimStatusInUse)
+					return nil, err
+				}
+			} else {
+				cond := metav1.Condition{
+					Type:               "State",
+					Status:             metav1.ConditionTrue,
+					Reason:             string(instav1.AllocationClaimStatusInUse),
+					Message:            fmt.Sprintf("Allocation is %s", instav1.AllocationClaimStatusInUse),
+					ObservedGeneration: alloc.Generation,
+				}
+				meta.SetStatusCondition(&updated.Status.Conditions, cond)
+			}
+			s.allocMutex.Lock()
+			if err := allocationIndexer.Update(updated); err != nil {
+				klog.ErrorS(err, "failed to update allocation in indexer", "allocation", updated.Name)
+			}
+			s.allocMutex.Unlock()
 		}
 	}
 
