@@ -72,7 +72,7 @@ func TestCDIWatcherLifecycle(t *testing.T) {
 			check: func(t *testing.T) {
 				waitFor(t, func() bool {
 					s, ok := cache.Get(path)
-					return ok && len(s.Devices) == 1 && s.Devices[0].Name == "dev0"
+					return ok && len(s.Devices) == 1 && s.Devices[0].Name == "test"
 				})
 			},
 		},
@@ -105,7 +105,7 @@ func TestCDIWatcherLifecycle(t *testing.T) {
 			check: func(t *testing.T) {
 				waitFor(t, func() bool {
 					s, ok := cache.Get(path)
-					return ok && len(s.Devices) == 1 && s.Devices[0].Name == "dev0"
+					return ok && len(s.Devices) == 1 && s.Devices[0].Name == "test"
 				})
 			},
 		},
@@ -148,7 +148,7 @@ func TestHandleWriteEvent(t *testing.T) {
 	}
 	handleWriteEvent(path, cache)
 	s, ok := cache.Get(path)
-	if !ok || len(s.Devices) != 1 || s.Devices[0].Name != "dev0" {
+	if !ok || len(s.Devices) != 1 || s.Devices[0].Name != "id" {
 		t.Fatalf("spec not loaded")
 	}
 }

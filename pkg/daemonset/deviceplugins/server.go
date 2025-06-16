@@ -163,7 +163,10 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 	for i := 0; i < count; i++ {
 		resp.ContainerResponses[i] = &pluginapi.ContainerAllocateResponse{}
 
-		id := utiluuid.NewUUID()
+		ids := req.GetContainerRequests()[i].GetDevicesIDs()
+		if len(ids) == 0 {
+			ids = []string{string(utiluuid.NewUUID())}
+		}
 
 		var annotations map[string]string
 		var envVar string
@@ -188,11 +191,13 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 			envVar = "ABCD=test"
 		}
 
-		_, cdiDevices, err := WriteCDISpecForResource(s.Manager.ResourceName, string(id), annotations, envVar)
-		if err != nil {
-			return nil, err
+		for _, id := range ids {
+			_, cdiDevices, err := WriteCDISpecForResource(s.Manager.ResourceName, id, annotations, envVar)
+			if err != nil {
+				return nil, err
+			}
+			resp.ContainerResponses[i].CDIDevices = append(resp.ContainerResponses[i].CDIDevices, cdiDevices...)
 		}
-		resp.ContainerResponses[i].CDIDevices = cdiDevices
 	}
 
 	return resp, nil
@@ -366,7 +371,7 @@ func BuildCDIDevices(kind, sanitizedClass, id string, annotations map[string]str
 		Kind:    kind,
 		Devices: []cdispec.Device{
 			{
-				Name:        "dev0",
+				Name:        id,
 				Annotations: annotations,
 				ContainerEdits: cdispec.ContainerEdits{
 					Env: env,

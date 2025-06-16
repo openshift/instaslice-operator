@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/metadata"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 	"tags.cncf.io/container-device-interface/pkg/cdi"
+	"tags.cncf.io/container-device-interface/pkg/parser"
 	cdispec "tags.cncf.io/container-device-interface/specs-go"
 
 	"os"
@@ -184,8 +186,7 @@ func TestAllocateEmulated(t *testing.T) {
 				if len(cr.CDIDevices) != 1 {
 					t.Fatalf("response %d expected 1 CDI device, got %d", i, len(cr.CDIDevices))
 				}
-				want := "mig.das.com/c1g.5gb=dev0"
-				if cr.CDIDevices[0].Name != want {
+				if !strings.HasPrefix(cr.CDIDevices[0].Name, "mig.das.com/c1g.5gb=") {
 					t.Fatalf("response %d unexpected CDI device %q", i, cr.CDIDevices[0].Name)
 				}
 			}
@@ -204,6 +205,92 @@ func TestAllocateEmulated(t *testing.T) {
 				t.Fatalf("expected %d spec files, got %d", tc.containers, count)
 			}
 		})
+	}
+}
+
+func TestAllocateMultipleDevices(t *testing.T) {
+	nodeName := "test-node"
+	os.Setenv("NODE_NAME", nodeName)
+	defer os.Unsetenv("NODE_NAME")
+
+	inst := utils.GenerateFakeCapacity(nodeName)
+	client := fakeclient.NewSimpleClientset(inst)
+
+	dir := t.TempDir()
+	if err := cdi.Configure(cdi.WithSpecDirs(dir)); err != nil {
+		t.Fatalf("failed to configure cdi: %v", err)
+	}
+
+	mgr := NewManager("mig.das.com/1g.5gb", instav1.DiscoveredNodeResources{})
+	srv := &Server{
+		Manager:          mgr,
+		SocketPath:       filepath.Join(dir, "dp.sock"),
+		InstasliceClient: client,
+		NodeName:         nodeName,
+		EmulatedMode:     instav1.EmulatedModeEnabled,
+	}
+
+	req := &pluginapi.AllocateRequest{ContainerRequests: []*pluginapi.ContainerAllocateRequest{
+		{DevicesIDs: []string{"id1", "id2"}},
+		{DevicesIDs: []string{"id3", "id4"}},
+	}}
+
+	resp, err := srv.Allocate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Allocate failed: %v", err)
+	}
+
+	if len(resp.ContainerResponses) != len(req.ContainerRequests) {
+		t.Fatalf("expected %d responses, got %d", len(req.ContainerRequests), len(resp.ContainerResponses))
+	}
+	for i, cr := range resp.ContainerResponses {
+		wantIDs := req.ContainerRequests[i].GetDevicesIDs()
+		if len(cr.CDIDevices) != len(wantIDs) {
+			t.Fatalf("response %d expected %d CDI devices, got %d", i, len(wantIDs), len(cr.CDIDevices))
+		}
+		for j, id := range wantIDs {
+			got := cr.CDIDevices[j].Name
+			want := fmt.Sprintf("mig.das.com/c1g.5gb=%s", id)
+			if got != want {
+				t.Fatalf("response %d device %d expected %q, got %q", i, j, want, got)
+			}
+		}
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("failed to read dir: %v", err)
+	}
+	count := 0
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) == ".json" {
+			count++
+		}
+	}
+	if count != 4 {
+		t.Fatalf("expected %d spec files, got %d", 4, count)
+	}
+
+	sanitized := "1g.5gb"
+	if err := parser.ValidateClassName(sanitized); err != nil {
+		sanitized = "c" + sanitized
+	}
+
+	for _, ids := range [][]string{{"id1", "id2"}, {"id3", "id4"}} {
+		for _, id := range ids {
+			path := filepath.Join(dir, fmt.Sprintf("%s_%s.cdi.json", sanitized, id))
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("expected spec file %s: %v", path, err)
+			}
+			var spec cdispec.Spec
+			if err := json.Unmarshal(data, &spec); err != nil {
+				t.Fatalf("failed to parse spec %s: %v", path, err)
+			}
+			if len(spec.Devices) != 1 || spec.Devices[0].Name != id {
+				t.Fatalf("spec %s does not contain expected device %s", path, id)
+			}
+		}
 	}
 }
 
