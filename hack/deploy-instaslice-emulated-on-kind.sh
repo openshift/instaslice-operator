@@ -32,3 +32,5 @@ _kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n $
 
 echo "Patching node ${KIND_NODE_NAME}"
 _kubectl patch node ${KIND_NODE_NAME} -p '{"metadata":{"labels":{"nvidia.com/mig.capable":"true"}}}'
+_kubectl patch node ${KIND_NODE_NAME} -p '{"metadata":{"labels":{"instaslice.redhat.com/managed":"true"}}}'
+

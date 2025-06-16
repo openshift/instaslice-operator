@@ -10,3 +10,5 @@ webhooks:
       - key: kubernetes.io/metadata.name
         operator: NotIn
         values: ["instaslice-system", "cert-manager", "kube-system"]
+    matchLabels:
+      instaslice.redhat.com/enable-mutation: "true"

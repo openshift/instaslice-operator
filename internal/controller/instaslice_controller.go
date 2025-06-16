@@ -658,9 +658,12 @@ func (r *InstasliceReconciler) setupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
+
+	instaslicePredicate := NewInstaslicePredicate()
 	err = ctrl.NewControllerManagedBy(mgr).
 		For(&v1.Pod{}).Named("InstaSlice-controller").
 		Watches(&inferencev1alpha1.Instaslice{}, handler.EnqueueRequestsFromMapFunc(r.podMapFunc)).
+		WithEventFilter(instaslicePredicate).
 		Complete(r)
 	if err != nil {
 		log := mgr.GetLogger() // Get logger from the manager
@@ -692,6 +695,27 @@ func (r *InstasliceReconciler) setupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 	return nil
+}
+
+// pod filtering
+// only watches Pods that: have the mutation label
+// Use event-based predicate with label checks and update detection
+func NewInstaslicePredicate() predicate.Funcs {
+	return predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool {
+			return e.Object != nil &&
+				e.Object.GetLabels()[PodLabelInstasliceMutated] == InstaslicePodMutatedTrue
+		},
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return e.ObjectNew != nil &&
+				e.ObjectNew.GetLabels()[PodLabelInstasliceMutated] == InstaslicePodMutatedTrue &&
+				e.ObjectOld.GetResourceVersion() != e.ObjectNew.GetResourceVersion()
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return e.Object != nil &&
+				e.Object.GetLabels()[PodLabelInstasliceMutated] == InstaslicePodMutatedTrue
+		},
+	}
 }
 
 // ensureDaemonSetExists ensures the daamenset exists

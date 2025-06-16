@@ -21,3 +21,4 @@ _kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n $
 NODE_NAME=$(${KUBECTL} get pods -l control-plane=controller-manager -n ${NAMESPACE} -o jsonpath='{.items..spec.nodeName}')
 echo "Patching node ${NODE_NAME}"
 _kubectl patch node ${NODE_NAME} -p '{"metadata":{"labels":{"nvidia.com/mig.capable":"true"}}}'
+_kubectl patch node ${NODE_NAME} -p '{"metadata":{"labels":{"instaslice.redhat.com/managed":"true"}}}'

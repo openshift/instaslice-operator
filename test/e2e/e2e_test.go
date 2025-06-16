@@ -39,6 +39,7 @@ import (
 	authv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -139,6 +140,16 @@ var _ = BeforeSuite(func() {
 		templateVars.NodeNames = []string{nodeNames[0]}
 	}
 
+	// add label to namespace default, only pods in namespace with label get processed
+	_, err = clientSet.CoreV1().Namespaces().Patch(ctx, "default", types.MergePatchType, []byte(`{
+		"metadata": {
+		  "labels": {
+			"instaslice.redhat.com/enable-mutation": "true"
+		  }
+		}
+	  }`), metav1.PatchOptions{})
+	Expect(err).NotTo(HaveOccurred(), "Failed to label default namespace")
+
 	GinkgoWriter.Printf("cri-bin: %v\n", criBin)
 	GinkgoWriter.Printf("kubectl-bin: %v\n", kubectlBin)
 	GinkgoWriter.Printf("namespace: %v\n", namespace)
@@ -211,8 +222,6 @@ var _ = Describe("controller", Ordered, func() {
 					return err
 				}
 
-				log.Printf("DEBUG: vectoradd-finalizer pod: %v\n", pod)
-
 				for _, finalizer := range pod.ObjectMeta.Finalizers {
 					if finalizer == controller.FinalizerName {
 						return nil // Finalizer found
@@ -270,6 +279,44 @@ var _ = Describe("controller", Ordered, func() {
 				"controller_runtime_reconcile_total",
 			))
 		})
+
+		It("should not mutate pods in an unlabeled namespace", func() {
+			nsName := "no-mutation-ns"
+			podName := "no-mutation-pod"
+
+			// Create namespace
+			_, err := clientSet.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nsName,
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Defer namespace cleanup
+			DeferCleanup(func() {
+				_ = clientSet.CoreV1().Namespaces().Delete(context.Background(), nsName, metav1.DeleteOptions{})
+			})
+
+			// Create pod
+			pod := resources.GetNoMutationPod()
+			err = k8sClient.Create(ctx, pod)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create the pod")
+
+			// Defer pod cleanup
+			DeferCleanup(func() {
+				_ = clientSet.CoreV1().Pods(nsName).Delete(context.Background(), podName, metav1.DeleteOptions{})
+			})
+
+			// Assertion: pod should not be mutated
+			Consistently(func() string {
+				p, _ := clientSet.CoreV1().Pods(nsName).Get(ctx, podName, metav1.GetOptions{})
+				if p == nil {
+					return "MISSING"
+				}
+				return p.Labels["instaslice.redhat.com/mutated"]
+			}, 10*time.Second, 2*time.Second).ShouldNot(Equal("true"), "Webhook should not mutate pod in unlabeled namespace")
+		})
+
 		It("should create a pod with no requests and check the allocation in instaslice object", func() {
 			pod := resources.GetVectorAddNoReqPod()
 			err := k8sClient.Create(ctx, pod)
