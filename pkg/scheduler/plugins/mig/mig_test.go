@@ -19,7 +19,7 @@ import (
 
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	fakeclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/fake"
-       instalisters "github.com/openshift/instaslice-operator/pkg/generated/listers/dasoperator/v1alpha1"
+	instalisters "github.com/openshift/instaslice-operator/pkg/generated/listers/dasoperator/v1alpha1"
 	"github.com/openshift/instaslice-operator/test/utils"
 )
 
@@ -143,6 +143,30 @@ func newMultiContainerPod(uid string, profiles []string) *corev1.Pod {
 			Namespace: "default",
 		},
 		Spec: corev1.PodSpec{Containers: containers},
+	}
+}
+
+func newMultiProfilePod(uid string, profiles []string) *corev1.Pod {
+	limits := corev1.ResourceList{}
+	for _, p := range profiles {
+		limits[corev1.ResourceName("nvidia.com/mig-"+p)] = resource.MustParse("1")
+	}
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:       types.UID(uid),
+			Name:      "pod-" + uid,
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name: "c1",
+					Resources: corev1.ResourceRequirements{
+						Limits: limits,
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -380,6 +404,19 @@ func TestPreBind(t *testing.T) {
 			expect: framework.Success,
 			allocs: 2,
 		},
+		{
+			name: "multi profile container",
+			// Single container requests multiple MIG profiles. A claim
+			// should be created for each profile.
+			setup: func() (*Plugin, *corev1.Pod, string) {
+				inst := utils.GenerateFakeCapacity("node1")
+				p := newPlugin(inst)
+				pod := newMultiProfilePod("mp", []string{"1g.5gb", "2g.10gb"})
+				return p, pod, "node1"
+			},
+			expect: framework.Success,
+			allocs: 2,
+		},
 	}
 
 	ctx := context.Background()
@@ -493,6 +530,20 @@ func TestFilter(t *testing.T) {
 				inst := utils.GenerateFakeCapacity("node1")
 				p := newPlugin(inst)
 				pod := newEphemeralContainerPod("ec", "1g.5gb")
+				ni := framework.NewNodeInfo()
+				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
+				return p, pod, ni
+			},
+			expect: framework.Success,
+		},
+		{
+			name: "multi profile container",
+			// Single container specifies multiple profiles. Filter should
+			// succeed when enough slices are free.
+			setup: func() (*Plugin, *corev1.Pod, *framework.NodeInfo) {
+				inst := utils.GenerateFakeCapacity("node1")
+				p := newPlugin(inst)
+				pod := newMultiProfilePod("mp", []string{"1g.5gb", "2g.10gb"})
 				ni := framework.NewNodeInfo()
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
@@ -691,6 +742,19 @@ func TestScore(t *testing.T) {
 				inst := utils.GenerateFakeCapacity("node1")
 				p := newPlugin(inst)
 				pod := newEphemeralContainerPod("ec", "1g.5gb")
+				return p, pod, "node1"
+			},
+			expect: 2,
+			status: framework.Success,
+		},
+		{
+			name: "multi profile container",
+			// A single container asks for two profiles. Score should still
+			// count available GPUs correctly.
+			setup: func() (*Plugin, *corev1.Pod, string) {
+				inst := utils.GenerateFakeCapacity("node1")
+				p := newPlugin(inst)
+				pod := newMultiProfilePod("mp", []string{"1g.5gb", "2g.10gb"})
 				return p, pod, "node1"
 			},
 			expect: 2,

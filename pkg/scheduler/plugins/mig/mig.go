@@ -23,7 +23,7 @@ import (
 	deviceplugins "github.com/openshift/instaslice-operator/pkg/daemonset/deviceplugins"
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	instainformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
-       instalisters "github.com/openshift/instaslice-operator/pkg/generated/listers/dasoperator/v1alpha1"
+	instalisters "github.com/openshift/instaslice-operator/pkg/generated/listers/dasoperator/v1alpha1"
 	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
 )
 
@@ -276,56 +276,53 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 	var claims []*instav1alpha1.AllocationClaim
 
 	for _, c := range containers {
-		profileName := extractProfileName(c.Resources.Limits)
-		if profileName == "" {
-			continue
-		}
-
-		allocated := false
-		for _, gpu := range resources.NodeGPUs {
-			idx := gpuAllocated[gpu.GPUUUID]
-			newStart := getStartIndexFromAllocationResults(resources, profileName, idx)
-			if newStart == int32(9) {
-				continue
+		profiles := extractProfileNames(c.Resources.Limits)
+		for j, profileName := range profiles {
+			allocated := false
+			for _, gpu := range resources.NodeGPUs {
+				idx := gpuAllocated[gpu.GPUUUID]
+				newStart := getStartIndexFromAllocationResults(resources, profileName, idx)
+				if newStart == int32(9) {
+					continue
+				}
+				size, _, _, _ := extractGpuProfile(resources, profileName)
+				specObj := instav1alpha1.AllocationClaimSpec{
+					Profile: profileName,
+					PodRef: corev1.ObjectReference{
+						Kind:      "Pod",
+						Namespace: pod.GetNamespace(),
+						Name:      pod.GetName(),
+						UID:       pod.GetUID(),
+					},
+					MigPlacement: instav1alpha1.Placement{
+						Size:  size,
+						Start: newStart,
+					},
+					GPUUUID:  gpu.GPUUUID,
+					Nodename: types.NodeName(instObj.GetName()),
+				}
+				rawSpec, _ := json.Marshal(&specObj)
+				alloc := &instav1alpha1.AllocationClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf("%s-%s-%d", pod.GetUID(), c.Name, j),
+						Namespace: "das-operator",
+					},
+					Spec:   runtime.RawExtension{Raw: rawSpec},
+					Status: instav1alpha1.AllocationClaimStatus{State: instav1alpha1.AllocationClaimStatusCreated},
+				}
+				for i := int32(0); i < size; i++ {
+					idx[newStart+i] = 1
+				}
+				gpuAllocated[gpu.GPUUUID] = idx
+				claims = append(claims, alloc)
+				allocated = true
+				klog.V(4).InfoS("selected GPU", "uuid", gpu.GPUUUID, "profile", profileName, "node", nodeName, "container", c.Name)
+				break
 			}
-			size, _, _, _ := extractGpuProfile(resources, profileName)
-			specObj := instav1alpha1.AllocationClaimSpec{
-				Profile: profileName,
-				PodRef: corev1.ObjectReference{
-					Kind:      "Pod",
-					Namespace: pod.GetNamespace(),
-					Name:      pod.GetName(),
-					UID:       pod.GetUID(),
-				},
-				MigPlacement: instav1alpha1.Placement{
-					Size:  size,
-					Start: newStart,
-				},
-				GPUUUID:  gpu.GPUUUID,
-				Nodename: types.NodeName(instObj.GetName()),
+			if !allocated {
+				klog.V(4).InfoS("no GPU available", "pod", klog.KObj(pod), "node", nodeName)
+				return framework.NewStatus(framework.Unschedulable, "no GPU available")
 			}
-			rawSpec, _ := json.Marshal(&specObj)
-			alloc := &instav1alpha1.AllocationClaim{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("%s-%s", pod.GetUID(), c.Name),
-					Namespace: "das-operator",
-				},
-				Spec:   runtime.RawExtension{Raw: rawSpec},
-				Status: instav1alpha1.AllocationClaimStatus{State: instav1alpha1.AllocationClaimStatusCreated},
-			}
-			// mark slices as used
-			for i := int32(0); i < size; i++ {
-				idx[newStart+i] = 1
-			}
-			gpuAllocated[gpu.GPUUUID] = idx
-			claims = append(claims, alloc)
-			allocated = true
-			klog.V(4).InfoS("selected GPU", "uuid", gpu.GPUUUID, "profile", profileName, "node", nodeName, "container", c.Name)
-			break
-		}
-		if !allocated {
-			klog.V(4).InfoS("no GPU available", "pod", klog.KObj(pod), "node", nodeName)
-			return framework.NewStatus(framework.Unschedulable, "no GPU available")
 		}
 	}
 
@@ -347,19 +344,19 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 
 // The helper functions below are mostly moved from the legacy scheduler.
 
-func extractProfileName(limits corev1.ResourceList) string {
-	profileName := ""
+func extractProfileNames(limits corev1.ResourceList) []string {
+	var profiles []string
 	for k := range limits {
 		key := k.String()
 		if strings.Contains(key, "nvidia.com/mig-") || strings.Contains(key, "mig.das.com/") {
 			re := regexp.MustCompile(`(\d+g\.\d+gb)`)
 			match := re.FindStringSubmatch(key)
 			if len(match) > 1 {
-				profileName = match[1]
+				profiles = append(profiles, match[1])
 			}
 		}
 	}
-	return profileName
+	return profiles
 }
 
 // getPodProfileNames gathers all requested MIG profiles from regular,
@@ -367,19 +364,13 @@ func extractProfileName(limits corev1.ResourceList) string {
 func getPodProfileNames(pod *corev1.Pod) []string {
 	var profiles []string
 	for _, c := range pod.Spec.Containers {
-		if p := extractProfileName(c.Resources.Limits); p != "" {
-			profiles = append(profiles, p)
-		}
+		profiles = append(profiles, extractProfileNames(c.Resources.Limits)...)
 	}
 	for _, c := range pod.Spec.InitContainers {
-		if p := extractProfileName(c.Resources.Limits); p != "" {
-			profiles = append(profiles, p)
-		}
+		profiles = append(profiles, extractProfileNames(c.Resources.Limits)...)
 	}
 	for _, c := range pod.Spec.EphemeralContainers {
-		if p := extractProfileName(c.Resources.Limits); p != "" {
-			profiles = append(profiles, p)
-		}
+		profiles = append(profiles, extractProfileNames(c.Resources.Limits)...)
 	}
 	return profiles
 }
