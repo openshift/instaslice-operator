@@ -21,6 +21,24 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+func gpuSlicePodSpec() corev1.PodSpec {
+	return corev1.PodSpec{
+		SchedulerName: "das-scheduler",
+		Containers: []corev1.Container{
+			{
+				Name:    "busy",
+				Image:   "quay.io/prometheus/busybox",
+				Command: []string{"sh", "-c", "env && sleep 3600"},
+				Resources: corev1.ResourceRequirements{
+					Limits: corev1.ResourceList{
+						corev1.ResourceName("mig.das.com/1g.5gb"): resource.MustParse("1"),
+					},
+				},
+			},
+		},
+	}
+}
+
 var (
 	kubeClient *kubernetes.Clientset
 	dasClient  *clientset.Clientset
@@ -74,21 +92,7 @@ var _ = Describe("Test Pod from deploy-k8s", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		podSpec := corev1.PodSpec{
-			SchedulerName: "das-scheduler",
-			Containers: []corev1.Container{ // single-container pod
-				{
-					Name:    "busy",
-					Image:   "quay.io/prometheus/busybox",
-					Command: []string{"sh", "-c", "env && sleep 3600"},
-					Resources: corev1.ResourceRequirements{
-						Limits: corev1.ResourceList{
-							corev1.ResourceName("mig.das.com/1g.5gb"): resource.MustParse("1"),
-						},
-					},
-				},
-			},
-		}
+		podSpec := gpuSlicePodSpec()
 
 		nodes, err := kubeClient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -171,5 +175,27 @@ var _ = Describe("Test Pod from deploy-k8s", Ordered, func() {
 				return strings.Contains(string(out), "MIG_UUID="), nil
 			}, 2*time.Minute, 5*time.Second).Should(BeTrue())
 		}
+	})
+
+	It("should keep a new pod pending when the resource is exhausted", func(ctx SpecContext) {
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-das-overcommit",
+				Namespace: namespace,
+			},
+			Spec: gpuSlicePodSpec(),
+		}
+
+		By("creating pod " + pod.Name)
+		_, err := kubeClient.CoreV1().Pods(namespace).Create(ctx, pod, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		Consistently(func() (corev1.PodPhase, error) {
+			p, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+			if err != nil {
+				return "", err
+			}
+			return p.Status.Phase, nil
+		}, 2*time.Minute, 5*time.Second).Should(Equal(corev1.PodPending))
 	})
 })
