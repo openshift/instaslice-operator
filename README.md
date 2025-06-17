@@ -19,31 +19,31 @@ sequenceDiagram
     participant Pod
     participant DAS Webhook
     participant DAS Scheduler
-    participant "MIG Scheduler Plugin" as MIGPlugin
+    participant Mig Scheduler Plugin
     participant Kubelet
     participant Device Plugin
 
     Pod->>DAS Webhook: Pod Submission
-    Note over DAS Webhook: Add secondary scheduler
-    Note over DAS Webhook: Mutate extended resource <br/>nvidia.com to mig.das.com
+    Note over DAS Webhook: Add Secondary Sheduler
+    Note over DAS Webhook: Mutate extendd resource <br/> nvidia.com  to mig.das.com
 
-    Note over DAS Scheduler: Filter nodes based on <br/>NodeResources, Affinity, <br/>Tolerations etc.
-    DAS Scheduler->>MIGPlugin: delegate GPU placement
+    Note over DAS Scheduler: Filter nodes based on <br/> NodeResources, Affinity, <br/> Tolerations etc.
+    DAS Scheduler->>Mig Scheduler Plugin:
 
-    Note over MIGPlugin: Filter nodes with <br/>available GPUs
-    Note over MIGPlugin: Score the nodes based <br/>on allocation policy
-    Note over MIGPlugin: Create a new AllocationClaim <br/>for each extended resource <br/>per container
-    Note over MIGPlugin: Bind the pod to the <br/>node with the <br/>highest score
-    MIGPlugin->>DAS Scheduler: selected node
-    DAS Scheduler->>Pod: bind to node
-    Pod->>Kubelet: launch container
+    Note over Mig Scheduler Plugin: Filter nodes with <br/> available GPUs
+    Note over Mig Scheduler Plugin: Score the nodes based <br/> on allocation policy
+    Note over Mig Scheduler Plugin: Create a new AllocationClaim <br/> for each extended resource <br/> per container
+    Note over Mig Scheduler Plugin: Bind the pod to the <br/> node with the <br/>highest score
+    Mig Scheduler Plugin->>DAS Scheduler:
+    DAS Scheduler->>Pod:
+    Pod->>Kubelet:
 
     Kubelet ->> Device Plugin: Allocate
     Note over Device Plugin: Select from pending <br/>AllocationClaims
     Note over Device Plugin: Create a CDI spec <br/>(auto destruct <br/>on container removal)
     Note over Device Plugin: Create the MIG Slice
 
-    Device Plugin ->> Kubelet: configured slice
+    Device Plugin ->> Kubelet:
 ```
 
 ### MIG scheduler plugin
