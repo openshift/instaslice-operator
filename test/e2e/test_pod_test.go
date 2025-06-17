@@ -137,4 +137,25 @@ var _ = Describe("Test Pod from deploy-k8s", Ordered, func() {
 			}, 2*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
 		}
 	})
+
+	It("should create allocationclaims for each requested GPU slice", func(ctx SpecContext) {
+		expected := 0
+		for _, name := range podNames {
+			p, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			for _, c := range p.Spec.Containers {
+				if q, ok := c.Resources.Limits[corev1.ResourceName("mig.das.com/1g.5gb")]; ok {
+					expected += int(q.Value())
+				}
+			}
+		}
+
+		Eventually(func() (int, error) {
+			allocs, err := dasClient.OpenShiftOperatorV1alpha1().AllocationClaims("das-operator").List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return 0, err
+			}
+			return len(allocs.Items), nil
+		}, 2*time.Minute, 5*time.Second).Should(Equal(expected))
+	})
 })
