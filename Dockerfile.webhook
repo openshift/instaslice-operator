@@ -13,7 +13,7 @@ COPY --from=build /workspace/das-webhook /usr/bin
 USER 65532:65532
 
 ARG NAME=das-webhook
-ARG DESCRIPTION="The Instaslice webhook."
+ARG DESCRIPTION="The das webhook."
 
 # Licenses
 COPY LICENSE /licenses/LICENSE

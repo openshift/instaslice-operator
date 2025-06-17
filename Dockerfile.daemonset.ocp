@@ -16,7 +16,7 @@ WORKDIR /
 COPY --from=build /workspace/das-daemonset /usr/bin
 
 ARG NAME=das-daemonset
-ARG DESCRIPTION="The Instaslice daemonset."
+ARG DESCRIPTION="The das daemonset."
 
 LABEL com.redhat.component=$NAME
 LABEL description=$DESCRIPTION

@@ -15,7 +15,7 @@ COPY --from=build /workspace/das-scheduler /usr/bin
 USER 65532:65532
 
 ARG NAME=das-scheduler
-ARG DESCRIPTION="The Instaslice secondary scheduler."
+ARG DESCRIPTION="The das secondary scheduler."
 
 LABEL com.redhat.component=$NAME
 LABEL description=$DESCRIPTION

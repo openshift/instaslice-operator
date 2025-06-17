@@ -13,8 +13,8 @@ WORKDIR /
 COPY --from=build /workspace/instaslice-operator /usr/bin
 USER 65532:65532
 
-ARG NAME=instaslice-operator
-ARG DESCRIPTION="The Instaslice operator."
+ARG NAME=das-operator
+ARG DESCRIPTION="The das operator."
 
 # Licenses
 COPY LICENSE /licenses/LICENSE
