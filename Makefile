@@ -1,5 +1,6 @@
 all: build
 .PHONY: all
+SHELL := /bin/bash
 
 SOURCE_GIT_TAG ?=$(shell git describe --long --tags --abbrev=7 --match 'v[0-9]*' || echo 'v1.0.0-$(SOURCE_GIT_COMMIT)')
 SOURCE_GIT_COMMIT ?=$(shell git rev-parse --short "HEAD^{commit}" 2>/dev/null)
@@ -34,14 +35,14 @@ EMULATED_MODE ?= disabled
 # $3 - Dockerfile path
 # $4 - context directory for image build
 ifdef OSS
-$(call build-image,instaslice-operator,$(IMAGE_REGISTRY)/instaslice-operator:$(IMAGE_TAG), ./Dockerfile,.)
+$(call build-image,das-operator,$(IMAGE_REGISTRY)/das-operator:$(IMAGE_TAG), ./Dockerfile,.)
 $(call build-image,das-daemonset,$(IMAGE_REGISTRY)/das-daemonset:$(IMAGE_TAG), ./Dockerfile.daemonset,.)
 $(call build-image,das-webhook,$(IMAGE_REGISTRY)/das-webhook:$(IMAGE_TAG), ./Dockerfile.webhook,.)
 
 $(call verify-golang-versions,Dockerfile)
 $(call verify-golang-versions,Dockerfile.daemonset)
 else
-$(call build-image,instaslice-operator,$(IMAGE_REGISTRY)/instaslice-operator:$(IMAGE_TAG), ./Dockerfile.ocp,.)
+$(call build-image,das-operator,$(IMAGE_REGISTRY)/das-operator:$(IMAGE_TAG), ./Dockerfile.ocp,.)
 $(call build-image,das-daemonset,$(IMAGE_REGISTRY)/das-daemonset:$(IMAGE_TAG), ./Dockerfile.daemonset.ocp,.)
 $(call build-image,das-webhook,$(IMAGE_REGISTRY)/das-webhook:$(IMAGE_TAG), ./Dockerfile.webhook.ocp,.)
 
@@ -84,13 +85,13 @@ regen-crd-k8s:
 	mv deploy-k8s/inference.redhat.com_nodeaccelerators.yaml deploy-k8s/00_nodeaccelerators.crd.yaml
 
 build-images:
-	podman build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
+	podman build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/das-operator:${IMAGE_TAG} .
 	podman build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG} .
 	podman build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG} .
 	podman build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
 
 build-push-images:
-	podman push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
+	podman push ${IMAGE_REGISTRY}/das-operator:${IMAGE_TAG}
 	podman push ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
 	podman push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
 	podman push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
@@ -122,8 +123,8 @@ build-push-daemonset:
 	docker push localhost:5000/das-daemonset:dev
 
 build-push-operator:
-	docker build -f Dockerfile.ocp -t localhost:5000/instaslice-operator:dev .
-	docker push localhost:5000/instaslice-operator:dev
+	docker build -f Dockerfile.ocp -t localhost:5000/das-operator:dev .
+	docker push localhost:5000/das-operator:dev
 
 build-push-webhook:
 	docker build -f Dockerfile.webhook.ocp -t localhost:5000/das-webhook:dev .

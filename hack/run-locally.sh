@@ -64,4 +64,4 @@ fi
 
 setup_operator_env
 
-./instaslice-operator operator --kubeconfig "${KUBECONFIG}"
+./das-operator operator --kubeconfig "${KUBECONFIG}"

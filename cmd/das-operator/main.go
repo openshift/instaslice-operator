@@ -24,8 +24,8 @@ func main() {
 
 func NewDASOperatorCommand(ctx context.Context) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "instaslice-operator",
-		Short:   "OpenShift cluster Instaslice operator",
+		Use:     "das-operator",
+		Short:   "OpenShift cluster DAS operator",
 		Version: version.Get().GitVersion,
 		Run: func(cmd *cobra.Command, args []string) {
 			err := cmd.Help()

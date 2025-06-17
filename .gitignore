@@ -34,5 +34,5 @@ report.json
 report.xml
 
 das-daemonset
-instaslice-operator
+das-operator
 das-webhook
