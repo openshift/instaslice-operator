@@ -89,7 +89,17 @@ var _ = Describe("Test Pod from deploy-k8s", Ordered, func() {
 			},
 		}
 
-		for i := 1; i <= 14; i++ {
+		nodes, err := kubeClient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		podsToCreate := 0
+		for _, node := range nodes.Items {
+			if q, ok := node.Status.Capacity[corev1.ResourceName("mig.das.com/1g.5gb")]; ok {
+				podsToCreate += int(q.Value())
+			}
+		}
+
+		for i := 1; i <= podsToCreate; i++ {
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      fmt.Sprintf("test-das-%d", i),
