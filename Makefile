@@ -184,4 +184,4 @@ deploy-cert-manager:
 .PHONY: test-e2e
 test-e2e:
 	@echo "=== Running e2e tests ==="
-	GOFLAGS=-mod=mod go test ./test/e2e -v -count=1
+	GOFLAGS=-mod=vendor go test ./test/e2e -v -count=1
