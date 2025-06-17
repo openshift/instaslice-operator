@@ -3,6 +3,7 @@ package deviceplugins
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -444,6 +445,26 @@ func WriteCDISpecForResource(resourceName string, id string, annotations map[str
 	}
 
 	specObj, specName, specPath, cdiDevices := BuildCDIDevices(kind, sanitizedClass, id, annotations, envVar)
+
+	// Wait for any previous spec with the same name to be removed. This is
+	// important for transient specs tied to container lifecycles. The
+	// removal is triggered by the poststop hook in the spec itself.
+	// Wait up to three minutes, checking every second, for the old spec
+	// file to disappear before writing the replacement.
+	err := wait.Poll(1*time.Second, 3*time.Minute, func() (bool, error) {
+		_, statErr := os.Stat(specPath)
+		if statErr == nil {
+			return false, nil
+		}
+		if errors.Is(statErr, os.ErrNotExist) {
+			return true, nil
+		}
+		return false, statErr
+	})
+	if err != nil {
+		return "", nil, fmt.Errorf("timed out waiting for old CDI spec %q to be removed: %w", specName, err)
+	}
+
 	if err := cdi.GetDefaultCache().WriteSpec(specObj, specName); err != nil {
 		klog.ErrorS(err, "failed to write CDI spec", "name", specName)
 		return "", nil, fmt.Errorf("failed to write CDI spec %q: %w", specName, err)

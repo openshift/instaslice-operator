@@ -356,3 +356,41 @@ func TestWriteCDISpecForResourceEnv(t *testing.T) {
 		t.Fatalf("unexpected env %v", env)
 	}
 }
+
+func TestWriteCDISpecForResourceWait(t *testing.T) {
+	dir := t.TempDir()
+	if err := cdi.Configure(cdi.WithSpecDirs(dir), cdi.WithAutoRefresh(false)); err != nil {
+		t.Fatalf("failed to configure cdi: %v", err)
+	}
+
+	path, _, err := WriteCDISpecForResource("vendor/class", "id", nil, "")
+	if err != nil {
+		t.Fatalf("failed to write spec: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		_, _, _ = WriteCDISpecForResource("vendor/class", "id", nil, "")
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Fatalf("WriteCDISpecForResource returned before spec removed")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("failed to remove spec: %v", err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("WriteCDISpecForResource did not finish after spec removal")
+	}
+
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected spec recreated: %v", err)
+	}
+}
