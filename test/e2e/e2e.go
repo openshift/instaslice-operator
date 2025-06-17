@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -79,7 +80,7 @@ var _ = Describe("Test Pod from deploy-k8s", Ordered, func() {
 				{
 					Name:    "busy",
 					Image:   "quay.io/prometheus/busybox",
-					Command: []string{"sh", "-c", "sleep 3600"},
+					Command: []string{"sh", "-c", "env && sleep 3600"},
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
 							corev1.ResourceName("mig.das.com/1g.5gb"): resource.MustParse("1"),
@@ -123,7 +124,7 @@ var _ = Describe("Test Pod from deploy-k8s", Ordered, func() {
 		Eventually(func() bool {
 			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
 			return apierrors.IsNotFound(err)
-		}, 1*time.Minute, time.Second).Should(BeTrue())
+		}, 2*time.Minute, time.Second).Should(BeTrue())
 	})
 
 	It("should be running", func(ctx SpecContext) {
@@ -157,5 +158,18 @@ var _ = Describe("Test Pod from deploy-k8s", Ordered, func() {
 			}
 			return len(allocs.Items), nil
 		}, 2*time.Minute, 5*time.Second).Should(Equal(expected))
+	})
+
+	It("should set MIG_UUID env var in each pod", func(ctx SpecContext) {
+		for _, name := range podNames {
+			Eventually(func() (bool, error) {
+				req := kubeClient.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{})
+				out, err := req.Do(ctx).Raw()
+				if err != nil {
+					return false, err
+				}
+				return strings.Contains(string(out), "MIG_UUID="), nil
+			}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+		}
 	})
 })

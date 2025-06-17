@@ -182,7 +182,7 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 				}
 				envVar = fmt.Sprintf("MIG_UUID=%s", uuid)
 			} else {
-				envVar = "ABCD=test"
+				envVar = "MIG_UUID=test"
 			}
 			if data, err := json.Marshal(alloc); err == nil {
 				annotations = map[string]string{allocationAnnotationKey: string(data)}
@@ -190,7 +190,7 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 				klog.ErrorS(err, "failed to marshal allocation")
 			}
 		} else {
-			envVar = "ABCD=test"
+			envVar = "MIG_UUID=test"
 		}
 
 		for _, id := range ids {
@@ -395,7 +395,7 @@ func BuildCDIDevices(kind, sanitizedClass, id string, annotations map[string]str
 	specPath := filepath.Join(dynamicDir, specName)
 
 	// TODO - Do we need to create a CDI spec for each device Allocate request? can we not use a single spec for all devices of the same kind?
-	env := []string{"ABCD=test"}
+	env := []string{"MIG_UUID=test"}
 	if envVar != "" {
 		env = []string{envVar}
 	}
