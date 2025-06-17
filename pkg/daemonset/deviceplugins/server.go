@@ -451,7 +451,8 @@ func WriteCDISpecForResource(resourceName string, id string, annotations map[str
 	// removal is triggered by the poststop hook in the spec itself.
 	// Wait up to three minutes, checking every second, for the old spec
 	// file to disappear before writing the replacement.
-	err := wait.Poll(1*time.Second, 3*time.Minute, func() (bool, error) {
+	ctx := context.Background()
+	err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 3*time.Minute, false, func(ctx context.Context) (bool, error) {
 		_, statErr := os.Stat(specPath)
 		if statErr == nil {
 			return false, nil
