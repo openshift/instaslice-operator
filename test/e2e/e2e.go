@@ -70,7 +70,7 @@ var _ = BeforeSuite(func() {
 	}
 })
 
-var _ = Describe("Test Pod from deploy-k8s", Ordered, func() {
+var _ = Describe("Test pods for requesting single type of extended resource", Ordered, func() {
 	var (
 		podNames  []string
 		namespace string
