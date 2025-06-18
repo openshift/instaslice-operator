@@ -38,7 +38,7 @@ spec:
               topologyKey: kubernetes.io/hostname
               labelSelector:
                 matchLabels:
-                  app.kubernetes.io/part-of: instalice-operator
+                  app.kubernetes.io/part-of: das-operator
             weight: 100
       automountServiceAccountToken: false
       containers:
