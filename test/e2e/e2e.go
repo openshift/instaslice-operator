@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	clientset "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 
 	corev1 "k8s.io/api/core/v1"
@@ -21,7 +23,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func gpuSlicePodSpec() corev1.PodSpec {
+func gpuSlicePodSpec(profile string) corev1.PodSpec {
 	return corev1.PodSpec{
 		SchedulerName: "das-scheduler",
 		Containers: []corev1.Container{
@@ -31,12 +33,16 @@ func gpuSlicePodSpec() corev1.PodSpec {
 				Command: []string{"sh", "-c", "env && sleep 3600"},
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
-						corev1.ResourceName("mig.das.com/1g.5gb"): resource.MustParse("1"),
+						corev1.ResourceName(fmt.Sprintf("mig.das.com/%s", profile)): resource.MustParse("1"),
 					},
 				},
 			},
 		},
 	}
+}
+
+func defaultGPUSlicePodSpec() corev1.PodSpec {
+	return gpuSlicePodSpec("1g.5gb")
 }
 
 var (
@@ -45,7 +51,8 @@ var (
 )
 
 const (
-	testNamespace = "das-e2e"
+	testNamespace      = "das-e2e"
+	multiTestNamespace = "das-e2e-multi"
 )
 
 var _ = BeforeSuite(func() {
@@ -92,7 +99,7 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		podSpec := gpuSlicePodSpec()
+		podSpec := defaultGPUSlicePodSpec()
 
 		nodes, err := kubeClient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -183,7 +190,7 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 				Name:      "test-das-overcommit",
 				Namespace: namespace,
 			},
-			Spec: gpuSlicePodSpec(),
+			Spec: defaultGPUSlicePodSpec(),
 		}
 
 		By("creating pod " + pod.Name)
@@ -199,3 +206,133 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 		}, 2*time.Minute, 5*time.Second).Should(Equal(corev1.PodPending))
 	})
 })
+
+var _ = Describe("Test pods for requesting multiple slice types", Ordered, func() {
+	var (
+		podNames  []string
+		namespace string
+	)
+
+	BeforeAll(func() {
+		if os.Getenv("KUBECONFIG") == "" {
+			Skip("KUBECONFIG is not set; skipping e2e test")
+		}
+	})
+
+	BeforeAll(func() {
+		namespace = multiTestNamespace
+
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+		By("creating namespace " + namespace)
+		_, err := kubeClient.CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{})
+		if err != nil && !apierrors.IsAlreadyExists(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		insts, err := dasClient.OpenShiftOperatorV1alpha1().NodeAccelerators("das-operator").List(context.Background(), metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		gpuCount := 0
+		for _, inst := range insts.Items {
+			var res instav1.DiscoveredNodeResources
+			Expect(json.Unmarshal(inst.Status.NodeResources.Raw, &res)).To(Succeed())
+			gpuCount += len(res.NodeGPUs)
+		}
+
+		pods1g := gpuCount * 2
+		pods2g := gpuCount * 2
+
+		var pods []*corev1.Pod
+
+		for i := 1; i <= pods1g; i++ {
+			pods = append(pods, &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("multi-1g-%d", i),
+					Namespace: namespace,
+				},
+				Spec: gpuSlicePodSpec("1g.5gb"),
+			})
+		}
+
+		for i := 1; i <= pods2g; i++ {
+			pods = append(pods, &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("multi-2g-%d", i),
+					Namespace: namespace,
+				},
+				Spec: gpuSlicePodSpec("2g.10gb"),
+			})
+		}
+
+		By(fmt.Sprintf("creating %d test pods", len(pods)))
+		Expect(createPods(context.Background(), namespace, pods)).To(Succeed())
+
+		for _, p := range pods {
+			podNames = append(podNames, p.Name)
+		}
+	})
+
+	AfterAll(func() {
+		By("deleting namespace " + namespace)
+		err := kubeClient.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() bool {
+			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
+			return apierrors.IsNotFound(err)
+		}, 2*time.Minute, time.Second).Should(BeTrue())
+	})
+
+	It("should be running", func(ctx SpecContext) {
+		for _, name := range podNames {
+			Eventually(func() (corev1.PodPhase, error) {
+				p, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+				if err != nil {
+					return "", err
+				}
+				return p.Status.Phase, nil
+			}, 2*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
+		}
+	})
+
+	It("should keep new pods pending when all slice types are exhausted", func(ctx SpecContext) {
+		pods := []*corev1.Pod{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "multi-over-1g",
+					Namespace: namespace,
+				},
+				Spec: gpuSlicePodSpec("1g.5gb"),
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "multi-over-2g",
+					Namespace: namespace,
+				},
+				Spec: gpuSlicePodSpec("2g.10gb"),
+			},
+		}
+
+		By("creating overcommit pods")
+		Expect(createPods(ctx, namespace, pods)).To(Succeed())
+
+		for _, p := range pods {
+			Consistently(func() (corev1.PodPhase, error) {
+				pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, p.Name, metav1.GetOptions{})
+				if err != nil {
+					return "", err
+				}
+				return pod.Status.Phase, nil
+			}, 2*time.Minute, 5*time.Second).Should(Equal(corev1.PodPending))
+		}
+	})
+})
+
+func createPods(ctx context.Context, namespace string, pods []*corev1.Pod) error {
+	for _, pod := range pods {
+		if _, err := kubeClient.CoreV1().Pods(namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
