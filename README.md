@@ -129,6 +129,19 @@ das-operator-webhook-7975df6958-qf5v7   1/1     Running   0          53s
 das-scheduler-7c5c648f6-rnmhc           1/1     Running   0          56s
 ```
 
+## Running E2E tests
+
+To run the end-to-end tests you need access to a running cluster and a valid KUBECONFIG. Execute:
+
+```console
+make test-e2e
+```
+
+You can narrow the executed specs by providing a regular expression to the FOCUS variable which is forwarded to Ginkgo:
+
+```console
+make test-e2e FOCUS="GPU slices"
+```
 
 ## Contributing
 

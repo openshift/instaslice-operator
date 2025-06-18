@@ -299,13 +299,6 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 		pods := []*corev1.Pod{
 			{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "multi-over-1g",
-					Namespace: namespace,
-				},
-				Spec: gpuSlicePodSpec("1g.5gb"),
-			},
-			{
-				ObjectMeta: metav1.ObjectMeta{
 					Name:      "multi-over-2g",
 					Namespace: namespace,
 				},

@@ -181,7 +181,13 @@ deploy-cert-manager:
 	export KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
 		hack/deploy-cert-manager.sh
 
+
+TEST_E2E_ARGS := -ginkgo.v
+ifdef FOCUS
+TEST_E2E_ARGS += -ginkgo.focus=$(FOCUS)
+endif
+
 .PHONY: test-e2e
 test-e2e:
 	@echo "=== Running e2e tests ==="
-	GOFLAGS=-mod=vendor go test ./test/e2e -v -count=1 -args -ginkgo.v
+	GOFLAGS=-mod=vendor go test ./test/e2e -v -count=1 -args $(TEST_E2E_ARGS)
