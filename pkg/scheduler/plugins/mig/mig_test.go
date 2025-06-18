@@ -36,7 +36,7 @@ func newTestPod(uid, profile string) *corev1.Pod {
 					Name: "c1",
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
-							corev1.ResourceName("nvidia.com/mig-" + profile): resource.MustParse("1"),
+							corev1.ResourceName("mig.das.com/" + profile): resource.MustParse("1"),
 						},
 					},
 				},
@@ -58,7 +58,7 @@ func newInitContainerPod(uid, profile string) *corev1.Pod {
 					Name: "init",
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
-							corev1.ResourceName("nvidia.com/mig-" + profile): resource.MustParse("1"),
+							corev1.ResourceName("mig.das.com/" + profile): resource.MustParse("1"),
 						},
 					},
 				},
@@ -84,7 +84,7 @@ func newEphemeralContainerPod(uid, profile string) *corev1.Pod {
 						Image: "busybox",
 						Resources: corev1.ResourceRequirements{
 							Limits: corev1.ResourceList{
-								corev1.ResourceName("nvidia.com/mig-" + profile): resource.MustParse("1"),
+								corev1.ResourceName("mig.das.com/" + profile): resource.MustParse("1"),
 							},
 						},
 					},
@@ -107,7 +107,7 @@ func newTwoContainerPod(uid, profile1, profile2 string) *corev1.Pod {
 					Name: "c1",
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
-							corev1.ResourceName("nvidia.com/mig-" + profile1): resource.MustParse("1"),
+							corev1.ResourceName("mig.das.com/" + profile1): resource.MustParse("1"),
 						},
 					},
 				},
@@ -115,7 +115,7 @@ func newTwoContainerPod(uid, profile1, profile2 string) *corev1.Pod {
 					Name: "c2",
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
-							corev1.ResourceName("nvidia.com/mig-" + profile2): resource.MustParse("1"),
+							corev1.ResourceName("mig.das.com/" + profile2): resource.MustParse("1"),
 						},
 					},
 				},
@@ -131,7 +131,7 @@ func newMultiContainerPod(uid string, profiles []string) *corev1.Pod {
 			Name: fmt.Sprintf("c%d", i),
 			Resources: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
-					corev1.ResourceName("nvidia.com/mig-" + p): resource.MustParse("1"),
+					corev1.ResourceName("mig.das.com/" + p): resource.MustParse("1"),
 				},
 			},
 		}
@@ -149,7 +149,7 @@ func newMultiContainerPod(uid string, profiles []string) *corev1.Pod {
 func newMultiProfilePod(uid string, profiles []string) *corev1.Pod {
 	limits := corev1.ResourceList{}
 	for _, p := range profiles {
-		limits[corev1.ResourceName("nvidia.com/mig-"+p)] = resource.MustParse("1")
+		limits[corev1.ResourceName("mig.das.com/"+p)] = resource.MustParse("1")
 	}
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
