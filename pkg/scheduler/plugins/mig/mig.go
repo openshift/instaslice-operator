@@ -52,6 +52,57 @@ func getAllocationClaimSpec(a *instav1alpha1.AllocationClaim) (instav1alpha1.All
 	return spec, nil
 }
 
+// cleanupAllocationClaims deletes any AllocationClaims for the given pod
+// that remain in the Created status when the pod is deleted.
+func cleanupAllocationClaims(ctx context.Context, client instaclient.Interface, indexer cache.Indexer, pod *corev1.Pod) {
+	uid := string(pod.GetUID())
+	items, err := indexer.ByIndex("pod-uid", uid)
+	if err != nil {
+		klog.ErrorS(err, "listing AllocationClaims for deleted pod", "pod", klog.KObj(pod))
+		return
+	}
+	for _, obj := range items {
+		alloc, ok := obj.(*instav1alpha1.AllocationClaim)
+		if !ok || alloc.Status.State != instav1alpha1.AllocationClaimStatusCreated {
+			continue
+		}
+		if err := client.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Delete(ctx, alloc.Name, metav1.DeleteOptions{}); err != nil {
+			klog.ErrorS(err, "deleting stale AllocationClaim for deleted pod", "alloc", klog.KObj(alloc), "pod", klog.KObj(pod))
+		} else {
+			klog.InfoS("deleted stale AllocationClaim for deleted pod", "alloc", klog.KObj(alloc), "pod", klog.KObj(pod))
+		}
+	}
+}
+
+// registerPodDeleteHandlerFunc attaches a delete handler to the podInformer to cleanup stale AllocationClaims.
+func registerPodDeleteHandlerFunc(podInformer cache.SharedIndexInformer, client instaclient.Interface, indexer cache.Indexer, ctx context.Context) {
+	podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		DeleteFunc: func(obj interface{}) {
+			var pod *corev1.Pod
+			switch t := obj.(type) {
+			case *corev1.Pod:
+				pod = t
+			case cache.DeletedFinalStateUnknown:
+				if p, ok := t.Obj.(*corev1.Pod); ok {
+					pod = p
+				} else {
+					return
+				}
+			default:
+				return
+			}
+			cleanupAllocationClaims(ctx, client, indexer, pod)
+		},
+	})
+}
+
+// registerPodDeleteHandler watches for Pod deletions and invokes cleanupAllocationClaims.
+func registerPodDeleteHandler(ctx context.Context, client instaclient.Interface, indexer cache.Indexer, handle framework.Handle) {
+	// delegate to the informer-based helper
+	pi := handle.SharedInformerFactory().Core().V1().Pods().Informer()
+	registerPodDeleteHandlerFunc(pi, client, indexer, ctx)
+}
+
 // Args holds the scheduler plugin configuration.
 type Args struct {
 	Namespace string `json:"namespace,omitempty"`
@@ -121,6 +172,18 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 			key := fmt.Sprintf("%s/%s", spec.Nodename, spec.GPUUUID)
 			return []string{key}, nil
 		},
+		// pod-uid index lets us look up claims for a Pod by its UID
+		"pod-uid": func(obj interface{}) ([]string, error) {
+			a, ok := obj.(*instav1alpha1.AllocationClaim)
+			if !ok {
+				return nil, nil
+			}
+			spec, err := getAllocationClaimSpec(a)
+			if err != nil {
+				return nil, err
+			}
+			return []string{string(spec.PodRef.UID)}, nil
+		},
 	})
 	if err != nil {
 		return nil, err
@@ -130,6 +193,9 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 	if ok := cache.WaitForCacheSync(ctx.Done(), allocInformer.HasSynced, instasliceInf.HasSynced); !ok {
 		return nil, fmt.Errorf("failed to sync caches")
 	}
+
+   // register a Pod delete handler for cleaning up stale AllocationClaims
+   registerPodDeleteHandler(ctx, instaClient, allocInformer.GetIndexer(), handle)
 
 	return &Plugin{
 		handle:            handle,
