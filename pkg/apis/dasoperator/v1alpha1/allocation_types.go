@@ -10,6 +10,7 @@ const (
 	AllocationClaimStatusProcessing AllocationClaimState = "processing"
 	AllocationClaimStatusInUse      AllocationClaimState = "inUse"
 	AllocationClaimStatusOrphaned   AllocationClaimState = "orphaned"
+	AllocationClaimStatusStaged     AllocationClaimState = "staged"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

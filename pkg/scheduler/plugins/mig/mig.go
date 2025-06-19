@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"regexp"
 	"strings"
@@ -19,6 +18,8 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
 	instav1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	deviceplugins "github.com/openshift/instaslice-operator/pkg/daemonset/deviceplugins"
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
@@ -29,7 +30,7 @@ import (
 
 const Name = "MigAccelerator"
 
-// Plugin implements a scheduler PreBind extension for GPU allocation.
+// Plugin implements a scheduler Filter extension for GPU allocation.
 type Plugin struct {
 	handle            framework.Handle
 	instaClient       instaclient.Interface
@@ -109,9 +110,7 @@ type Args struct {
 }
 
 var (
-	_ framework.PreBindPlugin = &Plugin{}
-	_ framework.FilterPlugin  = &Plugin{}
-	_ framework.ScorePlugin   = &Plugin{}
+	_ framework.FilterPlugin = &Plugin{}
 )
 
 // Name returns the plugin name.
@@ -194,8 +193,8 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 		return nil, fmt.Errorf("failed to sync caches")
 	}
 
-   // register a Pod delete handler for cleaning up stale AllocationClaims
-   registerPodDeleteHandler(ctx, instaClient, allocInformer.GetIndexer(), handle)
+	// register a Pod delete handler for cleaning up stale AllocationClaims
+	registerPodDeleteHandler(ctx, instaClient, allocInformer.GetIndexer(), handle)
 
 	return &Plugin{
 		handle:            handle,
@@ -230,98 +229,25 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 			return framework.AsStatus(err)
 		}
 	}
+
+	// remove any existing claims for this pod
+	if p.allocationIndexer != nil {
+		items, err := p.allocationIndexer.ByIndex("pod-uid", string(pod.UID))
+		if err == nil {
+			for _, obj := range items {
+				if ac, ok := obj.(*instav1alpha1.AllocationClaim); ok {
+					_ = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+				}
+			}
+		}
+	}
+
 	profiles := getPodProfileNames(pod)
 	if len(profiles) == 0 {
 		return nil
 	}
-	for _, prof := range profiles {
-		klog.V(4).InfoS("searching GPUs for profile", "profile", prof, "node", node.Name)
-		found := false
-		for _, gpu := range resources.NodeGPUs {
-			gpuAllocated, err := gpuAllocatedSlices(p.allocationIndexer, node.Name, gpu.GPUUUID)
-			if err != nil {
-				return framework.AsStatus(err)
-			}
-			newStart := getStartIndexFromAllocationResults(resources, prof, gpuAllocated)
-			if newStart != int32(9) {
-				klog.V(4).InfoS("found candidate GPU", "uuid", gpu.GPUUUID, "profile", prof, "node", node.Name)
-				found = true
-				break
-			}
-		}
-		if !found {
-			klog.V(4).InfoS("no suitable GPU found", "profile", prof, "node", node.Name)
-			return framework.NewStatus(framework.Unschedulable, "no GPU available")
-		}
-	}
-	return nil
-}
 
-// Score evaluates how many GPUs on the node can satisfy all requested profiles.
-func (p *Plugin) Score(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) (int64, *framework.Status) {
-	klog.V(4).InfoS("scoring node", "pod", klog.KObj(pod), "node", nodeName)
-	instObj, err := p.instasliceLister.NodeAccelerators(p.namespace).Get(nodeName)
-	if err != nil {
-		return 0, framework.AsStatus(err)
-	}
-	var resources instav1alpha1.DiscoveredNodeResources
-	if len(instObj.Status.NodeResources.Raw) > 0 {
-		if err := json.Unmarshal(instObj.Status.NodeResources.Raw, &resources); err != nil {
-			return 0, framework.AsStatus(err)
-		}
-	}
-	profiles := getPodProfileNames(pod)
-	if len(profiles) == 0 {
-		return 0, nil
-	}
-	var minAvailable int64 = math.MaxInt64
-	for _, profileName := range profiles {
-		klog.V(4).InfoS("counting GPUs for profile", "profile", profileName, "node", nodeName)
-		available := int64(0)
-		for _, gpu := range resources.NodeGPUs {
-			gpuAllocated, err := gpuAllocatedSlices(p.allocationIndexer, nodeName, gpu.GPUUUID)
-			if err != nil {
-				return 0, framework.AsStatus(err)
-			}
-			newStart := getStartIndexFromAllocationResults(resources, profileName, gpuAllocated)
-			if newStart != int32(9) {
-				available++
-			}
-		}
-		if available < minAvailable {
-			minAvailable = available
-		}
-		klog.V(4).InfoS("available GPUs for profile", "profile", profileName, "available", available, "node", nodeName)
-	}
-	if minAvailable == math.MaxInt64 {
-		minAvailable = 0
-	}
-	klog.V(4).InfoS("node score computed", "node", nodeName, "score", minAvailable)
-	return minAvailable, nil
-}
-
-func (p *Plugin) ScoreExtensions() framework.ScoreExtensions {
-	return nil
-}
-
-// PreBind selects a GPU and updates the NodeAccelerator object for the chosen node.
-func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) *framework.Status {
-	klog.V(4).InfoS("prebind selecting GPU", "pod", klog.KObj(pod), "node", nodeName)
-	instObj, err := p.instasliceLister.NodeAccelerators(p.namespace).Get(nodeName)
-	if err != nil {
-		return framework.AsStatus(err)
-	}
-	if instObj.Spec.AcceleratorType != "" && instObj.Spec.AcceleratorType != "nvidia-mig" {
-		return framework.NewStatus(framework.Unschedulable, fmt.Sprintf("unsupported acceleratorType %s", instObj.Spec.AcceleratorType))
-	}
-	var resources instav1alpha1.DiscoveredNodeResources
-	if len(instObj.Status.NodeResources.Raw) > 0 {
-		if err := json.Unmarshal(instObj.Status.NodeResources.Raw, &resources); err != nil {
-			return framework.AsStatus(err)
-		}
-	}
-
-	// Build a list of all containers (regular, init and ephemeral)
+	// Build container list
 	var containers []corev1.Container
 	containers = append(containers, pod.Spec.Containers...)
 	containers = append(containers, pod.Spec.InitContainers...)
@@ -329,10 +255,10 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 		containers = append(containers, corev1.Container{Name: ec.Name, Resources: ec.Resources})
 	}
 
-	// Build a map of already allocated slices for each GPU
+	// Build map of allocated slices per GPU excluding this pod's claims
 	gpuAllocated := make(map[string][8]int32)
 	for _, gpu := range resources.NodeGPUs {
-		allocIdx, err := gpuAllocatedSlices(p.allocationIndexer, nodeName, gpu.GPUUUID)
+		allocIdx, err := gpuAllocatedSlices(p.allocationIndexer, node.Name, gpu.GPUUUID, pod.UID)
 		if err != nil {
 			return framework.AsStatus(err)
 		}
@@ -342,8 +268,8 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 	var claims []*instav1alpha1.AllocationClaim
 
 	for _, c := range containers {
-		profiles := extractProfileNames(c.Resources.Limits)
-		for j, profileName := range profiles {
+		profs := extractProfileNames(c.Resources.Limits)
+		for j, profileName := range profs {
 			allocated := false
 			for _, gpu := range resources.NodeGPUs {
 				idx := gpuAllocated[gpu.GPUUUID]
@@ -371,40 +297,70 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 				alloc := &instav1alpha1.AllocationClaim{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      fmt.Sprintf("%s-%s-%d", pod.GetUID(), c.Name, j),
-						Namespace: "das-operator",
+						Namespace: p.namespace,
 					},
-					Spec:   runtime.RawExtension{Raw: rawSpec},
-					Status: instav1alpha1.AllocationClaimStatus{State: instav1alpha1.AllocationClaimStatusCreated},
+					Spec: runtime.RawExtension{Raw: rawSpec},
+				}
+				created, err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).Create(ctx, alloc, metav1.CreateOptions{})
+				if err != nil {
+					if apierrors.IsAlreadyExists(err) {
+						created, err = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).Get(ctx, alloc.Name, metav1.GetOptions{})
+						if err != nil {
+							return framework.AsStatus(err)
+						}
+					} else {
+						for _, ac := range claims {
+							_ = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+						}
+						return framework.AsStatus(err)
+					}
+				}
+				if _, err := deviceplugins.UpdateAllocationStatus(ctx, p.instaClient, created, instav1alpha1.AllocationClaimStatusStaged); err != nil {
+					for _, ac := range claims {
+						_ = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+					}
+					_ = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(created.Namespace).Delete(ctx, created.Name, metav1.DeleteOptions{})
+					return framework.AsStatus(err)
 				}
 				for i := int32(0); i < size; i++ {
 					idx[newStart+i] = 1
 				}
 				gpuAllocated[gpu.GPUUUID] = idx
-				claims = append(claims, alloc)
+				claims = append(claims, created)
 				allocated = true
-				klog.V(4).InfoS("selected GPU", "uuid", gpu.GPUUUID, "profile", profileName, "node", nodeName, "container", c.Name)
+				klog.V(4).InfoS("selected GPU", "uuid", gpu.GPUUUID, "profile", profileName, "node", node.Name, "container", c.Name)
 				break
 			}
 			if !allocated {
-				klog.V(4).InfoS("no GPU available", "pod", klog.KObj(pod), "node", nodeName)
+				klog.V(4).InfoS("no GPU available", "pod", klog.KObj(pod), "node", node.Name)
+				for _, ac := range claims {
+					_ = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+				}
 				return framework.NewStatus(framework.Unschedulable, "no GPU available")
 			}
 		}
 	}
 
 	for _, alloc := range claims {
-		created, err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims("das-operator").Create(ctx, alloc, metav1.CreateOptions{})
-		if err != nil {
-			return framework.AsStatus(err)
-		}
-		if _, err := deviceplugins.UpdateAllocationStatus(ctx, p.instaClient, created, instav1alpha1.AllocationClaimStatusCreated); err != nil {
+		if _, err := deviceplugins.UpdateAllocationStatus(ctx, p.instaClient, alloc, instav1alpha1.AllocationClaimStatusCreated); err != nil {
+			for _, ac := range claims {
+				_ = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+			}
 			return framework.AsStatus(err)
 		}
 	}
 
 	if len(claims) > 0 {
-		klog.V(4).InfoS("instaslice GPU selected", "pod", klog.KObj(pod), "node", nodeName)
+		klog.V(4).InfoS("instaslice GPU selected", "pod", klog.KObj(pod), "node", node.Name)
 	}
+	return nil
+}
+
+// Score evaluates how many GPUs on the node can satisfy all requested profiles.
+// PreBind has been deprecated and its functionality moved to Filter.
+// The method is kept for backward compatibility but performs no actions.
+func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) *framework.Status {
+	// deprecated
 	return nil
 }
 
@@ -522,7 +478,7 @@ func getStartIndexFromAllocationResults(resources instav1alpha1.DiscoveredNodeRe
 	return newStart
 }
 
-func gpuAllocatedSlices(indexer cache.Indexer, nodeName, gpuUUID string) ([8]int32, error) {
+func gpuAllocatedSlices(indexer cache.Indexer, nodeName, gpuUUID string, skipUID types.UID) ([8]int32, error) {
 	var gpuAllocatedIndex [8]int32
 	for i := range gpuAllocatedIndex {
 		gpuAllocatedIndex[i] = 0
@@ -546,6 +502,9 @@ func gpuAllocatedSlices(indexer cache.Indexer, nodeName, gpuUUID string) ([8]int
 		spec, err := getAllocationClaimSpec(alloc)
 		if err != nil {
 			klog.ErrorS(err, "unable to decode allocation spec")
+			continue
+		}
+		if skipUID != "" && spec.PodRef.UID == skipUID {
 			continue
 		}
 		for i := 0; i < int(spec.MigPlacement.Size); i++ {

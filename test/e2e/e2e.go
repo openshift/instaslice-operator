@@ -203,7 +203,7 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 				return "", err
 			}
 			return p.Status.Phase, nil
-		}, 2*time.Minute, 5*time.Second).Should(Equal(corev1.PodPending))
+		}, 25*time.Second, 5*time.Second).Should(Equal(corev1.PodPending))
 	})
 })
 
@@ -316,7 +316,7 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 					return "", err
 				}
 				return pod.Status.Phase, nil
-			}, 2*time.Minute, 5*time.Second).Should(Equal(corev1.PodPending))
+			}, 25*time.Second, 5*time.Second).Should(Equal(corev1.PodPending))
 		}
 	})
 })

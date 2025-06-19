@@ -30,10 +30,7 @@ sequenceDiagram
     Note over DAS Scheduler: Filter nodes based on <br/> NodeResources, Affinity, <br/> Tolerations etc.
     DAS Scheduler->>Mig Scheduler Plugin:
 
-    Note over Mig Scheduler Plugin: Filter nodes with <br/> available GPUs
-    Note over Mig Scheduler Plugin: Score the nodes based <br/> on allocation policy
-    Note over Mig Scheduler Plugin: Create a new AllocationClaim <br/> for each extended resource <br/> per container
-    Note over Mig Scheduler Plugin: Bind the pod to the <br/> node with the <br/>highest score
+    Note over Mig Scheduler Plugin: Filter nodes with <br/> available GPUs and stage AllocationClaims
     Mig Scheduler Plugin->>DAS Scheduler:
     DAS Scheduler->>Pod:
     Pod->>Kubelet:
@@ -49,21 +46,21 @@ sequenceDiagram
 ### MIG scheduler plugin
 
 The scheduler plugin lives in [`pkg/scheduler/plugins/mig/mig.go`](pkg/scheduler/plugins/mig/mig.go).
-It implements the `Filter`, `Score` and `PreBind` phases of the Kubernetes
+It implements the `Filter` phase of the Kubernetes
 scheduler framework. During `Filter` the plugin verifies that a node is MIG
-capable and looks for GPUs that can satisfy all requested profiles. In
-`Score` it ranks the nodes based on the allocation policy and finally, in
-`PreBind` it selects a GPU and creates one `AllocationClaim` object per
-container per extended resource, describing the slice to be provisioned. These claims are observed by
-the device plugin which creates the actual slice on the target node.
+capable, selects suitable GPUs and creates `AllocationClaim` objects in a staged
+state. After all profiles are successfully allocated the claims are promoted to
+`created` so the device plugin can provision the slices on the target node.
 
 
 ### AllocationClaim resource
 
 `AllocationClaim` is a namespaced custom resource used to track which MIG slice
-should be prepared for a pod. Claims are created by the scheduler plugin during
-`PreBind` and consumed by the device plugin running on the target node. Each
-claim records the GPU UUID, the slice position and the owning pod reference.
+should be prepared for a pod. Claims are initially created in the `staged` state
+by the scheduler plugin during `Filter`. When all requested profiles have been
+satisfied they are promoted to `created` and consumed by the device plugin
+running on the target node. Each claim records the GPU UUID, the slice position
+and the owning pod reference.
 
 Example output:
 
