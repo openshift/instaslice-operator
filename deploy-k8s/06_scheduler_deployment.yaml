@@ -16,7 +16,7 @@ spec:
       serviceAccountName: das-scheduler
       containers:
       - name: scheduler
-        image: localhost:5000/das-scheduler:dev
+        image: ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
         imagePullPolicy: Always
         command: ["das-scheduler"]
         args:

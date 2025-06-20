@@ -126,6 +126,18 @@ das-operator-webhook-7975df6958-qf5v7   1/1     Running   0          53s
 das-scheduler-7c5c648f6-rnmhc           1/1     Running   0          56s
 ```
 
+## Testing on OpenShift
+
+The `make emulated-ocp` target builds and deploys all components using the
+registry and tag specified via `IMAGE_REGISTRY` and `IMAGE_TAG`.
+
+```console
+$ IMAGE_REGISTRY=quay.io/myrepo IMAGE_TAG=dev make emulated-ocp
+```
+
+This will push images under `quay.io/myrepo` and substitute those values in the
+deployment manifests before applying them to the cluster.
+
 ## Running E2E tests
 
 To run the end-to-end tests you need access to a running cluster and a valid KUBECONFIG. Execute:

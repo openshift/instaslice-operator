@@ -35,14 +35,14 @@ EMULATED_MODE ?= disabled
 # $3 - Dockerfile path
 # $4 - context directory for image build
 ifdef OSS
-$(call build-image,das-operator,$(IMAGE_REGISTRY)/das-operator:$(IMAGE_TAG), ./Dockerfile,.)
+$(call build-image,instaslice-operator,$(IMAGE_REGISTRY)/instaslice-operator:$(IMAGE_TAG), ./Dockerfile,.)
 $(call build-image,das-daemonset,$(IMAGE_REGISTRY)/das-daemonset:$(IMAGE_TAG), ./Dockerfile.daemonset,.)
 $(call build-image,das-webhook,$(IMAGE_REGISTRY)/das-webhook:$(IMAGE_TAG), ./Dockerfile.webhook,.)
 
 $(call verify-golang-versions,Dockerfile)
 $(call verify-golang-versions,Dockerfile.daemonset)
 else
-$(call build-image,das-operator,$(IMAGE_REGISTRY)/das-operator:$(IMAGE_TAG), ./Dockerfile.ocp,.)
+$(call build-image,instaslice-operator,$(IMAGE_REGISTRY)/instaslice-operator:$(IMAGE_TAG), ./Dockerfile.ocp,.)
 $(call build-image,das-daemonset,$(IMAGE_REGISTRY)/das-daemonset:$(IMAGE_TAG), ./Dockerfile.daemonset.ocp,.)
 $(call build-image,das-webhook,$(IMAGE_REGISTRY)/das-webhook:$(IMAGE_TAG), ./Dockerfile.webhook.ocp,.)
 
@@ -72,7 +72,7 @@ regen-crd:
 	./_output/tools/bin/controller-gen crd paths=./pkg/apis/dasoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
 	mv manifests/inference.redhat.com_dasoperators.yaml manifests/instaslice-operator.crd.yaml
 	cp manifests/instaslice-operator.crd.yaml deploy/00_instaslice-operator.crd.yaml
-		cp manifests/inference.redhat.com_nodeaccelerators.yaml deploy/00_nodeaccelerators.crd.yaml
+	cp manifests/inference.redhat.com_nodeaccelerators.yaml deploy/00_nodeaccelerators.crd.yaml
 
 .PHONY: regen-crd-k8s
 regen-crd-k8s:
@@ -85,13 +85,13 @@ regen-crd-k8s:
 	mv deploy-k8s/inference.redhat.com_nodeaccelerators.yaml deploy-k8s/00_nodeaccelerators.crd.yaml
 
 build-images:
-	podman build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/das-operator:${IMAGE_TAG} .
+	podman build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
 	podman build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG} .
 	podman build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG} .
 	podman build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
 
 build-push-images:
-	podman push ${IMAGE_REGISTRY}/das-operator:${IMAGE_TAG}
+	podman push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
 	podman push ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
 	podman push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
 	podman push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
@@ -123,8 +123,8 @@ build-push-daemonset:
 	docker push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
 
 build-push-operator:
-	docker build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/das-operator:${IMAGE_TAG} .
-	docker push ${IMAGE_REGISTRY}/das-operator:${IMAGE_TAG}
+	docker build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
+	docker push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
 
 build-push-webhook:
 	docker build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
@@ -156,12 +156,13 @@ test-k8s:
 
 	@echo "=== Applying K8s core manifests ==="
 	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
-	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' \
-	      deploy-k8s/09_instaslice_operator.cr.yaml
-	kubectl apply -f deploy-k8s/
-
-	@echo "=== Deploying das-scheduler ==="
-	kubectl apply -f deploy-k8s/06_scheduler_deployment.yaml
+	TMP_DIR=$$(mktemp -d); \
+	cp deploy-k8s/*.yaml $$TMP_DIR/; \
+	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' $$TMP_DIR/09_instaslice_operator.cr.yaml; \
+	env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < deploy-k8s/05_deployment.yaml > $$TMP_DIR/05_deployment.yaml; \
+	env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < deploy-k8s/06_scheduler_deployment.yaml > $$TMP_DIR/06_scheduler_deployment.yaml; \
+	kubectl apply -f $$TMP_DIR/; \
+	kubectl apply -f $$TMP_DIR/06_scheduler_deployment.yaml
 
 	sleep 5
 	@echo "=== Deploying test pod ==="
@@ -175,6 +176,51 @@ emulated-k8s: test-k8s
 cleanup-k8s:
 	@echo "=== Deleting K8s resources ==="
 	kubectl delete -f deploy-k8s/
+
+.PHONY: test-ocp
+test-ocp:
+	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') \
+		nvidia.com/mig.capable=true --overwrite
+
+	@echo "=== Building and pushing images in parallel ==="
+	$(MAKE) -j16 build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
+
+	@echo "=== All images built & pushed ==="
+
+	@echo "=== Generating CRDs for K8s ==="
+	$(MAKE) regen-crd-k8s
+
+	@echo "=== Applying K8s CRDs ==="
+	       kubectl apply -f deploy-k8s/00_instaslice-operator.crd.yaml \
+                      -f deploy-k8s/00_nodeaccelerators.crd.yaml
+
+	@echo "=== Waiting for CRDs to be established ==="
+	kubectl wait --for=condition=established --timeout=60s \
+                     crd dasoperators.inference.redhat.com
+
+	@echo "=== Applying K8s core manifests ==="
+	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
+	TMP_DIR=$$(mktemp -d); \
+	cp deploy-k8s/*.yaml $$TMP_DIR/; \
+	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' $$TMP_DIR/09_instaslice_operator.cr.yaml; \
+	env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < deploy-k8s/05_deployment.yaml > $$TMP_DIR/05_deployment.yaml; \
+	env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < deploy-k8s/06_scheduler_deployment.yaml > $$TMP_DIR/06_scheduler_deployment.yaml; \
+	kubectl apply -f $$TMP_DIR/; \
+	kubectl apply -f $$TMP_DIR/06_scheduler_deployment.yaml
+
+	sleep 5
+	@echo "=== Deploying test pod ==="
+	kubectl apply -f deploy-k8s/07_test_pod.yaml
+
+.PHONY: emulated-ocp
+emulated-ocp: EMULATED_MODE=enabled
+emulated-ocp: test-ocp
+
+.PHONY: cleanup-ocp
+cleanup-ocp:
+	@echo "=== Deleting OCP resources ==="
+	kubectl delete -f deploy-k8s/
+
 
 .PHONY: deploy-cert-manager
 deploy-cert-manager:
