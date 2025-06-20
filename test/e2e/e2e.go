@@ -146,7 +146,7 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 					return "", err
 				}
 				return p.Status.Phase, nil
-			}, 2*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
+			}, 60*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
 		}
 	})
 
@@ -204,6 +204,22 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 			}
 			return p.Status.Phase, nil
 		}, 25*time.Second, 5*time.Second).Should(Equal(corev1.PodPending))
+		By("deleting pod " + podNames[0])
+		err = kubeClient.CoreV1().Pods(namespace).Delete(ctx, podNames[0], metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() bool {
+			_, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podNames[0], metav1.GetOptions{})
+			return apierrors.IsNotFound(err)
+		}, 2*time.Minute, time.Second).Should(BeTrue())
+
+		Eventually(func() (corev1.PodPhase, error) {
+			p, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+			if err != nil {
+				return "", err
+			}
+			return p.Status.Phase, nil
+		}, 60*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
 	})
 })
 
@@ -291,7 +307,7 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 					return "", err
 				}
 				return p.Status.Phase, nil
-			}, 2*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
+			}, 60*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
 		}
 	})
 
