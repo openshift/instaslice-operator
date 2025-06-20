@@ -101,7 +101,7 @@ spec:
             memory: 64Mi
         env:
           - name: RELATED_IMAGE_INSTASLICE_DAEMONSET
-            value: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:f886a1e1b9b06297d852221c0dd0a9c45e5f0b77da2e3652645809216062255a
+            value: registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:9448bb8f3eeceb8753c30405c177e2dc2d2944ea8af4324b9528575338ff947d
           - name: EMULATOR_MODE
             value: "false"
           - name: AUTO_LABEL_MANAGED_NODES
