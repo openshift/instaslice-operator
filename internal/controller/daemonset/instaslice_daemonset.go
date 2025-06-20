@@ -26,10 +26,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logr "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // InstaSliceDaemonsetReconciler reconciles an Instaslice object.
@@ -554,10 +558,52 @@ func (r *InstaSliceDaemonsetReconciler) SetupWithManager(mgr ctrl.Manager) error
 // Enable creation of controller caches to talk to the API server in order to perform
 // object discovery in SetupWithManager
 func (r *InstaSliceDaemonsetReconciler) setupWithManager(mgr ctrl.Manager) error {
+	log := mgr.GetLogger()
+
+	// Predicate to trigger reconcile only when the managed label changes
+	nodePredicate := predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			old, okOld := e.ObjectOld.(*v1.Node)
+			newNode, okNew := e.ObjectNew.(*v1.Node)
+			if !okOld || !okNew {
+				log.Info("Unexpected object type during node label update filter")
+				return false
+			}
+			return old.Labels[controller.ManagedLabel] != newNode.Labels[controller.ManagedLabel]
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return true
+		},
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&inferencev1alpha1.Instaslice{}).Named("InstaSliceDaemonSet").
-		Watches(&v1.Node{}, &handler.EnqueueRequestForObject{}). // also watch out for node events
+		Named("instaslice-daemonset").
+		For(&inferencev1alpha1.Instaslice{}).
+		Watches(
+			&v1.Node{},
+			handler.EnqueueRequestsFromMapFunc(r.nodeMapFunc),
+			builder.WithPredicates(nodePredicate),
+		).
 		Complete(r)
+}
+
+// nodeMapFunc maps a Node event to a reconcile.Request for the current node only.
+// This ensures that only events for the node this DaemonSet instance is running on will trigger reconciliation.
+func (r *InstaSliceDaemonsetReconciler) nodeMapFunc(_ context.Context, obj client.Object) []reconcile.Request {
+	node, ok := obj.(*v1.Node)
+	if !ok {
+		// If the object is not a Node, do not trigger reconciliation
+		return nil
+	}
+	// Only respond to events for the node this DaemonSet is managing
+	if node.Name != r.NodeName {
+		return nil
+	}
+	return []reconcile.Request{{
+		NamespacedName: types.NamespacedName{
+			Name: r.NodeName,
+		},
+	}}
 }
 
 func CalculateTotalMemoryGB(nodeGPUs []inferencev1alpha1.DiscoveredGPU) (float64, error) {

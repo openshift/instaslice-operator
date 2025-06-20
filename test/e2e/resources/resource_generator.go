@@ -52,6 +52,30 @@ func GetVectorAddFinalizerPod() *corev1.Pod {
 	}
 }
 
+func GetNoMutationPod() *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "no-mutation-pod",
+			Namespace: "no-mutation-ns",
+		},
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyOnFailure,
+			Containers: []corev1.Container{
+				{
+					Name:  "no-mutation-pod",
+					Image: "ubuntu:20.04",
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							"nvidia.com/mig-1g.5gb": resource.MustParse("1"),
+						},
+					},
+					Command: []string{"sh", "-c", "sleep 20"},
+				},
+			},
+		},
+	}
+}
+
 func GetVectorAddNoReqPod() *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{

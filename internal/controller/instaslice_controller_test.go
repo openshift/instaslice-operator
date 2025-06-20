@@ -35,6 +35,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	inferencev1alpha1 "github.com/openshift/instaslice-operator/api/v1alpha1"
@@ -42,6 +44,65 @@ import (
 	"github.com/openshift/instaslice-operator/internal/controller/config"
 	"github.com/openshift/instaslice-operator/internal/controller/utils"
 )
+
+var _ = Describe("Instaslice Predicate", func() {
+	var mutatedPod, plainPod *v1.Pod
+	var predicate predicate.Funcs
+
+	BeforeEach(func() {
+		mutatedPod = &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "mutated-pod",
+				Namespace: "default",
+				Labels: map[string]string{
+					PodLabelInstasliceMutated: InstaslicePodMutatedTrue,
+				},
+				ResourceVersion: "1",
+			},
+		}
+		plainPod = &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "plain-pod",
+				Namespace:       "default",
+				Labels:          map[string]string{},
+				ResourceVersion: "1",
+			},
+		}
+		predicate = NewInstaslicePredicate()
+	})
+
+	It("should allow mutated pod creation", func() {
+		Expect(predicate.Create(event.CreateEvent{Object: mutatedPod})).To(BeTrue())
+	})
+
+	It("should block plain pod creation", func() {
+		Expect(predicate.Create(event.CreateEvent{Object: plainPod})).To(BeFalse())
+	})
+
+	It("should allow update if pod is mutated and resource version changed", func() {
+		newPod := mutatedPod.DeepCopy()
+		newPod.ResourceVersion = "2"
+		Expect(predicate.Update(event.UpdateEvent{ObjectOld: mutatedPod, ObjectNew: newPod})).To(BeTrue())
+	})
+
+	It("should block update if pod is mutated but resource version is unchanged", func() {
+		Expect(predicate.Update(event.UpdateEvent{ObjectOld: mutatedPod, ObjectNew: mutatedPod})).To(BeFalse())
+	})
+
+	It("should block update if new pod is not mutated", func() {
+		newPod := plainPod.DeepCopy()
+		newPod.ResourceVersion = "2"
+		Expect(predicate.Update(event.UpdateEvent{ObjectOld: mutatedPod, ObjectNew: newPod})).To(BeFalse())
+	})
+
+	It("should allow delete for mutated pod", func() {
+		Expect(predicate.Delete(event.DeleteEvent{Object: mutatedPod})).To(BeTrue())
+	})
+
+	It("should block delete for non-mutated pod", func() {
+		Expect(predicate.Delete(event.DeleteEvent{Object: plainPod})).To(BeFalse())
+	})
+})
 
 var _ = Describe("NodeReconciler", func() {
 	var (

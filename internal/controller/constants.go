@@ -21,6 +21,7 @@ import "time"
 const (
 	OrgInstaslicePrefix              = "instaslice.redhat.com/"
 	ManagedLabel                     = OrgInstaslicePrefix + "managed"
+	PodLabelInstasliceMutated        = OrgInstaslicePrefix + "mutated"
 	GateName                         = OrgInstaslicePrefix + "accelerator"
 	FinalizerName                    = GateName
 	QuotaResourceName                = OrgInstaslicePrefix + "accelerator-memory-quota"
@@ -29,6 +30,7 @@ const (
 	EmulatorModeFalse                = "false"
 	EmulatorModeTrue                 = "true"
 	InstasliceManagedTrue            = "true"
+	InstaslicePodMutatedTrue         = "true"
 	MigCapableTrue                   = "true"
 	AttributeMediaExtensions         = "me"
 	InstaSliceOperatorNamespace      = "instaslice-system"
