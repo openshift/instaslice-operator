@@ -1,22 +1,22 @@
 package main
 
 import (
-	"os"
+       "context"
+       "fmt"
+       "os"
 
-	"k8s.io/component-base/cli"
-	_ "k8s.io/component-base/metrics/prometheus/clientgo"
-	_ "k8s.io/component-base/metrics/prometheus/version"
-	"k8s.io/kubernetes/cmd/kube-scheduler/app"
-
-	_ "sigs.k8s.io/scheduler-plugins/apis/config/scheme"
-
-	mig "github.com/openshift/instaslice-operator/pkg/scheduler/plugins/mig"
+       "github.com/openshift/instaslice-operator/pkg/cmd/scheduler"
 )
 
 func main() {
-	command := app.NewSchedulerCommand(
-		app.WithPlugin(mig.Name, mig.New),
-	)
-	code := cli.Run(command)
-	os.Exit(code)
+       command := scheduler.NewScheduler(context.Background())
+       command.Use = "das-scheduler"
+       command.Short = "Instaslice Scheduler"
+       if err := command.Execute(); err != nil {
+               _, err := fmt.Fprintf(os.Stderr, "%v\n", err)
+               if err != nil {
+                       fmt.Printf("Unable to print err to stderr: %v", err)
+		}
+		os.Exit(1)
+	}
 }
