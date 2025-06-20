@@ -6,8 +6,15 @@ spec:
   schedulerName: das-scheduler
   containers:
   - name: busy
-    image: quay.io/prometheus/busybox 
+    image: quay.io/prometheus/busybox
     command: ["sh","-c","sleep 3600"]
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
     resources:
       limits:
         mig.das.com/1g.5gb: "1"

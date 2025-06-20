@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/pointer"
 )
 
 func gpuSlicePodSpec(profile string) corev1.PodSpec {
@@ -35,6 +36,12 @@ func gpuSlicePodSpec(profile string) corev1.PodSpec {
 					Limits: corev1.ResourceList{
 						corev1.ResourceName(fmt.Sprintf("mig.das.com/%s", profile)): resource.MustParse("1"),
 					},
+				},
+				SecurityContext: &corev1.SecurityContext{
+					AllowPrivilegeEscalation: pointer.Bool(false),
+					Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+					RunAsNonRoot:             pointer.Bool(true),
+					SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 				},
 			},
 		},
