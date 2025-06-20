@@ -13,6 +13,7 @@ require (
 	github.com/openshift/library-go v0.0.0-20250218150059-017e5b6cf27c
 	github.com/prometheus/client_golang v1.22.0
 	github.com/spf13/cobra v1.9.1
+	github.com/spf13/pflag v1.0.6
 	google.golang.org/grpc v1.68.1
 	k8s.io/api v0.32.5
 	k8s.io/apiextensions-apiserver v0.32.3
@@ -28,7 +29,6 @@ require (
 	sigs.k8s.io/controller-tools v0.17.2
 	sigs.k8s.io/scheduler-plugins v0.32.5-devel
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0
-	sigs.k8s.io/yaml v1.4.0
 	tags.cncf.io/container-device-interface v0.8.1
 	tags.cncf.io/container-device-interface/specs-go v0.8.0
 )
@@ -93,7 +93,6 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
-	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
@@ -147,4 +146,5 @@ require (
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
+	sigs.k8s.io/yaml v1.4.0 // indirect
 )
