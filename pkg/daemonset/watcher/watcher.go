@@ -150,7 +150,11 @@ func processDeviceRemoval(ctx context.Context, dev cdispec.Device, path string, 
 
 	var migUUID string
 	for _, e := range dev.ContainerEdits.Env {
-		if strings.HasPrefix(e, "MIG_UUID=") {
+		switch {
+		case strings.HasPrefix(e, "NVIDIA_VISIBLE_DEVICES="):
+			migUUID = strings.TrimPrefix(e, "NVIDIA_VISIBLE_DEVICES=")
+			break
+		case strings.HasPrefix(e, "MIG_UUID="):
 			migUUID = strings.TrimPrefix(e, "MIG_UUID=")
 			break
 		}

@@ -338,7 +338,7 @@ func TestWriteCDISpecForResourceEnv(t *testing.T) {
 		t.Fatalf("failed to configure cdi: %v", err)
 	}
 
-	path, _, err := WriteCDISpecForResource("vendor/class", "id-env", nil, "MIG_UUID=foo")
+	path, _, err := WriteCDISpecForResource("vendor/class", "id-env", nil, "NVIDIA_VISIBLE_DEVICES=foo")
 	if err != nil {
 		t.Fatalf("failed to write spec: %v", err)
 	}
@@ -352,7 +352,10 @@ func TestWriteCDISpecForResourceEnv(t *testing.T) {
 		t.Fatalf("failed to unmarshal spec: %v", err)
 	}
 	env := spec.Devices[0].ContainerEdits.Env
-	if len(env) != 1 || env[0] != "MIG_UUID=foo" {
+	if len(env) != 2 {
+		t.Fatalf("unexpected env %v", env)
+	}
+	if env[0] != "NVIDIA_VISIBLE_DEVICES=foo" || env[1] != "CUDA_VISIBLE_DEVICES=foo" {
 		t.Fatalf("unexpected env %v", env)
 	}
 }

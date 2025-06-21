@@ -181,9 +181,9 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 					klog.ErrorS(err, "failed to create MIG slice")
 					return nil, err
 				}
-				envVar = fmt.Sprintf("MIG_UUID=%s", uuid)
+				envVar = fmt.Sprintf("NVIDIA_VISIBLE_DEVICES=%s", uuid)
 			} else {
-				envVar = "MIG_UUID=test"
+				envVar = "NVIDIA_VISIBLE_DEVICES=test"
 			}
 			if data, err := json.Marshal(alloc); err == nil {
 				annotations = map[string]string{allocationAnnotationKey: string(data)}
@@ -191,7 +191,7 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 				klog.ErrorS(err, "failed to marshal allocation")
 			}
 		} else {
-			envVar = "MIG_UUID=test"
+			envVar = "NVIDIA_VISIBLE_DEVICES=test"
 		}
 
 		for _, id := range ids {
@@ -434,9 +434,13 @@ func BuildCDIDevices(kind, sanitizedClass, id string, annotations map[string]str
 	specPath := filepath.Join(dynamicDir, specName)
 
 	// TODO - Do we need to create a CDI spec for each device Allocate request? can we not use a single spec for all devices of the same kind?
-	env := []string{"MIG_UUID=test"}
+	env := []string{"NVIDIA_VISIBLE_DEVICES=test", "CUDA_VISIBLE_DEVICES=test"}
 	if envVar != "" {
 		env = []string{envVar}
+		if eq := strings.Index(envVar, "="); eq != -1 {
+			val := envVar[eq+1:]
+			env = append(env, fmt.Sprintf("CUDA_VISIBLE_DEVICES=%s", val))
+		}
 	}
 	specObj := &cdispec.Spec{
 		Version: cdispec.CurrentVersion,

@@ -178,7 +178,7 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 		}, 2*time.Minute, 5*time.Second).Should(Equal(expected))
 	})
 
-	It("should set MIG_UUID env var in each pod", func(ctx SpecContext) {
+	It("should set NVIDIA_VISIBLE_DEVICES env var in each pod", func(ctx SpecContext) {
 		for _, name := range podNames {
 			Eventually(func() (bool, error) {
 				req := kubeClient.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{})
@@ -186,7 +186,7 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 				if err != nil {
 					return false, err
 				}
-				return strings.Contains(string(out), "MIG_UUID="), nil
+				return strings.Contains(string(out), "NVIDIA_VISIBLE_DEVICES="), nil
 			}, 2*time.Minute, 5*time.Second).Should(BeTrue())
 		}
 	})
