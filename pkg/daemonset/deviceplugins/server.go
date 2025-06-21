@@ -149,7 +149,7 @@ func (s *Server) ListAndWatch(req *pluginapi.Empty, stream pluginapi.DevicePlugi
 }
 
 func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
-	klog.InfoS("Received Allocate request", "containerRequests", req.GetContainerRequests(), "emulatedMode", s.EmulatedMode)
+	klog.InfoS("Received Allocate request ZZZZZZZZZZ", "containerRequests", req.GetContainerRequests(), "emulatedMode", s.EmulatedMode)
 	count := len(req.GetContainerRequests())
 	resp := &pluginapi.AllocateResponse{
 		ContainerResponses: make([]*pluginapi.ContainerAllocateResponse, count),

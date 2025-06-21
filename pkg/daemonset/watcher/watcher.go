@@ -11,8 +11,12 @@ import (
 	"sync"
 
 	"github.com/fsnotify/fsnotify"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/informers"
+	kubernetes "k8s.io/client-go/kubernetes"
+	kcache "k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
@@ -234,4 +238,99 @@ func deleteMigSlice(uuid string) error {
 
 	klog.InfoS("Deleted MIG slice", "UUID", uuid)
 	return nil
+}
+
+// getAllocationClaimSpec decodes the AllocationClaimSpec from the Raw extension.
+func getAllocationClaimSpec(a *instav1.AllocationClaim) (instav1.AllocationClaimSpec, error) {
+	if a == nil {
+		return instav1.AllocationClaimSpec{}, fmt.Errorf("allocation claim is nil")
+	}
+	var spec instav1.AllocationClaimSpec
+	if len(a.Spec.Raw) == 0 {
+		return spec, fmt.Errorf("allocation claim spec is empty")
+	}
+	if err := json.Unmarshal(a.Spec.Raw, &spec); err != nil {
+		return instav1.AllocationClaimSpec{}, fmt.Errorf("failed to decode allocation spec: %w", err)
+	}
+	return spec, nil
+}
+
+// SetupPodDeletionWatcher registers a pod delete handler that removes any CDI
+// specs associated with the deleted pod via allocation annotations. Spec file
+// deletion will then trigger MIG and AllocationClaim cleanup via the CDI watcher.
+func SetupPodDeletionWatcher(ctx context.Context, client kubernetes.Interface, nodeName string, cache *CDICache) error {
+	if client == nil {
+		return fmt.Errorf("kubernetes client is nil")
+	}
+
+	factory := informers.NewSharedInformerFactoryWithOptions(
+		client, 0,
+		informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
+			opts.FieldSelector = fmt.Sprintf("spec.nodeName=%s", nodeName)
+		}),
+	)
+
+	informer := factory.Core().V1().Pods().Informer()
+	informer.AddEventHandler(kcache.ResourceEventHandlerFuncs{
+		DeleteFunc: func(obj interface{}) {
+			var pod *corev1.Pod
+			switch t := obj.(type) {
+			case *corev1.Pod:
+				pod = t
+			case kcache.DeletedFinalStateUnknown:
+				if p, ok := t.Obj.(*corev1.Pod); ok {
+					pod = p
+				} else {
+					return
+				}
+			default:
+				return
+			}
+			handlePodDeletion(ctx, pod, cache)
+		},
+	})
+
+	factory.Start(ctx.Done())
+	return nil
+}
+
+// handlePodDeletion removes all CDI spec files referencing the given pod UID.
+func handlePodDeletion(ctx context.Context, pod *corev1.Pod, cache *CDICache) {
+	if pod == nil {
+		return
+	}
+
+	var paths []string
+	cache.mu.RLock()
+	for path, spec := range cache.specs {
+		for _, dev := range spec.Devices {
+			ann, ok := dev.Annotations[allocationAnnotationKey]
+			if !ok || ann == "" {
+				continue
+			}
+			var alloc instav1.AllocationClaim
+			if err := json.Unmarshal([]byte(ann), &alloc); err != nil {
+				klog.ErrorS(err, "failed to unmarshal allocation annotation", "path", path)
+				continue
+			}
+			specObj, err := getAllocationClaimSpec(&alloc)
+			if err != nil {
+				klog.ErrorS(err, "failed to decode allocation spec", "allocation", alloc.Name)
+				continue
+			}
+			if specObj.PodRef.UID == pod.UID {
+				paths = append(paths, path)
+				break
+			}
+		}
+	}
+	cache.mu.RUnlock()
+
+	for _, p := range paths {
+		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+			klog.ErrorS(err, "failed to remove CDI spec for deleted pod", "pod", klog.KObj(pod), "path", p)
+		} else {
+			klog.V(3).InfoS("removed CDI spec for deleted pod", "pod", klog.KObj(pod), "path", p)
+		}
+	}
 }

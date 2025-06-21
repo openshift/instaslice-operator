@@ -3,6 +3,7 @@ package daemonset
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	deviceplugins "github.com/openshift/instaslice-operator/pkg/daemonset/deviceplugins"
@@ -12,6 +13,7 @@ import (
 	"github.com/openshift/instaslice-operator/pkg/operator/operatorclient"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/loglevel"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"tags.cncf.io/container-device-interface/pkg/cdi"
@@ -48,6 +50,13 @@ func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) erro
 		return fmt.Errorf("failed to create instaslice operator client: %w", err)
 	}
 
+	kubeClient, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to create kubernetes client: %w", err)
+	}
+
+	nodeName := os.Getenv("NODE_NAME")
+
 	// Setup CDI spec watcher using the same CDI cache as the device plugin
 	cdiCache := watcher.NewCDICache(cdi.GetDefaultCache())
 	if err := watcher.SetupCDIDeletionWatcher(ctx, cdi.DefaultStaticDir, cdiCache, opClientset); err != nil {
@@ -55,6 +64,12 @@ func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) erro
 		return err
 	}
 	klog.InfoS("CDI watcher setup completed")
+
+	if err := watcher.SetupPodDeletionWatcher(ctx, kubeClient, nodeName, cdiCache); err != nil {
+		klog.ErrorS(err, "Failed to setup pod deletion watcher")
+		return err
+	}
+	klog.InfoS("Pod watcher setup completed")
 
 	// Set up operator config informers for dynamic log level
 	operatorNamespace := cc.OperatorNamespace

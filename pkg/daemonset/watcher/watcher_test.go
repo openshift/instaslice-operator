@@ -3,6 +3,7 @@ package watcher
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -10,8 +11,11 @@ import (
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	deviceplugins "github.com/openshift/instaslice-operator/pkg/daemonset/deviceplugins"
 	fakeclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/fake"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	kubefake "k8s.io/client-go/kubernetes/fake"
 
 	"tags.cncf.io/container-device-interface/pkg/cdi"
 	cdispec "tags.cncf.io/container-device-interface/specs-go"
@@ -191,4 +195,58 @@ func TestHandleRemoveEvent(t *testing.T) {
 	if err == nil || !apierrors.IsNotFound(err) {
 		t.Fatalf("allocation claim not deleted")
 	}
+}
+
+func TestPodDeletionWatcher(t *testing.T) {
+	dir := t.TempDir()
+	if err := cdi.Configure(cdi.WithSpecDirs(dir)); err != nil {
+		t.Fatalf("failed to configure cdi: %v", err)
+	}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default", UID: "uid1"},
+		Spec:       corev1.PodSpec{NodeName: "node1"},
+	}
+	specObj := instav1.AllocationClaimSpec{
+		PodRef:       corev1.ObjectReference{UID: pod.UID},
+		MigPlacement: instav1.Placement{Start: 0, Size: 1},
+		GPUUUID:      "gpu1",
+		Nodename:     "node1",
+	}
+	raw, _ := json.Marshal(&specObj)
+	alloc := &instav1.AllocationClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "allocp", Namespace: "default"},
+		Spec:       runtime.RawExtension{Raw: raw},
+	}
+
+	kubeClient := kubefake.NewSimpleClientset(pod)
+	opClient := fakeclient.NewSimpleClientset(alloc)
+	cache := NewCDICache(nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := SetupCDIDeletionWatcher(ctx, dir, cache, opClient); err != nil {
+		t.Fatalf("failed to setup cdi watcher: %v", err)
+	}
+	if err := SetupPodDeletionWatcher(ctx, kubeClient, "node1", cache); err != nil {
+		t.Fatalf("failed to setup pod watcher: %v", err)
+	}
+
+	data, _ := json.Marshal(alloc)
+	annotations := map[string]string{allocationAnnotationKey: string(data)}
+	path, _, err := deviceplugins.WriteCDISpecForResource("vendor/class", "idp", annotations, "")
+	if err != nil {
+		t.Fatalf("failed to write spec: %v", err)
+	}
+	waitFor(t, func() bool { _, ok := cache.Get(path); return ok })
+
+	if err := kubeClient.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{}); err != nil {
+		t.Fatalf("failed to delete pod: %v", err)
+	}
+
+	waitFor(t, func() bool { _, err := os.Stat(path); return errors.Is(err, os.ErrNotExist) })
+	waitFor(t, func() bool { _, ok := cache.Get(path); return !ok })
+	waitFor(t, func() bool {
+		_, err := opClient.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Get(ctx, alloc.Name, metav1.GetOptions{})
+		return err != nil && apierrors.IsNotFound(err)
+	})
 }
