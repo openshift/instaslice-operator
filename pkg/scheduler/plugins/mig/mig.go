@@ -110,7 +110,9 @@ type Args struct {
 }
 
 var (
-	_ framework.FilterPlugin = &Plugin{}
+	_ framework.FilterPlugin  = &Plugin{}
+	_ framework.ScorePlugin   = &Plugin{}
+	_ framework.PreBindPlugin = &Plugin{}
 )
 
 // Name returns the plugin name.
@@ -341,28 +343,82 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 		}
 	}
 
-	for _, alloc := range claims {
-		if _, err := deviceplugins.UpdateAllocationStatus(ctx, p.instaClient, alloc, instav1alpha1.AllocationClaimStatusCreated); err != nil {
-			for _, ac := range claims {
-				_ = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
-			}
-			return framework.AsStatus(err)
+	if len(claims) > 0 {
+		klog.V(4).InfoS("instaslice GPU staged", "pod", klog.KObj(pod), "node", node.Name)
+	}
+	return nil
+}
+
+// Score favors nodes with the most remaining free MIG slice capacity after
+// accounting for all AllocationClaims including those staged for this Pod.
+func (p *Plugin) Score(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) (int64, *framework.Status) {
+	instObj, err := p.instasliceLister.NodeAccelerators(p.namespace).Get(nodeName)
+	if err != nil {
+		return 0, framework.AsStatus(err)
+	}
+
+	var resources instav1alpha1.DiscoveredNodeResources
+	if len(instObj.Status.NodeResources.Raw) > 0 {
+		if err := json.Unmarshal(instObj.Status.NodeResources.Raw, &resources); err != nil {
+			return 0, framework.AsStatus(err)
 		}
 	}
 
-	if len(claims) > 0 {
-		klog.V(4).InfoS("instaslice GPU selected", "pod", klog.KObj(pod), "node", node.Name)
+	var freeSlots, totalSlots int32
+	for _, gpu := range resources.NodeGPUs {
+		idx, err := gpuAllocatedSlices(p.allocationIndexer, nodeName, gpu.GPUUUID, "")
+		if err != nil {
+			return 0, framework.AsStatus(err)
+		}
+		totalSlots += int32(len(idx))
+		for _, v := range idx {
+			if v == 0 {
+				freeSlots++
+			}
+		}
+	}
+
+	if totalSlots == 0 {
+		return 0, nil
+	}
+	score := int64(freeSlots) * framework.MaxNodeScore / int64(totalSlots)
+	return score, nil
+}
+
+// PreBind finalizes AllocationClaims on the chosen node and cleans up staged
+// claims on the other nodes.
+func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) *framework.Status {
+	items, err := p.allocationIndexer.ByIndex("pod-uid", string(pod.UID))
+	if err != nil {
+		return framework.AsStatus(err)
+	}
+	for _, obj := range items {
+		alloc, ok := obj.(*instav1alpha1.AllocationClaim)
+		if !ok {
+			continue
+		}
+		spec, err := getAllocationClaimSpec(alloc)
+		if err != nil {
+			klog.ErrorS(err, "decoding AllocationClaim", "alloc", klog.KObj(alloc))
+			continue
+		}
+		if string(spec.Nodename) == nodeName {
+			if alloc.Status.State != instav1alpha1.AllocationClaimStatusCreated {
+				if _, err := deviceplugins.UpdateAllocationStatus(ctx, p.instaClient, alloc, instav1alpha1.AllocationClaimStatusCreated); err != nil {
+					return framework.AsStatus(err)
+				}
+			}
+		} else {
+			if err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Delete(ctx, alloc.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+				return framework.AsStatus(err)
+			}
+		}
 	}
 	return nil
 }
 
-// Score evaluates how many GPUs on the node can satisfy all requested profiles.
-// PreBind has been deprecated and its functionality moved to Filter.
-// The method is kept for backward compatibility but performs no actions.
-func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) *framework.Status {
-	// deprecated
-	return nil
-}
+// ScoreExtensions returns nil as the plugin does not implement score extensions.
+func (p *Plugin) ScoreExtensions() framework.ScoreExtensions { return nil }
 
 // The helper functions below are mostly moved from the legacy scheduler.
 
