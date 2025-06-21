@@ -149,7 +149,7 @@ func (s *Server) ListAndWatch(req *pluginapi.Empty, stream pluginapi.DevicePlugi
 }
 
 func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
-	klog.InfoS("Received Allocate request ZZZZZZZZZZ", "containerRequests", req.GetContainerRequests(), "emulatedMode", s.EmulatedMode)
+	klog.InfoS("Received Allocate request", "containerRequests", req.GetContainerRequests(), "emulatedMode", s.EmulatedMode)
 	count := len(req.GetContainerRequests())
 	resp := &pluginapi.AllocateResponse{
 		ContainerResponses: make([]*pluginapi.ContainerAllocateResponse, count),
@@ -287,20 +287,58 @@ func (s *Server) createMigSlice(ctx context.Context, alloc *instav1.AllocationCl
 		return "", fmt.Errorf("create compute instance: %v", ret)
 	}
 
-	info, ret := ci.GetInfo()
-	if ret != nvml.SUCCESS {
+	uuid, err := migUUIDFromInstance(dev, gpuInst, ci)
+	if err != nil {
+		ci.Destroy()
 		gpuInst.Destroy()
-		return "", fmt.Errorf("get compute instance info: %v", ret)
-	}
-
-	uuid, ret := info.Device.GetUUID()
-	if ret != nvml.SUCCESS {
-		gpuInst.Destroy()
-		return "", fmt.Errorf("get MIG UUID: %v", ret)
+		return "", err
 	}
 
 	klog.InfoS("Created MIG slice", "gpu", spec.GPUUUID, "profile", spec.Profile, "migUUID", uuid)
 	return uuid, nil
+}
+
+// migUUIDFromInstance finds the UUID of the MIG device corresponding to the
+// given compute instance.
+func migUUIDFromInstance(parent nvml.Device, gi nvml.GpuInstance, ci nvml.ComputeInstance) (string, error) {
+	ciInfo, ret := ci.GetInfo()
+	if ret != nvml.SUCCESS {
+		return "", fmt.Errorf("get compute instance info: %v", ret)
+	}
+
+	giInfo, ret := gi.GetInfo()
+	if ret != nvml.SUCCESS {
+		return "", fmt.Errorf("get gpu instance info: %v", ret)
+	}
+
+	count, ret := parent.GetMaxMigDeviceCount()
+	if ret != nvml.SUCCESS {
+		return "", fmt.Errorf("get MIG device count: %v", ret)
+	}
+
+	for i := 0; i < count; i++ {
+		migDev, ret := parent.GetMigDeviceHandleByIndex(i)
+		if ret != nvml.SUCCESS {
+			continue
+		}
+		giID, ret := nvml.DeviceGetGpuInstanceId(migDev)
+		if ret != nvml.SUCCESS {
+			continue
+		}
+		ciID, ret := nvml.DeviceGetComputeInstanceId(migDev)
+		if ret != nvml.SUCCESS {
+			continue
+		}
+		if uint32(giID) == giInfo.Id && uint32(ciID) == ciInfo.Id {
+			uuid, ret := migDev.GetUUID()
+			if ret != nvml.SUCCESS {
+				return "", fmt.Errorf("get MIG UUID: %v", ret)
+			}
+			return uuid, nil
+		}
+	}
+
+	return "", fmt.Errorf("matching MIG device not found")
 }
 
 func profileFromResourceName(res string) string {
