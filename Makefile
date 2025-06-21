@@ -132,8 +132,9 @@ build-push-webhook:
 
 .PHONY: test-k8s
 test-k8s:
-	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') \
-		nvidia.com/mig.capable=true --overwrite
+	kubectl label node $$(kubectl get nodes -l node-role.kubernetes.io/worker \
+                                -o jsonpath='{range .items[*]}{.metadata.name}{" "}{end}') \
+        nvidia.com/mig.capable=true --overwrite
 
 	@echo "=== Building and pushing images in parallel ==="
 	$(MAKE) -j16 build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
@@ -179,13 +180,16 @@ cleanup-k8s:
 
 .PHONY: test-ocp
 test-ocp:
-	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') \
-		nvidia.com/mig.capable=true --overwrite
+	kubectl label node $$(kubectl get nodes -l node-role.kubernetes.io/worker \
+                                -o jsonpath='{range .items[*]}{.metadata.name}{" "}{end}') \
+        nvidia.com/mig.capable=true --overwrite
 
 	@echo "=== Building and pushing images in parallel ==="
 	$(MAKE) -j16 build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
 
+	@echo "=== Allowing quay to refresh the images ==="
 	sleep 10
+
 	@echo "=== All images built & pushed ==="
 
 	@echo "=== Generating CRDs for K8s ==="
@@ -214,7 +218,7 @@ test-ocp:
 	kubectl apply -f deploy-k8s/07_test_pod.yaml
 
 .PHONY: emulated-ocp
-emulated-ocp: EMULATED_MODE=enabled
+emulated-ocp: EMULATED_MODE=disabled
 emulated-ocp: test-ocp
 
 .PHONY: cleanup-ocp
