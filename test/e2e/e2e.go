@@ -262,6 +262,8 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 			gpuCount += len(res.NodeGPUs)
 		}
 
+		// TODO - Remove this hardcoding by dynamically calculating number of max slices like we do in Filter and Score plugins.
+		// This test will likely fail on hardware other than A100 or H100 GPUs.
 		pods1g := gpuCount * 2
 		pods2g := gpuCount * 2
 
