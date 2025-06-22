@@ -135,6 +135,14 @@ Change the cluster-wide log level by editing the `DASOperator` custom resource `
 
 ## Testing on OpenShift
 
+### Prerequisites
+
+- [OpenShift Container Platform](https://docs.openshift.com/container-platform/4.17/installing/overview/index.html) 4.17+
+- [oc client binary](https://docs.openshift.com/container-platform/4.17/cli_reference/openshift_cli/getting-started-cli.html) v4.17+
+- [operator-sdk binary](https://sdk.operatorframework.io/docs/installation/) v1.37+
+- [openshift cert manager operator](https://docs.openshift.com/container-platform/4.17/security/cert_manager_operator/cert-manager-operator-install.html)
+- [nvidia gpu operator](https://github.com/openshift/instaslice-operator/blob/main/docs/nvidia-gpu-openshift.md)
+
 Emulated mode is useful for testing on OpenShift clusters where GPUs are not available.
 
 ```console
