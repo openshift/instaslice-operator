@@ -217,8 +217,12 @@ test-ocp:
 	kubectl apply -f deploy-k8s/07_test_pod.yaml
 
 .PHONY: emulated-ocp
-emulated-ocp: EMULATED_MODE=disabled
+emulated-ocp: EMULATED_MODE=enabled
 emulated-ocp: test-ocp
+
+.PHONY: gpu-ocp
+gpu-ocp: EMULATED_MODE=disabled
+gpu-ocp: test-ocp
 
 .PHONY: cleanup-ocp
 cleanup-ocp:
