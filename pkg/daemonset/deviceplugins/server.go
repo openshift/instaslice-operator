@@ -215,12 +215,22 @@ func (s *Server) ListAndWatch(req *pluginapi.Empty, stream pluginapi.DevicePlugi
 
 func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
 	klog.InfoS("Received Allocate request", "containerRequests", req.GetContainerRequests(), "emulatedMode", s.EmulatedMode)
-	count := len(req.GetContainerRequests())
-	resp := &pluginapi.AllocateResponse{
-		ContainerResponses: make([]*pluginapi.ContainerAllocateResponse, count),
+
+	total := 0
+	for _, cr := range req.GetContainerRequests() {
+		ids := cr.GetDevicesIDs()
+		if len(ids) == 0 {
+			total++
+		} else {
+			total += len(ids)
+		}
 	}
 
-	allocations, err := s.getAllocationsByNodeGPU(ctx, s.NodeName, s.Manager.ResourceName, count)
+	resp := &pluginapi.AllocateResponse{
+		ContainerResponses: make([]*pluginapi.ContainerAllocateResponse, len(req.GetContainerRequests())),
+	}
+
+	allocations, err := s.getAllocationsByNodeGPU(ctx, s.NodeName, s.Manager.ResourceName, total)
 	if err != nil {
 		klog.ErrorS(err, "failed to get allocations", "node", s.NodeName, "profile", s.Manager.ResourceName)
 	} else {
@@ -228,35 +238,37 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 		klog.V(5).InfoS("Allocations", "allocations", allocations)
 	}
 
-	for i := 0; i < count; i++ {
+	allocIndex := 0
+	for i, cr := range req.GetContainerRequests() {
 		resp.ContainerResponses[i] = &pluginapi.ContainerAllocateResponse{}
 
-		ids := req.GetContainerRequests()[i].GetDevicesIDs()
+		ids := cr.GetDevicesIDs()
 		if len(ids) == 0 {
 			ids = []string{string(utiluuid.NewUUID())}
 		}
 
-		var alloc *instav1.AllocationClaim
-		if i < len(allocations) {
-			alloc = allocations[i]
-		}
-
-		envVar, annotations, err := s.prepareEnv(ctx, alloc)
-		if err != nil {
-			return nil, err
-		}
-
 		for _, id := range ids {
+			var alloc *instav1.AllocationClaim
+			if allocIndex < len(allocations) {
+				alloc = allocations[allocIndex]
+				allocIndex++
+			}
+
+			envVar, annotations, err := s.prepareEnv(ctx, alloc)
+			if err != nil {
+				return nil, err
+			}
+
 			_, cdiDevices, err := WriteCDISpecForResource(s.Manager.ResourceName, id, annotations, envVar)
 			if err != nil {
 				return nil, err
 			}
 			resp.ContainerResponses[i].CDIDevices = append(resp.ContainerResponses[i].CDIDevices, cdiDevices...)
-		}
 
-		if alloc != nil {
-			if err := s.markAllocationInUse(ctx, alloc); err != nil {
-				return nil, err
+			if alloc != nil {
+				if err := s.markAllocationInUse(ctx, alloc); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}

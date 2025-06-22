@@ -7,12 +7,6 @@ spec:
   containers:
   - name: cuda-vectoradd-1-webhook-test
     image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8"
-    env:
-    - name: NVIDIA_VISIBLE_DEVICES
-      valueFrom:
-        configMapKeyRef:
-          name: cuda-vectoradd-1      # ConfigMap name
-          key: NVIDIA_VISIBLE_DEVICES       # Key inside the ConfigMap
     resources:
       limits:
         nvidia.com/mig-1g.5gb: "1"

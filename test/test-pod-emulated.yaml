@@ -7,6 +7,17 @@ spec:
   containers:
   - name: busy
     image: quay.io/prometheus/busybox
+    env:
+    - name: NVIDIA_VISIBLE_DEVICES  # TODO - Remove this once webhook starts working
+      valueFrom:
+        configMapKeyRef:
+          name: cuda-vectoradd-1
+          key: NVIDIA_VISIBLE_DEVICES
+    - name: CUDA_VISIBLE_DEVICES
+      valueFrom:
+        configMapKeyRef:
+          name: cuda-vectoradd-1
+          key: CUDA_VISIBLE_DEVICES
     command: ["sh","-c","sleep 3600"]
     securityContext:
       allowPrivilegeEscalation: false

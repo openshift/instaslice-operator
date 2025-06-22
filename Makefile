@@ -164,10 +164,6 @@ test-k8s:
 	kubectl apply -f $$TMP_DIR/; \
 	kubectl apply -f $$TMP_DIR/06_scheduler_deployment.yaml
 
-	sleep 5
-	@echo "=== Deploying test pod ==="
-	kubectl apply -f deploy-k8s/07_test_pod.yaml
-
 .PHONY: emulated-k8s
 emulated-k8s: EMULATED_MODE=enabled
 emulated-k8s: test-k8s
@@ -187,7 +183,7 @@ test-ocp:
 	$(MAKE) -j16 build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
 
 	@echo "=== Allowing quay to refresh the images ==="
-	sleep 10
+	sleep 15
 
 	@echo "=== All images built & pushed ==="
 
@@ -211,10 +207,6 @@ test-ocp:
 	env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < deploy-k8s/06_scheduler_deployment.yaml > $$TMP_DIR/06_scheduler_deployment.yaml; \
 	kubectl apply -f $$TMP_DIR/; \
 	kubectl apply -f $$TMP_DIR/06_scheduler_deployment.yaml
-
-	sleep 5
-	@echo "=== Deploying test pod ==="
-	kubectl apply -f deploy-k8s/07_test_pod.yaml
 
 .PHONY: emulated-ocp
 emulated-ocp: EMULATED_MODE=enabled

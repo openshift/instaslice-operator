@@ -21,7 +21,7 @@ spec:
           key: CUDA_VISIBLE_DEVICES
     resources:
       limits:
-        mig.das.com/1g.5gb: "1"
+        mig.das.com/1g.5gb: "2"
     command:
       - sh
       - -c
