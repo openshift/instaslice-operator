@@ -8,13 +8,17 @@ spec:
   containers:
   - name: cuda-vectoradd-1
     image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8"
+    env:
+    - name: NVIDIA_VISIBLE_DEVICES
+      valueFrom:
+        configMapKeyRef:
+          name: cuda-vectoradd-1      # ConfigMap name
+          key: NVIDIA_VISIBLE_DEVICES       # Key inside the ConfigMap
     resources:
       limits:
         mig.das.com/1g.5gb: "1"
     command:
       - sh
       - -c
-      -  "nvidia-smi -L; /cuda-samples/vectorAdd && sleep 3600"
-      # requests:
-      #   cpu: 1000m
-      #   memory: 512Mi
+      - "/cuda-samples/vectorAdd && sleep 3600"
+
