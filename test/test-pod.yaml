@@ -12,13 +12,17 @@ spec:
     - name: NVIDIA_VISIBLE_DEVICES
       valueFrom:
         configMapKeyRef:
-          name: cuda-vectoradd-1      # ConfigMap name
-          key: NVIDIA_VISIBLE_DEVICES       # Key inside the ConfigMap
+          name: cuda-vectoradd-1           
+          key: NVIDIA_VISIBLE_DEVICES      
+    - name: CUDA_VISIBLE_DEVICES
+      valueFrom:
+        configMapKeyRef:
+          name: cuda-vectoradd-1          
+          key: CUDA_VISIBLE_DEVICES       
     resources:
       limits:
         mig.das.com/1g.5gb: "1"
     command:
       - sh
       - -c
-      - "/cuda-samples/vectorAdd && sleep 3600"
-
+      - "env && /cuda-samples/vectorAdd && sleep 3600"

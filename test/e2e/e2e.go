@@ -25,13 +25,19 @@ import (
 )
 
 func gpuSlicePodSpec(profile string, mode instav1.EmulatedMode) corev1.PodSpec {
+	image := "quay.io/prometheus/busybox"
+	command := []string{"sh", "-c", "env && sleep 3600"}
+	if mode == instav1.EmulatedModeDisabled {
+		image = "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8"
+		command = []string{"sh", "-c", "/cuda-samples/vectorAdd && env && sleep 3600"}
+	}
 	return corev1.PodSpec{
 		SchedulerName: "das-scheduler",
 		Containers: []corev1.Container{
 			{
 				Name:    "busy",
-				Image:   "quay.io/prometheus/busybox",
-				Command: []string{"sh", "-c", "env && sleep 3600"},
+				Image:   image,
+				Command: command,
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceName(fmt.Sprintf("mig.das.com/%s", profile)): resource.MustParse("1"),
@@ -75,6 +81,9 @@ var _ = BeforeSuite(func() {
 			Skip("kubernetes config not available: " + err.Error())
 		}
 	}
+
+	// TODO - Remove this warning suppression once the webhook starts working properly
+	cfg.WarningHandler = rest.NoWarnings{}
 	kubeClient, err = kubernetes.NewForConfig(cfg)
 	if err != nil {
 		Skip("failed to create kubernetes client: " + err.Error())
@@ -124,19 +133,22 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 			}
 		}
 
+		var pods []*corev1.Pod
 		for i := 1; i <= podsToCreate; i++ {
-			pod := &corev1.Pod{
+			pods = append(pods, &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      fmt.Sprintf("test-das-%d", i),
 					Namespace: namespace,
 				},
 				Spec: podSpec,
-			}
+			})
+		}
 
-			By("creating test pod " + pod.Name)
-			_, err := kubeClient.CoreV1().Pods(namespace).Create(context.Background(), pod, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			podNames = append(podNames, pod.Name)
+		By(fmt.Sprintf("creating %d test pods", len(pods)))
+		Expect(createPods(context.Background(), namespace, pods)).To(Succeed())
+
+		for _, p := range pods {
+			podNames = append(podNames, p.Name)
 		}
 	})
 
@@ -197,6 +209,19 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 		}
 	})
 
+	It("should set CUDA_VISIBLE_DEVICES env var in each pod", func(ctx SpecContext) {
+		for _, name := range podNames {
+			Eventually(func() (bool, error) {
+				req := kubeClient.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{})
+				out, err := req.Do(ctx).Raw()
+				if err != nil {
+					return false, err
+				}
+				return strings.Contains(string(out), "CUDA_VISIBLE_DEVICES="), nil
+			}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+		}
+	})
+
 	It("should keep a new pod pending when the resource is exhausted", func(ctx SpecContext) {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -207,8 +232,7 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 		}
 
 		By("creating pod " + pod.Name)
-		_, err := kubeClient.CoreV1().Pods(namespace).Create(ctx, pod, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		Expect(createPods(ctx, namespace, []*corev1.Pod{pod})).To(Succeed())
 
 		Consistently(func() (corev1.PodPhase, error) {
 			p, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, pod.Name, metav1.GetOptions{})
@@ -218,7 +242,7 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 			return p.Status.Phase, nil
 		}, 25*time.Second, 5*time.Second).Should(Equal(corev1.PodPending))
 		By("deleting pod " + podNames[0])
-		err = kubeClient.CoreV1().Pods(namespace).Delete(ctx, podNames[0], metav1.DeleteOptions{})
+		err := kubeClient.CoreV1().Pods(namespace).Delete(ctx, podNames[0], metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		Eventually(func() bool {
@@ -354,6 +378,30 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 
 func createPods(ctx context.Context, namespace string, pods []*corev1.Pod) error {
 	for _, pod := range pods {
+		pod.Spec.RestartPolicy = corev1.RestartPolicyOnFailure
+		// TODO - remove this once the webhook starts working properly
+		if len(pod.Spec.Containers) > 0 {
+			pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env,
+				corev1.EnvVar{
+					Name: "NVIDIA_VISIBLE_DEVICES",
+					ValueFrom: &corev1.EnvVarSource{
+						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{Name: pod.Name},
+							Key:                  "NVIDIA_VISIBLE_DEVICES",
+						},
+					},
+				},
+				corev1.EnvVar{
+					Name: "CUDA_VISIBLE_DEVICES",
+					ValueFrom: &corev1.EnvVarSource{
+						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{Name: pod.Name},
+							Key:                  "CUDA_VISIBLE_DEVICES",
+						},
+					},
+				},
+			)
+		}
 		if _, err := kubeClient.CoreV1().Pods(namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
 			return err
 		}

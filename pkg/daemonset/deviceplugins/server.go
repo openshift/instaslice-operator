@@ -221,6 +221,7 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 						},
 						Data: map[string]string{
 							"NVIDIA_VISIBLE_DEVICES": strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES="),
+							"CUDA_VISIBLE_DEVICES":   strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES="),
 						},
 					}
 					if _, err := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Create(ctx, cm, metav1.CreateOptions{}); err != nil {
