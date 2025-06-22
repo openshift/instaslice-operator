@@ -236,84 +236,14 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 			ids = []string{string(utiluuid.NewUUID())}
 		}
 
-		var annotations map[string]string
-		var envVar string
+		var alloc *instav1.AllocationClaim
 		if i < len(allocations) {
-			alloc := allocations[i]
-			if s.EmulatedMode == instav1.EmulatedModeDisabled {
-				uuid, err := s.createMigSlice(ctx, alloc)
-				if err != nil {
-					klog.ErrorS(err, "failed to create MIG slice")
-					return nil, err
-				}
-				envVar = fmt.Sprintf("NVIDIA_VISIBLE_DEVICES=%s", uuid)
-			} else {
-				envVar = "NVIDIA_VISIBLE_DEVICES=test"
-			}
-			if data, err := json.Marshal(alloc); err == nil {
-				annotations = map[string]string{allocationAnnotationKey: string(data)}
-			} else {
-				klog.ErrorS(err, "failed to marshal allocation")
-			}
-			// Create a ConfigMap with the NVIDIA_VISIBLE_DEVICES value
-			if s.KubeClient != nil {
-				specObj, err := getAllocationClaimSpec(alloc)
-				if err != nil {
-					klog.ErrorS(err, "failed to decode allocation spec for configmap", "allocation", alloc.Name)
-				} else {
-					cm := &corev1.ConfigMap{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      specObj.PodRef.Name,
-							Namespace: specObj.PodRef.Namespace,
-							OwnerReferences: []metav1.OwnerReference{
-								{
-									APIVersion: "v1",
-									Kind:       "Pod",
-									Name:       specObj.PodRef.Name,
-									UID:        specObj.PodRef.UID,
-									Controller: pointer.Bool(true),
-								},
-							},
-						},
-						Data: map[string]string{
-							"NVIDIA_VISIBLE_DEVICES": strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES="),
-							"CUDA_VISIBLE_DEVICES":   strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES="),
-						},
-					}
-					if _, err := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Create(ctx, cm, metav1.CreateOptions{}); err != nil {
-						if apierrors.IsAlreadyExists(err) {
-							// Retrieve existing ConfigMap to append variables
-							existing, getErr := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Get(ctx, cm.Name, metav1.GetOptions{})
-							if getErr != nil {
-								klog.ErrorS(getErr, "failed to get existing ConfigMap", "configMap", cm.Name)
-							} else {
-								nvidiaValue := strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES=")
-								cudaValue := strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES=")
+			alloc = allocations[i]
+		}
 
-								if v, ok := existing.Data["NVIDIA_VISIBLE_DEVICES"]; ok && v != "" {
-									nvidiaValue = fmt.Sprintf("%s,%s", v, nvidiaValue)
-								}
-								if v, ok := existing.Data["CUDA_VISIBLE_DEVICES"]; ok && v != "" {
-									cudaValue = fmt.Sprintf("%s,%s", v, cudaValue)
-								}
-
-								existing.Data["NVIDIA_VISIBLE_DEVICES"] = nvidiaValue
-								existing.Data["CUDA_VISIBLE_DEVICES"] = cudaValue
-
-								if _, err := s.KubeClient.CoreV1().ConfigMaps(existing.Namespace).Update(ctx, existing, metav1.UpdateOptions{}); err != nil {
-									klog.ErrorS(err, "failed to update ConfigMap", "configMap", existing.Name)
-								}
-							}
-						} else {
-							klog.ErrorS(err, "failed to create ConfigMap", "configMap", cm.Name)
-						}
-					} else {
-						klog.InfoS("created ConfigMap for env var", "configMap", cm.Name)
-					}
-				}
-			}
-		} else {
-			envVar = "NVIDIA_VISIBLE_DEVICES=test"
+		envVar, annotations, err := s.prepareEnv(ctx, alloc)
+		if err != nil {
+			return nil, err
 		}
 
 		for _, id := range ids {
@@ -324,35 +254,10 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 			resp.ContainerResponses[i].CDIDevices = append(resp.ContainerResponses[i].CDIDevices, cdiDevices...)
 		}
 
-		// After CDI spec creation succeed we can mark the AllocationClaim
-		// as in use so the scheduler does not hand it out again.
-
-		if i < len(allocations) {
-			alloc := allocations[i]
-			alloc.Status.State = instav1.AllocationClaimStatusInUse
-			updated := alloc
-			if s.InstasliceClient != nil {
-				var err error
-				updated, err = UpdateAllocationStatus(ctx, s.InstasliceClient, alloc, instav1.AllocationClaimStatusInUse)
-				if err != nil {
-					klog.ErrorS(err, "failed to update allocation status", "allocation", alloc.Name, "status", instav1.AllocationClaimStatusInUse)
-					return nil, err
-				}
-			} else {
-				cond := metav1.Condition{
-					Type:               "State",
-					Status:             metav1.ConditionTrue,
-					Reason:             string(instav1.AllocationClaimStatusInUse),
-					Message:            fmt.Sprintf("Allocation is %s", instav1.AllocationClaimStatusInUse),
-					ObservedGeneration: alloc.Generation,
-				}
-				meta.SetStatusCondition(&updated.Status.Conditions, cond)
+		if alloc != nil {
+			if err := s.markAllocationInUse(ctx, alloc); err != nil {
+				return nil, err
 			}
-			s.allocMutex.Lock()
-			if err := allocationIndexer.Update(updated); err != nil {
-				klog.ErrorS(err, "failed to update allocation in indexer", "allocation", updated.Name)
-			}
-			s.allocMutex.Unlock()
 		}
 	}
 
@@ -361,6 +266,129 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 
 func (s *Server) PreStartContainer(ctx context.Context, req *pluginapi.PreStartContainerRequest) (*pluginapi.PreStartContainerResponse, error) {
 	return &pluginapi.PreStartContainerResponse{}, nil
+}
+
+// prepareEnv creates the environment variable and annotations for a container
+// based on the given AllocationClaim. If a claim is provided, it also ensures a
+// ConfigMap with the NVIDIA_VISIBLE_DEVICES value exists on the node.
+func (s *Server) prepareEnv(ctx context.Context, alloc *instav1.AllocationClaim) (string, map[string]string, error) {
+	envVar := "NVIDIA_VISIBLE_DEVICES=test"
+	var annotations map[string]string
+
+	if alloc != nil {
+		if s.EmulatedMode == instav1.EmulatedModeDisabled {
+			uuid, err := s.createMigSlice(ctx, alloc)
+			if err != nil {
+				klog.ErrorS(err, "failed to create MIG slice")
+				return "", nil, err
+			}
+			envVar = fmt.Sprintf("NVIDIA_VISIBLE_DEVICES=%s", uuid)
+		}
+
+		if data, err := json.Marshal(alloc); err == nil {
+			annotations = map[string]string{allocationAnnotationKey: string(data)}
+		} else {
+			klog.ErrorS(err, "failed to marshal allocation")
+		}
+
+		if s.KubeClient != nil {
+			s.ensureEnvConfigMap(ctx, alloc, envVar)
+		}
+	}
+
+	return envVar, annotations, nil
+}
+
+// ensureEnvConfigMap creates or updates a ConfigMap storing the environment
+// variable for the pod referenced by the AllocationClaim.
+func (s *Server) ensureEnvConfigMap(ctx context.Context, alloc *instav1.AllocationClaim, envVar string) {
+	specObj, err := getAllocationClaimSpec(alloc)
+	if err != nil {
+		klog.ErrorS(err, "failed to decode allocation spec for configmap", "allocation", alloc.Name)
+		return
+	}
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      specObj.PodRef.Name,
+			Namespace: specObj.PodRef.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "v1",
+					Kind:       "Pod",
+					Name:       specObj.PodRef.Name,
+					UID:        specObj.PodRef.UID,
+					Controller: pointer.Bool(true),
+				},
+			},
+		},
+		Data: map[string]string{
+			"NVIDIA_VISIBLE_DEVICES": strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES="),
+			"CUDA_VISIBLE_DEVICES":   strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES="),
+		},
+	}
+
+	if _, err := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Create(ctx, cm, metav1.CreateOptions{}); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			existing, getErr := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Get(ctx, cm.Name, metav1.GetOptions{})
+			if getErr != nil {
+				klog.ErrorS(getErr, "failed to get existing ConfigMap", "configMap", cm.Name)
+				return
+			}
+
+			nvidiaValue := strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES=")
+			cudaValue := strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES=")
+
+			if v, ok := existing.Data["NVIDIA_VISIBLE_DEVICES"]; ok && v != "" {
+				nvidiaValue = fmt.Sprintf("%s,%s", v, nvidiaValue)
+			}
+			if v, ok := existing.Data["CUDA_VISIBLE_DEVICES"]; ok && v != "" {
+				cudaValue = fmt.Sprintf("%s,%s", v, cudaValue)
+			}
+
+			existing.Data["NVIDIA_VISIBLE_DEVICES"] = nvidiaValue
+			existing.Data["CUDA_VISIBLE_DEVICES"] = cudaValue
+
+			if _, err := s.KubeClient.CoreV1().ConfigMaps(existing.Namespace).Update(ctx, existing, metav1.UpdateOptions{}); err != nil {
+				klog.ErrorS(err, "failed to update ConfigMap", "configMap", existing.Name)
+			}
+		} else {
+			klog.ErrorS(err, "failed to create ConfigMap", "configMap", cm.Name)
+		}
+	} else {
+		klog.InfoS("created ConfigMap for env var", "configMap", cm.Name)
+	}
+}
+
+// markAllocationInUse updates the AllocationClaim status to InUse and stores it
+// in the informer indexer.
+func (s *Server) markAllocationInUse(ctx context.Context, alloc *instav1.AllocationClaim) error {
+	alloc.Status.State = instav1.AllocationClaimStatusInUse
+	updated := alloc
+	if s.InstasliceClient != nil {
+		var err error
+		updated, err = UpdateAllocationStatus(ctx, s.InstasliceClient, alloc, instav1.AllocationClaimStatusInUse)
+		if err != nil {
+			klog.ErrorS(err, "failed to update allocation status", "allocation", alloc.Name, "status", instav1.AllocationClaimStatusInUse)
+			return err
+		}
+	} else {
+		cond := metav1.Condition{
+			Type:               "State",
+			Status:             metav1.ConditionTrue,
+			Reason:             string(instav1.AllocationClaimStatusInUse),
+			Message:            fmt.Sprintf("Allocation is %s", instav1.AllocationClaimStatusInUse),
+			ObservedGeneration: alloc.Generation,
+		}
+		meta.SetStatusCondition(&updated.Status.Conditions, cond)
+	}
+
+	s.allocMutex.Lock()
+	if err := allocationIndexer.Update(updated); err != nil {
+		klog.ErrorS(err, "failed to update allocation in indexer", "allocation", updated.Name)
+	}
+	s.allocMutex.Unlock()
+	return nil
 }
 
 // createMigSlice uses the NVML library to create a MIG slice as specified by
