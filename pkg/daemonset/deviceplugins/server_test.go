@@ -397,3 +397,57 @@ func TestWriteCDISpecForResourceWait(t *testing.T) {
 		t.Fatalf("expected spec recreated: %v", err)
 	}
 }
+
+func TestListAndWatchRebootResetsAllocations(t *testing.T) {
+	dir := t.TempDir()
+	if err := cdi.Configure(cdi.WithSpecDirs(dir), cdi.WithAutoRefresh(false)); err != nil {
+		t.Fatalf("failed to configure cdi: %v", err)
+	}
+
+	// Setup allocation indexer with one InUse AllocationClaim
+	allocationIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
+		"node-MigProfile": func(obj interface{}) ([]string, error) {
+			a := obj.(*instav1.AllocationClaim)
+			spec, err := getAllocationClaimSpec(a)
+			if err != nil {
+				return nil, err
+			}
+			key := fmt.Sprintf("%s/%s", spec.Nodename, spec.Profile)
+			return []string{key}, nil
+		},
+	})
+
+	specObj := instav1.AllocationClaimSpec{Profile: "1g.5gb", Nodename: types.NodeName("node1")}
+	raw, _ := json.Marshal(&specObj)
+	alloc := &instav1.AllocationClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "a1", Namespace: "default"},
+		Spec:       runtime.RawExtension{Raw: raw},
+		Status:     instav1.AllocationClaimStatus{State: instav1.AllocationClaimStatusInUse},
+	}
+	_ = allocationIndexer.Add(alloc)
+
+	mgr := NewManager("mig.das.com/1g.5gb", instav1.DiscoveredNodeResources{})
+	srv := &Server{Manager: mgr, NodeName: "node1"}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stream := newFakeListWatchServer(ctx)
+	done := make(chan error, 1)
+	go func() { done <- srv.ListAndWatch(&pluginapi.Empty{}, stream) }()
+
+	// Wait for initial response
+	var resp *pluginapi.ListAndWatchResponse
+	select {
+	case resp = <-stream.ch:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for initial response")
+	}
+
+	if len(resp.Devices) != 0 {
+		t.Fatalf("expected no devices, got %d", len(resp.Devices))
+	}
+
+	if alloc.Status.State != instav1.AllocationClaimStatusCreated {
+		t.Fatalf("expected allocation state reset to Created, got %s", alloc.Status.State)
+	}
+}

@@ -137,6 +137,62 @@ func (s *Server) ListAndWatch(req *pluginapi.Empty, stream pluginapi.DevicePlugi
 		}
 	}
 
+	// Detect system reboot by comparing in-use allocations with on-disk CDI specs
+	// TODO : filter out CDI specs and AllocationClaims that are not relevant to this server's resource
+	// because it will race with other servers that will be running on the same node.
+	migProfile := profileFromResourceName(s.Manager.ResourceName)
+	migProfile = unsanitizeProfileName(migProfile)
+	key := fmt.Sprintf("%s/%s", s.NodeName, migProfile)
+
+	var inUseAllocs []*instav1.AllocationClaim
+	if allocationIndexer != nil {
+		s.allocMutex.Lock()
+		objs, err := allocationIndexer.ByIndex("node-MigProfile", key)
+		s.allocMutex.Unlock()
+		if err != nil {
+			klog.ErrorS(err, "failed to lookup allocations by index", "key", key)
+		} else {
+			for _, obj := range objs {
+				if a, ok := obj.(*instav1.AllocationClaim); ok {
+					if a.Status.State == instav1.AllocationClaimStatusInUse {
+						inUseAllocs = append(inUseAllocs, a)
+					}
+				}
+			}
+		}
+	}
+
+	if len(inUseAllocs) != len(initDevices) {
+		klog.InfoS("Detected reboot, resetting allocations", "resource", s.Manager.ResourceName, "inUse", len(inUseAllocs), "specs", len(initDevices))
+		for _, alloc := range inUseAllocs {
+			alloc.Status.State = instav1.AllocationClaimStatusCreated
+			updated := alloc
+			if s.InstasliceClient != nil {
+				var err error
+				updated, err = UpdateAllocationStatus(stream.Context(), s.InstasliceClient, alloc, instav1.AllocationClaimStatusCreated)
+				if err != nil {
+					klog.ErrorS(err, "failed to update allocation status", "allocation", alloc.Name)
+					continue
+				}
+			} else {
+				cond := metav1.Condition{
+					Type:               "State",
+					Status:             metav1.ConditionTrue,
+					Reason:             string(instav1.AllocationClaimStatusCreated),
+					Message:            fmt.Sprintf("Allocation is %s", instav1.AllocationClaimStatusCreated),
+					ObservedGeneration: alloc.Generation,
+				}
+				meta.SetStatusCondition(&updated.Status.Conditions, cond)
+			}
+
+			s.allocMutex.Lock()
+			if err := allocationIndexer.Update(updated); err != nil {
+				klog.ErrorS(err, "failed to update allocation in indexer", "allocation", updated.Name)
+			}
+			s.allocMutex.Unlock()
+		}
+	}
+
 	// send initial device list
 	if err := stream.Send(&pluginapi.ListAndWatchResponse{Devices: initDevices}); err != nil {
 		return fmt.Errorf("failed to send initial device list: %w", err)
