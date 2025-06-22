@@ -282,8 +282,27 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 					}
 					if _, err := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Create(ctx, cm, metav1.CreateOptions{}); err != nil {
 						if apierrors.IsAlreadyExists(err) {
-							if _, err := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Update(ctx, cm, metav1.UpdateOptions{}); err != nil {
-								klog.ErrorS(err, "failed to update ConfigMap", "configMap", cm.Name)
+							// Retrieve existing ConfigMap to append variables
+							existing, getErr := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Get(ctx, cm.Name, metav1.GetOptions{})
+							if getErr != nil {
+								klog.ErrorS(getErr, "failed to get existing ConfigMap", "configMap", cm.Name)
+							} else {
+								nvidiaValue := strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES=")
+								cudaValue := strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES=")
+
+								if v, ok := existing.Data["NVIDIA_VISIBLE_DEVICES"]; ok && v != "" {
+									nvidiaValue = fmt.Sprintf("%s,%s", v, nvidiaValue)
+								}
+								if v, ok := existing.Data["CUDA_VISIBLE_DEVICES"]; ok && v != "" {
+									cudaValue = fmt.Sprintf("%s,%s", v, cudaValue)
+								}
+
+								existing.Data["NVIDIA_VISIBLE_DEVICES"] = nvidiaValue
+								existing.Data["CUDA_VISIBLE_DEVICES"] = cudaValue
+
+								if _, err := s.KubeClient.CoreV1().ConfigMaps(existing.Namespace).Update(ctx, existing, metav1.UpdateOptions{}); err != nil {
+									klog.ErrorS(err, "failed to update ConfigMap", "configMap", existing.Name)
+								}
 							}
 						} else {
 							klog.ErrorS(err, "failed to create ConfigMap", "configMap", cm.Name)
