@@ -89,6 +89,19 @@ webhook, scheduler and device plugin (along with the CDI devices) behave normall
 development and CI where no hardware is available. The only limitation is
 that NVML calls used to create real MIG slices are skipped.
 
+
+```bash
+IMAGE_REGISTRY=<image_registry> IMAGE_TAG=<tag> make emulated-k8s
+```
+
+Apply `test/test-pod-emulated.yaml` to verify the operator in this mode:
+
+```bash
+kubectl apply -f test/test-pod-emulated.yaml
+```
+
+
+
 ## Debugging
 
 All components are deployed in the `das-operator` namespace. Check their
@@ -105,17 +118,39 @@ das-operator-webhook-7975df6958-qf5v7   1/1     Running   0          53s
 das-scheduler-7c5c648f6-rnmhc           1/1     Running   0          56s
 ```
 
-## Testing on OpenShift
-
-The `make emulated-ocp` target builds and deploys all components using the
-registry and tag specified via `IMAGE_REGISTRY` and `IMAGE_TAG`.
+Check the AllocationClaims in the `das-operator` namespace:
 
 ```console
-$ IMAGE_REGISTRY=quay.io/myrepo IMAGE_TAG=dev make emulated-ocp
+kubectl get allocationclaims -n das-operator
 ```
 
-This will push images under `quay.io/myrepo` and substitute those values in the
-deployment manifests before applying them to the cluster.
+Verif on the host if the CDI devices are created:
+
+```console
+ ls -l /var/run/cdi/
+```
+
+Change the cluster-wide log level by editing the `DASOperator` custom resource `kubectl edit -n das-operator dasoperators.inference.redhat.com cluster ` and setting the `operatorLogLevel` field to `Debug` or `Trace`. The default is `Info`.
+
+
+## Testing on OpenShift
+
+Emulated mode is useful for testing on OpenShift clusters where GPUs are not available.
+
+```console
+IMAGE_REGISTRY=<image_registry> IMAGE_TAG=<tag> make emulated-ocp
+```
+To install the operator with real GPUs,
+```
+IMAGE_REGISTRY=<image_registry> IMAGE_TAG=<tag> make gpu-ocp
+```
+
+When GPUs are available, you can validate the installation with:
+
+```bash
+kubectl apply -f test/test-pod.yaml
+```
+
 
 ## Running E2E tests
 
