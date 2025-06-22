@@ -8,6 +8,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/google/uuid"
 )
 
 // GenerateFakeCapacity returns a fake NodeAccelerator CR for emulated mode.
@@ -191,15 +193,17 @@ func generateFakeCapacityBase(nodeName, gpuName, memory string, placement map[st
 				},
 			},
 			NodeResources: func() runtime.RawExtension {
+				gpu1 := "GPU-" + uuid.NewString()
+				gpu2 := "GPU-" + uuid.NewString()
 				res := instav1.DiscoveredNodeResources{
 					NodeGPUs: []instav1.DiscoveredGPU{
 						{
-							GPUUUID:   "GPU-8d042338-e67f-9c48-92b4-5b55c7e5133c",
+							GPUUUID:   gpu1,
 							GPUName:   gpuName,
 							GPUMemory: resource.MustParse(memory),
 						},
 						{
-							GPUUUID:   "GPU-31cfe05c-ed13-cd17-d7aa-c63db5108c24",
+							GPUUUID:   gpu2,
 							GPUName:   gpuName,
 							GPUMemory: resource.MustParse(memory),
 						},
