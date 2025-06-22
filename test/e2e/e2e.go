@@ -24,7 +24,7 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-func gpuSlicePodSpec(profile string) corev1.PodSpec {
+func gpuSlicePodSpec(profile string, mode instav1.EmulatedMode) corev1.PodSpec {
 	return corev1.PodSpec{
 		SchedulerName: "das-scheduler",
 		Containers: []corev1.Container{
@@ -49,12 +49,13 @@ func gpuSlicePodSpec(profile string) corev1.PodSpec {
 }
 
 func defaultGPUSlicePodSpec() corev1.PodSpec {
-	return gpuSlicePodSpec("1g.5gb")
+	return gpuSlicePodSpec("1g.5gb", emulatedMode)
 }
 
 var (
-	kubeClient *kubernetes.Clientset
-	dasClient  *clientset.Clientset
+	kubeClient   *kubernetes.Clientset
+	dasClient    *clientset.Clientset
+	emulatedMode instav1.EmulatedMode
 )
 
 const (
@@ -82,6 +83,11 @@ var _ = BeforeSuite(func() {
 	if err != nil {
 		Skip("failed to create das client: " + err.Error())
 	}
+	instOp, err := dasClient.OpenShiftOperatorV1alpha1().DASOperators("das-operator").Get(context.Background(), "cluster", metav1.GetOptions{})
+	if err != nil {
+		Skip("failed to get DASOperator: " + err.Error())
+	}
+	emulatedMode = instOp.Spec.EmulatedMode
 })
 
 var _ = Describe("Test pods for requesting single type of extended resource", Ordered, func() {
@@ -275,7 +281,7 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 					Name:      fmt.Sprintf("multi-1g-%d", i),
 					Namespace: namespace,
 				},
-				Spec: gpuSlicePodSpec("1g.5gb"),
+				Spec: gpuSlicePodSpec("1g.5gb", emulatedMode),
 			})
 		}
 
@@ -285,7 +291,7 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 					Name:      fmt.Sprintf("multi-2g-%d", i),
 					Namespace: namespace,
 				},
-				Spec: gpuSlicePodSpec("2g.10gb"),
+				Spec: gpuSlicePodSpec("2g.10gb", emulatedMode),
 			})
 		}
 
@@ -327,7 +333,7 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 					Name:      "multi-over-2g",
 					Namespace: namespace,
 				},
-				Spec: gpuSlicePodSpec("2g.10gb"),
+				Spec: gpuSlicePodSpec("2g.10gb", emulatedMode),
 			},
 		}
 
