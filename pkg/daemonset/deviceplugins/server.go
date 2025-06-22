@@ -13,13 +13,17 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
+	"k8s.io/utils/pointer"
 
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	nvml "github.com/NVIDIA/go-nvml/pkg/nvml"
@@ -41,6 +45,7 @@ type Server struct {
 	Manager          *Manager
 	SocketPath       string
 	InstasliceClient instaclient.Interface
+	KubeClient       kubernetes.Interface
 	NodeName         string
 	EmulatedMode     instav1.EmulatedMode
 	allocMutex       sync.Mutex
@@ -56,8 +61,12 @@ func NewServer(mgr *Manager, socketPath string, kubeConfig *rest.Config, emulate
 	if err != nil {
 		return nil, fmt.Errorf("failed to create instaslice client: %w", err)
 	}
+	kubeClient, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
+	}
 	nodeName := os.Getenv("NODE_NAME")
-	return &Server{Manager: mgr, SocketPath: socketPath, InstasliceClient: client, NodeName: nodeName, EmulatedMode: emulatedMode}, nil
+	return &Server{Manager: mgr, SocketPath: socketPath, InstasliceClient: client, KubeClient: kubeClient, NodeName: nodeName, EmulatedMode: emulatedMode}, nil
 }
 
 func (s *Server) Start(ctx context.Context) error {
@@ -189,6 +198,43 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 				annotations = map[string]string{allocationAnnotationKey: string(data)}
 			} else {
 				klog.ErrorS(err, "failed to marshal allocation")
+			}
+			// Create a ConfigMap with the NVIDIA_VISIBLE_DEVICES value
+			if s.KubeClient != nil {
+				specObj, err := getAllocationClaimSpec(alloc)
+				if err != nil {
+					klog.ErrorS(err, "failed to decode allocation spec for configmap", "allocation", alloc.Name)
+				} else {
+					cm := &corev1.ConfigMap{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      specObj.PodRef.Name,
+							Namespace: specObj.PodRef.Namespace,
+							OwnerReferences: []metav1.OwnerReference{
+								{
+									APIVersion: "v1",
+									Kind:       "Pod",
+									Name:       specObj.PodRef.Name,
+									UID:        specObj.PodRef.UID,
+									Controller: pointer.Bool(true),
+								},
+							},
+						},
+						Data: map[string]string{
+							"NVIDIA_VISIBLE_DEVICES": strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES="),
+						},
+					}
+					if _, err := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Create(ctx, cm, metav1.CreateOptions{}); err != nil {
+						if apierrors.IsAlreadyExists(err) {
+							if _, err := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Update(ctx, cm, metav1.UpdateOptions{}); err != nil {
+								klog.ErrorS(err, "failed to update ConfigMap", "configMap", cm.Name)
+							}
+						} else {
+							klog.ErrorS(err, "failed to create ConfigMap", "configMap", cm.Name)
+						}
+					} else {
+						klog.InfoS("created ConfigMap for env var", "configMap", cm.Name)
+					}
+				}
 			}
 		} else {
 			envVar = "NVIDIA_VISIBLE_DEVICES=test"

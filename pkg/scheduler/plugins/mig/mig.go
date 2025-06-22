@@ -317,6 +317,8 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 						return framework.AsStatus(err)
 					}
 				}
+				// TODO - may be there is no need to have updates done here with the mutation lock, there is no race condition for updating the status
+				// in the scheduler. Removing lock could speed things up a bit.
 				if _, err := deviceplugins.UpdateAllocationStatus(ctx, p.instaClient, created, instav1alpha1.AllocationClaimStatusStaged); err != nil {
 					for _, ac := range claims {
 						_ = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})

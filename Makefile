@@ -115,26 +115,25 @@ clean:
 .PHONY: build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
 
 build-push-scheduler:
-	# docker build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG} .
-	# docker push ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
+	docker build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG} .
+	docker push ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
 
 build-push-daemonset:
 	docker build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG} .
 	docker push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
 
 build-push-operator:
-	# docker build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
-	# docker push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
+	docker build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
+	docker push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
 
 build-push-webhook:
-	# docker build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
-	# docker push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
+	docker build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
+	docker push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
 
 .PHONY: test-k8s
 test-k8s:
-	kubectl label node $$(kubectl get nodes -l node-role.kubernetes.io/worker \
-                                -o jsonpath='{range .items[*]}{.metadata.name}{" "}{end}') \
-        nvidia.com/mig.capable=true --overwrite
+	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') \
+		nvidia.com/mig.capable=true --overwrite
 
 	@echo "=== Building and pushing images in parallel ==="
 	$(MAKE) -j16 build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
