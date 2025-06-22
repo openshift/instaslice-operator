@@ -58,6 +58,12 @@ func defaultGPUSlicePodSpec() corev1.PodSpec {
 	return gpuSlicePodSpec("1g.5gb", emulatedMode)
 }
 
+func multiGPUSlicePodSpec(count int) corev1.PodSpec {
+	spec := gpuSlicePodSpec("1g.5gb", emulatedMode)
+	spec.Containers[0].Resources.Limits[corev1.ResourceName("mig.das.com/1g.5gb")] = resource.MustParse(fmt.Sprintf("%d", count))
+	return spec
+}
+
 var (
 	kubeClient   *kubernetes.Clientset
 	dasClient    *clientset.Clientset
@@ -65,8 +71,9 @@ var (
 )
 
 const (
-	testNamespace      = "das-e2e"
-	multiTestNamespace = "das-e2e-multi"
+	testNamespace          = "das-e2e"
+	multiTestNamespace     = "das-e2e-multi"
+	multiResourceNamespace = "das-e2e-multires"
 )
 
 var _ = BeforeSuite(func() {
@@ -257,6 +264,117 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 			}
 			return p.Status.Phase, nil
 		}, 60*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
+	})
+})
+
+var _ = Describe("Test pods requesting multiple resources", Ordered, func() {
+	var (
+		podNames  []string
+		namespace string
+	)
+
+	BeforeAll(func() {
+		if os.Getenv("KUBECONFIG") == "" {
+			Skip("KUBECONFIG is not set; skipping e2e test")
+		}
+	})
+
+	BeforeAll(func() {
+		namespace = multiResourceNamespace
+
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+		By("creating namespace " + namespace)
+		_, err := kubeClient.CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{})
+		if err != nil && !apierrors.IsAlreadyExists(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		podSpec := multiGPUSlicePodSpec(3)
+
+		pods := []*corev1.Pod{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "multi-resource-1",
+					Namespace: namespace,
+				},
+				Spec: podSpec,
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "multi-resource-2",
+					Namespace: namespace,
+				},
+				Spec: podSpec,
+			},
+		}
+
+		By("creating test pods")
+		Expect(createPods(context.Background(), namespace, pods)).To(Succeed())
+
+		for _, p := range pods {
+			podNames = append(podNames, p.Name)
+		}
+	})
+
+	AfterAll(func() {
+		By("deleting namespace " + namespace)
+		err := kubeClient.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() bool {
+			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
+			return apierrors.IsNotFound(err)
+		}, 2*time.Minute, time.Second).Should(BeTrue())
+	})
+
+	It("should be running", func(ctx SpecContext) {
+		for _, name := range podNames {
+			Eventually(func() (corev1.PodPhase, error) {
+				p, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+				if err != nil {
+					return "", err
+				}
+				return p.Status.Phase, nil
+			}, 60*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
+		}
+	})
+
+	It("should set NVIDIA_VISIBLE_DEVICES to 3 comma separated values", func(ctx SpecContext) {
+		for _, name := range podNames {
+			Eventually(func() (int, error) {
+				req := kubeClient.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{})
+				out, err := req.Do(ctx).Raw()
+				if err != nil {
+					return 0, err
+				}
+				for _, line := range strings.Split(string(out), "\n") {
+					if strings.HasPrefix(line, "NVIDIA_VISIBLE_DEVICES=") {
+						val := strings.TrimPrefix(line, "NVIDIA_VISIBLE_DEVICES=")
+						return len(strings.Split(strings.TrimSpace(val), ",")), nil
+					}
+				}
+				return 0, fmt.Errorf("env var not found")
+			}, 2*time.Minute, 5*time.Second).Should(Equal(3))
+		}
+	})
+
+	It("should set CUDA_VISIBLE_DEVICES to 3 comma separated values", func(ctx SpecContext) {
+		for _, name := range podNames {
+			Eventually(func() (int, error) {
+				req := kubeClient.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{})
+				out, err := req.Do(ctx).Raw()
+				if err != nil {
+					return 0, err
+				}
+				for _, line := range strings.Split(string(out), "\n") {
+					if strings.HasPrefix(line, "CUDA_VISIBLE_DEVICES=") {
+						val := strings.TrimPrefix(line, "CUDA_VISIBLE_DEVICES=")
+						return len(strings.Split(strings.TrimSpace(val), ",")), nil
+					}
+				}
+				return 0, fmt.Errorf("env var not found")
+			}, 2*time.Minute, 5*time.Second).Should(Equal(3))
+		}
 	})
 })
 
