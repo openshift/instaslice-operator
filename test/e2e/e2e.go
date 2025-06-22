@@ -40,8 +40,8 @@ func gpuSlicePodSpec(profile string) corev1.PodSpec {
 				SecurityContext: &corev1.SecurityContext{
 					AllowPrivilegeEscalation: pointer.Bool(false),
 					Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
-					RunAsNonRoot:             pointer.Bool(true),
-					SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+					// RunAsNonRoot:             pointer.Bool(true),
+					SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 				},
 			},
 		},

@@ -472,7 +472,7 @@ func BuildCDIDevices(kind, sanitizedClass, id string, annotations map[string]str
 	specNameBase := fmt.Sprintf("%s_%s", sanitizedClass, id)
 	specName := specNameBase + ".cdi.json"
 
-	dynamicDir := cdi.DefaultStaticDir
+	dynamicDir := cdi.DefaultDynamicDir
 	dirs := cdi.GetDefaultCache().GetSpecDirectories()
 	if len(dirs) > 0 {
 		dynamicDir = dirs[len(dirs)-1]
