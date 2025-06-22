@@ -44,6 +44,28 @@ func newTestPod(uid, profile string) *corev1.Pod {
 	}
 }
 
+func newCountPod(uid, profile string, count int) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:       types.UID(uid),
+			Name:      "pod-" + uid,
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name: "c1",
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceName("mig.das.com/" + profile): resource.MustParse(strconv.Itoa(count)),
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func newInitContainerPod(uid, profile string) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -236,9 +258,10 @@ func TestGPUAllocatedSlicesNilIndexer(t *testing.T) {
 
 func TestFilter(t *testing.T) {
 	cases := []struct {
-		name   string
-		setup  func() (*Plugin, *corev1.Pod, *framework.NodeInfo)
-		expect framework.Code
+		name     string
+		setup    func() (*Plugin, *corev1.Pod, *framework.NodeInfo)
+		expect   framework.Code
+		validate func(*testing.T, *Plugin)
 	}{
 		{
 			name: "success",
@@ -334,6 +357,26 @@ func TestFilter(t *testing.T) {
 				return p, pod, ni
 			},
 			expect: framework.Success,
+		},
+		{
+			name: "multi count",
+			// Single container requests the same profile multiple times via the
+			// extended resource quantity. Filter should create one claim per count.
+			setup: func() (*Plugin, *corev1.Pod, *framework.NodeInfo) {
+				inst := utils.GenerateFakeCapacity("node1")
+				p := newPlugin(inst)
+				pod := newCountPod("mc", "1g.5gb", 2)
+				ni := framework.NewNodeInfo()
+				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
+				return p, pod, ni
+			},
+			expect: framework.Success,
+			validate: func(t *testing.T, p *Plugin) {
+				allocs, _ := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).List(context.Background(), metav1.ListOptions{})
+				if len(allocs.Items) != 2 {
+					t.Fatalf("expected 2 AllocationClaims, got %d", len(allocs.Items))
+				}
+			},
 		},
 		{
 			name: "node not found",
@@ -479,6 +522,9 @@ func TestFilter(t *testing.T) {
 			}
 			if code != tc.expect {
 				t.Fatalf("expected %v, got %v", tc.expect, code)
+			}
+			if tc.validate != nil {
+				tc.validate(t, p)
 			}
 		})
 	}

@@ -426,13 +426,19 @@ func (p *Plugin) ScoreExtensions() framework.ScoreExtensions { return nil }
 
 func extractProfileNames(limits corev1.ResourceList) []string {
 	var profiles []string
-	for k := range limits {
+	for k, v := range limits {
 		key := k.String()
 		if strings.Contains(key, "nvidia.com/mig-") || strings.Contains(key, "mig.das.com/") {
 			re := regexp.MustCompile(`(\d+g\.\d+gb)`)
 			match := re.FindStringSubmatch(key)
 			if len(match) > 1 {
-				profiles = append(profiles, match[1])
+				count := v.Value()
+				if count < 1 {
+					count = 1
+				}
+				for i := int64(0); i < count; i++ {
+					profiles = append(profiles, match[1])
+				}
 			}
 		}
 	}
