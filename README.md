@@ -19,11 +19,17 @@ device plugin running on each node:
 ### MIG scheduler plugin
 
 The scheduler plugin lives in [`pkg/scheduler/plugins/mig/mig.go`](pkg/scheduler/plugins/mig/mig.go).
-It implements the `Filter` phase of the Kubernetes
-scheduler framework. During `Filter` the plugin verifies that a node is MIG
-capable, selects suitable GPUs and creates `AllocationClaim` objects in a staged
-state. After all profiles are successfully allocated the claims are promoted to
-`created` so the device plugin can provision the slices on the target node.
+It integrates with the Kubernetes scheduler via three framework phases:
+
+* **Filter** – ensures the node is MIG capable, removes any stale
+  `AllocationClaim`s for the pod and stages new claims for suitable GPUs.
+* **Score** – favors nodes with the most free MIG slice slots after taking all
+  `AllocationClaim`s (including staged ones) into account.
+* **PreBind** – promotes the staged claims on the chosen node to `created` and
+  removes any claims on the nodes that were not selected.
+
+Once the claims are promoted to `created` the device plugin can provision the
+required slices on the target node.
 
 
 ### AllocationClaim resource
