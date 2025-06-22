@@ -14,34 +14,7 @@ scheduler then delegates GPU placement to a plugin that tracks available MIG
 slices and creates `AllocationClaim` objects which are later processed by the
 device plugin running on each node:
 
-```mermaid
-sequenceDiagram
-    participant Pod
-    participant DAS Webhook
-    participant DAS Scheduler
-    participant Mig Scheduler Plugin
-    participant Kubelet
-    participant Device Plugin
-
-    Pod->>DAS Webhook: Pod Submission
-    Note over DAS Webhook: Add Secondary Sheduler
-    Note over DAS Webhook: Mutate extendd resource <br/> nvidia.com  to mig.das.com
-
-    Note over DAS Scheduler: Filter nodes based on <br/> NodeResources, Affinity, <br/> Tolerations etc.
-    DAS Scheduler->>Mig Scheduler Plugin:
-
-    Note over Mig Scheduler Plugin: Filter nodes with <br/> available GPUs and stage AllocationClaims
-    Mig Scheduler Plugin->>DAS Scheduler:
-    DAS Scheduler->>Pod:
-    Pod->>Kubelet:
-
-    Kubelet ->> Device Plugin: Allocate
-    Note over Device Plugin: Select from pending <br/>AllocationClaims
-    Note over Device Plugin: Create a CDI spec <br/>(auto destruct <br/>on container removal)
-    Note over Device Plugin: Create the MIG Slice
-
-    Device Plugin ->> Kubelet:
-```
+![DAS Architecture](docs/images/arch.png)
 
 ### MIG scheduler plugin
 
