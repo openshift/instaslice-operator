@@ -216,7 +216,7 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 	if val, ok := node.Labels["nvidia.com/mig.capable"]; !ok || val != "true" {
 		return framework.NewStatus(framework.Unschedulable, "node not MIG capable")
 	}
-	klog.V(4).InfoS("checking MIG availability", "pod", klog.KObj(pod), "node", node.Name)
+	klog.InfoS("checking MIG availability", "pod", klog.KObj(pod), "node", node.Name)
 
 	instObj, err := p.instasliceLister.NodeAccelerators(p.namespace).Get(node.Name)
 	if err != nil {
@@ -232,13 +232,26 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 		}
 	}
 
-	// remove any existing claims for this pod
+	// remove any existing claims for this pod on this node
 	if p.allocationIndexer != nil {
 		items, err := p.allocationIndexer.ByIndex("pod-uid", string(pod.UID))
 		if err == nil {
 			for _, obj := range items {
-				if ac, ok := obj.(*instav1alpha1.AllocationClaim); ok {
-					_ = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+				ac, ok := obj.(*instav1alpha1.AllocationClaim)
+				if !ok {
+					continue
+				}
+				spec, err := getAllocationClaimSpec(ac)
+				if err != nil {
+					klog.ErrorS(err, "decoding AllocationClaim", "alloc", klog.KObj(ac))
+					continue
+				}
+				if string(spec.Nodename) == node.Name {
+					klog.InfoS("removing stale AllocationClaim for pod", "pod", klog.KObj(pod), "claim", klog.KObj(ac))
+					if err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+						klog.ErrorS(err, "failed to delete existing AllocationClaim", "AllocationClaim", klog.KObj(ac))
+						return framework.AsStatus(err)
+					}
 				}
 			}
 		}
@@ -298,32 +311,71 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 				rawSpec, _ := json.Marshal(&specObj)
 				alloc := &instav1alpha1.AllocationClaim{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      fmt.Sprintf("%s-%s-%d", pod.GetUID(), c.Name, j),
+						Name:      fmt.Sprintf("%s-%s-%s-%d", pod.GetUID(), node.Name, c.Name, j),
 						Namespace: p.namespace,
 					},
 					Spec: runtime.RawExtension{Raw: rawSpec},
 				}
 				created, err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).Create(ctx, alloc, metav1.CreateOptions{})
 				if err != nil {
+					klog.ErrorS(err, "failed to create AllocationClaim", "AllocationClaim", klog.KObj(alloc))
 					if apierrors.IsAlreadyExists(err) {
 						created, err = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).Get(ctx, alloc.Name, metav1.GetOptions{})
 						if err != nil {
+							klog.ErrorS(err, "failed to get AllocationClaim", "AllocationClaim", klog.KObj(alloc))
 							return framework.AsStatus(err)
 						}
 					} else {
 						for _, ac := range claims {
-							_ = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+							specAC, err2 := getAllocationClaimSpec(ac)
+							if err2 != nil {
+								klog.ErrorS(err2, "decoding AllocationClaim", "alloc", klog.KObj(ac))
+								continue
+							}
+							if string(specAC.Nodename) != node.Name {
+								continue
+							}
+							klog.Info("deleting other AllocationClaim", "AllocationClaim", klog.KObj(ac))
+							err = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+							if err != nil && !apierrors.IsNotFound(err) {
+								klog.ErrorS(err, "failed to delete other AllocationClaim", "AllocationClaim", klog.KObj(ac))
+								return framework.AsStatus(err)
+							}
 						}
+						klog.ErrorS(err, "failed to delete created AllocationClaim", "AllocationClaim", klog.KObj(created))
 						return framework.AsStatus(err)
 					}
 				}
 				// TODO - may be there is no need to have updates done here with the mutation lock, there is no race condition for updating the status
 				// in the scheduler. Removing lock could speed things up a bit.
 				if _, err := deviceplugins.UpdateAllocationStatus(ctx, p.instaClient, created, instav1alpha1.AllocationClaimStatusStaged); err != nil {
+					klog.ErrorS(err, "failed to update AllocationClaim status to Staged", "AllocationClaim", klog.KObj(created))
 					for _, ac := range claims {
-						_ = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+						specAC, err2 := getAllocationClaimSpec(ac)
+						if err2 != nil {
+							klog.ErrorS(err2, "decoding AllocationClaim", "alloc", klog.KObj(ac))
+							continue
+						}
+						if string(specAC.Nodename) != node.Name {
+							continue
+						}
+						klog.Info("deleting staged AllocationClaim", "AllocationClaim", klog.KObj(ac))
+						err = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+						if err != nil && !apierrors.IsNotFound(err) {
+							klog.ErrorS(err, "failed to delete staged AllocationClaim", "AllocationClaim", klog.KObj(ac))
+							return framework.AsStatus(err)
+						}
 					}
-					_ = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(created.Namespace).Delete(ctx, created.Name, metav1.DeleteOptions{})
+					specCreated, err3 := getAllocationClaimSpec(created)
+					if err3 != nil {
+						klog.ErrorS(err3, "decoding AllocationClaim", "alloc", klog.KObj(created))
+					} else if string(specCreated.Nodename) == node.Name {
+						err2 := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(created.Namespace).Delete(ctx, created.Name, metav1.DeleteOptions{})
+						if err2 != nil && !apierrors.IsNotFound(err2) {
+							klog.ErrorS(err2, "failed to delete created AllocationClaim", "AllocationClaim", klog.KObj(created))
+							return framework.AsStatus(err2)
+						}
+					}
 					return framework.AsStatus(err)
 				}
 				for i := int32(0); i < size; i++ {
@@ -332,21 +384,34 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 				gpuAllocated[gpu.GPUUUID] = idx
 				claims = append(claims, created)
 				allocated = true
-				klog.V(4).InfoS("selected GPU", "uuid", gpu.GPUUUID, "profile", profileName, "node", node.Name, "container", c.Name)
+				klog.InfoS("selected GPU", "uuid", gpu.GPUUUID, "profile", profileName, "node", node.Name, "container", c.Name)
 				break
 			}
 			if !allocated {
-				klog.V(4).InfoS("no GPU available", "pod", klog.KObj(pod), "node", node.Name)
+				klog.InfoS("no GPU available", "pod", klog.KObj(pod), "node", node.Name)
 				for _, ac := range claims {
-					_ = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+					specAC, err2 := getAllocationClaimSpec(ac)
+					if err2 != nil {
+						klog.ErrorS(err2, "decoding AllocationClaim", "alloc", klog.KObj(ac))
+						continue
+					}
+					if string(specAC.Nodename) != node.Name {
+						continue
+					}
+					err = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+					if err != nil && !apierrors.IsNotFound(err) {
+						klog.ErrorS(err, "failed to delete staged AllocationClaim", "AllocationClaim", klog.KObj(ac))
+						return framework.AsStatus(err)
+					}
 				}
+				klog.InfoS("no GPU available for pod", "pod", klog.KObj(pod), "node", node.Name)
 				return framework.NewStatus(framework.Unschedulable, "no GPU available")
 			}
 		}
 	}
 
 	if len(claims) > 0 {
-		klog.V(4).InfoS("instaslice GPU staged", "pod", klog.KObj(pod), "node", node.Name)
+		klog.InfoS("AllocationClaims staged", "pod", klog.KObj(pod), "node", node.Name, "claims", claims)
 	}
 	return nil
 }
@@ -384,15 +449,22 @@ func (p *Plugin) Score(ctx context.Context, state *framework.CycleState, pod *co
 		return 0, nil
 	}
 	score := int64(freeSlots) * framework.MaxNodeScore / int64(totalSlots)
+	klog.InfoS("scoring node", "node", nodeName, "freeSlots", freeSlots, "totalSlots", totalSlots, "score", score)
 	return score, nil
 }
 
 // PreBind finalizes AllocationClaims on the chosen node and cleans up staged
 // claims on the other nodes.
 func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *corev1.Pod, nodeName string) *framework.Status {
+	klog.InfoS("pre-binding pod to node", "pod", klog.KObj(pod), "node", nodeName)
 	items, err := p.allocationIndexer.ByIndex("pod-uid", string(pod.UID))
 	if err != nil {
 		return framework.AsStatus(err)
+	}
+
+	if len(items) == 0 {
+		klog.InfoS("no staged AllocationClaims found for pod", "pod", klog.KObj(pod), "node", nodeName)
+		return framework.AsStatus(fmt.Errorf("no staged AllocationClaims found for pod %s on node %s", pod.Name, nodeName))
 	}
 	for _, obj := range items {
 		alloc, ok := obj.(*instav1alpha1.AllocationClaim)
