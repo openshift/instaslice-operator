@@ -12,6 +12,7 @@ Dynamic Accelerator Slicer (DAS) is an operator that dynamically partitions GPU 
   - [AllocationClaim resource](#allocationclaim-resource)
 - [Debugging](#debugging)
 - [Running E2E tests](#running-e2e-tests)
+- [Uninstalling](#uninstalling)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -135,6 +136,14 @@ You can focus on specific tests:
 
 ```console
 make test-e2e FOCUS="GPU slices"
+```
+
+## Uninstalling
+
+Remove the deployed resources with:
+
+```bash
+make cleanup-k8s
 ```
 
 ## Contributing
