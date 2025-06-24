@@ -91,17 +91,10 @@ type RealMigGpuDiscoverer struct {
 var _ MigGpuDiscoverer = &RealMigGpuDiscoverer{}
 
 func (r *RealMigGpuDiscoverer) Discover() (*instav1.NodeAccelerator, error) {
-	if ret := nvml.Init(); ret != nvml.SUCCESS {
-		err := fmt.Errorf("unable to initialize NVML: %v", ret)
-		klog.ErrorS(err, "NVML initialization failed", "returnCode", ret)
+	if err := EnsureNvmlInitialized(); err != nil {
+		klog.ErrorS(err, "NVML initialization failed")
 		return nil, err
 	}
-	klog.InfoS("NVML initialized successfully")
-	defer func() {
-		if ret := nvml.Shutdown(); ret != nvml.SUCCESS {
-			klog.ErrorS(fmt.Errorf("nvml shutdown failed: %v", ret), "nvml shutdown")
-		}
-	}()
 
 	// Ensure Instaslice CR exists
 	instaslice := &instav1.NodeAccelerator{

@@ -23,6 +23,7 @@ import (
 	versioned "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 
 	nvml "github.com/NVIDIA/go-nvml/pkg/nvml"
+	deviceplugins "github.com/openshift/instaslice-operator/pkg/daemonset/deviceplugins"
 
 	cdiapi "tags.cncf.io/container-device-interface/pkg/cdi"
 	cdispec "tags.cncf.io/container-device-interface/specs-go"
@@ -201,14 +202,9 @@ func deleteMigSlice(uuid string) error {
 		return nil
 	}
 
-	if ret := nvml.Init(); ret != nvml.SUCCESS {
-		return fmt.Errorf("nvml init failed: %v", ret)
+	if err := deviceplugins.EnsureNvmlInitialized(); err != nil {
+		return err
 	}
-	defer func() {
-		if ret := nvml.Shutdown(); ret != nvml.SUCCESS {
-			klog.ErrorS(fmt.Errorf("nvml shutdown failed: %v", ret), "nvml shutdown")
-		}
-	}()
 
 	migDev, ret := nvml.DeviceGetHandleByUUID(uuid)
 	if ret != nvml.SUCCESS {

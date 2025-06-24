@@ -416,14 +416,9 @@ func (s *Server) createMigSlice(alloc *instav1.AllocationClaim) (string, error) 
 		return "", fmt.Errorf("profile %s not found", spec.Profile)
 	}
 
-	if ret := nvml.Init(); ret != nvml.SUCCESS {
-		return "", fmt.Errorf("nvml init failed: %v", ret)
+	if err := EnsureNvmlInitialized(); err != nil {
+		return "", err
 	}
-	defer func() {
-		if ret := nvml.Shutdown(); ret != nvml.SUCCESS {
-			klog.ErrorS(fmt.Errorf("nvml shutdown failed: %v", ret), "nvml shutdown")
-		}
-	}()
 
 	dev, ret := nvml.DeviceGetHandleByUUID(spec.GPUUUID)
 	if ret != nvml.SUCCESS {

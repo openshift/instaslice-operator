@@ -21,6 +21,7 @@ import (
 
 func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) error {
 	klog.InfoS("RunDaemonset started")
+	defer deviceplugins.ShutdownNvml()
 	// Configure the CDI cache once so both the device plugin and watcher
 	// operate on the same instance.
 	if err := cdi.Configure(cdi.WithSpecDirs(cdi.DefaultDynamicDir)); err != nil {
