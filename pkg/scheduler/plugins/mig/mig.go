@@ -77,7 +77,7 @@ func cleanupAllocationClaims(ctx context.Context, client instaclient.Interface, 
 
 // registerPodDeleteHandlerFunc attaches a delete handler to the podInformer to cleanup stale AllocationClaims.
 func registerPodDeleteHandlerFunc(podInformer cache.SharedIndexInformer, client instaclient.Interface, indexer cache.Indexer, ctx context.Context) {
-	podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	if _, err := podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj interface{}) {
 			var pod *corev1.Pod
 			switch t := obj.(type) {
@@ -94,7 +94,9 @@ func registerPodDeleteHandlerFunc(podInformer cache.SharedIndexInformer, client 
 			}
 			cleanupAllocationClaims(ctx, client, indexer, pod)
 		},
-	})
+	}); err != nil {
+		klog.ErrorS(err, "failed to add pod delete handler")
+	}
 }
 
 // registerPodDeleteHandler watches for Pod deletions and invokes cleanupAllocationClaims.
@@ -263,7 +265,7 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 	}
 
 	// Build container list
-	var containers []corev1.Container
+	containers := make([]corev1.Container, 0, len(pod.Spec.Containers)+len(pod.Spec.InitContainers)+len(pod.Spec.EphemeralContainers))
 	containers = append(containers, pod.Spec.Containers...)
 	containers = append(containers, pod.Spec.InitContainers...)
 	for _, ec := range pod.Spec.EphemeralContainers {

@@ -23,8 +23,8 @@ import (
 
 	"github.com/openshift/instaslice-operator/bindata"
 	slicev1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
-       instasliceoperatorv1alphaclientset "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1"
-       operatorclientv1alpha1informers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions/dasoperator/v1alpha1"
+	instasliceoperatorv1alphaclientset "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1"
+	operatorclientv1alpha1informers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions/dasoperator/v1alpha1"
 
 	"github.com/openshift/instaslice-operator/pkg/operator/operatorclient"
 	"github.com/openshift/library-go/pkg/controller/factory"
@@ -49,7 +49,6 @@ type TargetConfigReconciler struct {
 	dynamicClient              dynamic.Interface
 	eventRecorder              events.Recorder
 	generations                []operatorsv1.GenerationStatus
-	instasliceInformer         operatorclientv1alpha1informers.NodeAcceleratorInformer
 	instasliceoperatorClient   *operatorclient.DASOperatorSetClient
 	kubeClient                 kubernetes.Interface
 	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces

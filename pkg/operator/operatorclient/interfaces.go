@@ -17,9 +17,9 @@ import (
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 
 	instasliceoperatorapiv1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
-       instasliceoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/applyconfiguration/dasoperator/v1alpha1"
-       instasliceoperatorinterface "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1"
-       dasoperatorlisterv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/listers/dasoperator/v1alpha1"
+	instasliceoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/applyconfiguration/dasoperator/v1alpha1"
+	instasliceoperatorinterface "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1"
+	dasoperatorlisterv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/listers/dasoperator/v1alpha1"
 )
 
 const OperatorConfigName = "cluster"

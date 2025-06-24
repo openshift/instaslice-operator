@@ -59,27 +59,27 @@ func (s *InstasliceWebhook) Validate(req admissionctl.Request) bool {
 // Authorized implements Webhook interface
 func (s *InstasliceWebhook) Authorized(request admissionctl.Request) admissionctl.Response {
 	var ret admissionctl.Response
-	klog.InfoS("Webhook Authorized called", "uid", request.AdmissionRequest.UID, "kind", request.Kind.Kind)
+	klog.InfoS("Webhook Authorized called", "uid", request.UID, "kind", request.Kind.Kind)
 
 	pod, err := s.renderPod(request)
 	if err != nil {
-		klog.ErrorS(err, "Failed to render Pod from request", "uid", request.AdmissionRequest.UID)
+		klog.ErrorS(err, "Failed to render Pod from request", "uid", request.UID)
 		ret = admissionctl.Errored(http.StatusBadRequest, err)
-		ret.UID = request.AdmissionRequest.UID
+		ret.UID = request.UID
 		return ret
 	}
 
 	mutatePod, err := s.mutatePod(pod)
 	if err != nil {
-		klog.ErrorS(err, "Pod mutation failed", "uid", request.AdmissionRequest.UID)
+		klog.ErrorS(err, "Pod mutation failed", "uid", request.UID)
 		ret = admissionctl.Errored(http.StatusBadRequest, err)
-		ret.UID = request.AdmissionRequest.UID
+		ret.UID = request.UID
 		return ret
 	}
 
-	klog.V(4).InfoS("Returning patch response for Pod", "uid", request.AdmissionRequest.UID)
+	klog.V(4).InfoS("Returning patch response for Pod", "uid", request.UID)
 	ret = admissionctl.PatchResponseFromRaw(request.Object.Raw, mutatePod)
-	ret.UID = request.AdmissionRequest.UID
+	ret.UID = request.UID
 	return ret
 }
 
@@ -136,7 +136,7 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 // preferred, otherwise, the Object will be preferred.
 func (s *InstasliceWebhook) renderPod(request admissionctl.Request) (*corev1.Pod, error) {
 	var err error
-	klog.V(4).InfoS("Rendering Pod from request", "uid", request.AdmissionRequest.UID)
+	klog.V(4).InfoS("Rendering Pod from request", "uid", request.UID)
 	decoder := admissionctl.NewDecoder(scheme)
 	pod := &corev1.Pod{}
 	if len(request.OldObject.Raw) > 0 {

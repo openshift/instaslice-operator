@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	kubernetes "k8s.io/client-go/kubernetes"
@@ -289,7 +289,7 @@ func (s *Server) prepareEnv(ctx context.Context, alloc *instav1.AllocationClaim)
 
 	if alloc != nil {
 		if s.EmulatedMode == instav1.EmulatedModeDisabled {
-			uuid, err := s.createMigSlice(ctx, alloc)
+			uuid, err := s.createMigSlice(alloc)
 			if err != nil {
 				klog.ErrorS(err, "failed to create MIG slice")
 				return "", nil, err
@@ -330,7 +330,7 @@ func (s *Server) ensureEnvConfigMap(ctx context.Context, alloc *instav1.Allocati
 					Kind:       "Pod",
 					Name:       specObj.PodRef.Name,
 					UID:        specObj.PodRef.UID,
-					Controller: pointer.Bool(true),
+					Controller: ptr.To(true),
 				},
 			},
 		},
@@ -406,7 +406,7 @@ func (s *Server) markAllocationInUse(ctx context.Context, alloc *instav1.Allocat
 // createMigSlice uses the NVML library to create a MIG slice as specified by
 // the AllocationClaim. It looks up the GI and CI profile IDs from the
 // discovered node resources stored in the Manager.
-func (s *Server) createMigSlice(ctx context.Context, alloc *instav1.AllocationClaim) (string, error) {
+func (s *Server) createMigSlice(alloc *instav1.AllocationClaim) (string, error) {
 	spec, err := getAllocationClaimSpec(alloc)
 	if err != nil {
 		return "", err
@@ -419,7 +419,11 @@ func (s *Server) createMigSlice(ctx context.Context, alloc *instav1.AllocationCl
 	if ret := nvml.Init(); ret != nvml.SUCCESS {
 		return "", fmt.Errorf("nvml init failed: %v", ret)
 	}
-	defer nvml.Shutdown()
+	defer func() {
+		if ret := nvml.Shutdown(); ret != nvml.SUCCESS {
+			klog.ErrorS(fmt.Errorf("nvml shutdown failed: %v", ret), "nvml shutdown")
+		}
+	}()
 
 	dev, ret := nvml.DeviceGetHandleByUUID(spec.GPUUUID)
 	if ret != nvml.SUCCESS {
@@ -439,20 +443,28 @@ func (s *Server) createMigSlice(ctx context.Context, alloc *instav1.AllocationCl
 
 	ciInfo, ret := gpuInst.GetComputeInstanceProfileInfo(int(mig.CIProfileID), 0)
 	if ret != nvml.SUCCESS {
-		gpuInst.Destroy()
+		if ret := gpuInst.Destroy(); ret != nvml.SUCCESS {
+			klog.ErrorS(fmt.Errorf("destroy gpu instance: %v", ret), "destroy gpu instance")
+		}
 		return "", fmt.Errorf("get CI profile info: %v", ret)
 	}
 
 	ci, ret := gpuInst.CreateComputeInstance(&ciInfo)
 	if ret != nvml.SUCCESS {
-		gpuInst.Destroy()
+		if ret := gpuInst.Destroy(); ret != nvml.SUCCESS {
+			klog.ErrorS(fmt.Errorf("destroy gpu instance: %v", ret), "destroy gpu instance")
+		}
 		return "", fmt.Errorf("create compute instance: %v", ret)
 	}
 
 	uuid, err := migUUIDFromInstance(dev, gpuInst, ci)
 	if err != nil {
-		ci.Destroy()
-		gpuInst.Destroy()
+		if ret := ci.Destroy(); ret != nvml.SUCCESS {
+			klog.ErrorS(fmt.Errorf("destroy compute instance: %v", ret), "destroy compute instance")
+		}
+		if ret := gpuInst.Destroy(); ret != nvml.SUCCESS {
+			klog.ErrorS(fmt.Errorf("destroy gpu instance: %v", ret), "destroy gpu instance")
+		}
 		return "", err
 	}
 
@@ -682,7 +694,3 @@ func WriteCDISpecForResource(resourceName string, id string, annotations map[str
 // writeCDISpecForResource is kept for backwards compatibility with older code.
 // It simply calls the exported WriteCDISpecForResource function and discards the
 // returned spec path.
-func (s *Server) writeCDISpecForResource(resourceName string, id string) ([]*pluginapi.CDIDevice, error) {
-	_, devices, err := WriteCDISpecForResource(resourceName, id, nil, "")
-	return devices, err
-}

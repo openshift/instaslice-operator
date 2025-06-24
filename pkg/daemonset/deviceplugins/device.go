@@ -149,7 +149,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 		return err
 	}
 
-	allocInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	if _, err = allocInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			a, ok := obj.(*instav1.AllocationClaim)
 			if !ok {
@@ -163,7 +163,10 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 			// Perform a simple action on AllocationClaim creation. For now we just log it.
 			klog.InfoS("AllocationClaim created", "name", a.Name, "node", spec.Nodename, "Spec", spec)
 		},
-	})
+	}); err != nil {
+		klog.ErrorS(err, "Failed to add AllocationClaim handler")
+		return err
+	}
 
 	// Start the informer in a separate goroutine.
 	allocInformerFactory.Start(ctx.Done())
@@ -180,7 +183,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 
 	// define the extended resources to serve based on the discovered
 	// NodeAccelerator resources
-	var resourceNames []string
+	resourceNames := make([]string, 0, len(discovered.MigPlacement))
 	for profile := range discovered.MigPlacement {
 		sanitizedProfile := sanitizeProfileName(profile)
 		resourceNames = append(resourceNames, fmt.Sprintf("mig.das.com/%s", sanitizedProfile))

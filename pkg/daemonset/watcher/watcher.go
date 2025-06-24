@@ -94,7 +94,11 @@ func SetupCDIDeletionWatcher(ctx context.Context, dir string, cache *CDICache, c
 	}
 
 	go func() {
-		defer w.Close()
+		defer func() {
+			if err := w.Close(); err != nil {
+				klog.ErrorS(err, "failed to close watcher")
+			}
+		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -153,10 +157,8 @@ func processDeviceRemoval(ctx context.Context, dev cdispec.Device, path string, 
 		switch {
 		case strings.HasPrefix(e, "NVIDIA_VISIBLE_DEVICES="):
 			migUUID = strings.TrimPrefix(e, "NVIDIA_VISIBLE_DEVICES=")
-			break
 		case strings.HasPrefix(e, "MIG_UUID="):
 			migUUID = strings.TrimPrefix(e, "MIG_UUID=")
-			break
 		}
 	}
 	if migUUID != "" && os.Getenv("EMULATED_MODE") != string(instav1.EmulatedModeEnabled) {
@@ -202,7 +204,11 @@ func deleteMigSlice(uuid string) error {
 	if ret := nvml.Init(); ret != nvml.SUCCESS {
 		return fmt.Errorf("nvml init failed: %v", ret)
 	}
-	defer nvml.Shutdown()
+	defer func() {
+		if ret := nvml.Shutdown(); ret != nvml.SUCCESS {
+			klog.ErrorS(fmt.Errorf("nvml shutdown failed: %v", ret), "nvml shutdown")
+		}
+	}()
 
 	migDev, ret := nvml.DeviceGetHandleByUUID(uuid)
 	if ret != nvml.SUCCESS {
@@ -275,7 +281,7 @@ func SetupPodDeletionWatcher(ctx context.Context, client kubernetes.Interface, n
 	)
 
 	informer := factory.Core().V1().Pods().Informer()
-	informer.AddEventHandler(kcache.ResourceEventHandlerFuncs{
+	if _, err := informer.AddEventHandler(kcache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj interface{}) {
 			var pod *corev1.Pod
 			switch t := obj.(type) {
@@ -290,16 +296,18 @@ func SetupPodDeletionWatcher(ctx context.Context, client kubernetes.Interface, n
 			default:
 				return
 			}
-			handlePodDeletion(ctx, pod, cache)
+			handlePodDeletion(pod, cache)
 		},
-	})
+	}); err != nil {
+		return err
+	}
 
 	factory.Start(ctx.Done())
 	return nil
 }
 
 // handlePodDeletion removes all CDI spec files referencing the given pod UID.
-func handlePodDeletion(ctx context.Context, pod *corev1.Pod, cache *CDICache) {
+func handlePodDeletion(pod *corev1.Pod, cache *CDICache) {
 	if pod == nil {
 		return
 	}

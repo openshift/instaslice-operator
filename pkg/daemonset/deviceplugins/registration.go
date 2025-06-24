@@ -46,7 +46,9 @@ func (r *Registrar) Start(ctx context.Context) {
 		cc.Connect()
 		if !cc.WaitForStateChange(dialCtx, connectivity.Idle) {
 			dialCancel()
-			cc.Close()
+			if err := cc.Close(); err != nil {
+				klog.ErrorS(err, "failed to close gRPC client")
+			}
 			klog.ErrorS(dialCtx.Err(), "Failed to connect to kubelet socket; retrying", "socket", pluginapi.KubeletSocket)
 			time.Sleep(time.Second)
 			continue
@@ -61,7 +63,9 @@ func (r *Registrar) Start(ctx context.Context) {
 		regCtx, regCancel := context.WithTimeout(ctx, 5*time.Second)
 		_, err = client.Register(regCtx, req)
 		regCancel()
-		cc.Close()
+		if errClose := cc.Close(); errClose != nil {
+			klog.ErrorS(errClose, "failed to close gRPC client")
+		}
 		if err != nil {
 			klog.ErrorS(err, "Registration failed; retrying", "socket", r.SocketPath)
 			time.Sleep(time.Second)

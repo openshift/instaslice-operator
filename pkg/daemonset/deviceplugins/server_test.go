@@ -140,8 +140,14 @@ func TestListAndWatchForwardsUpdates(t *testing.T) {
 
 func TestAllocateEmulated(t *testing.T) {
 	nodeName := "test-node"
-	os.Setenv("NODE_NAME", nodeName)
-	defer os.Unsetenv("NODE_NAME")
+	if err := os.Setenv("NODE_NAME", nodeName); err != nil {
+		t.Fatalf("failed to set env: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("NODE_NAME"); err != nil {
+			t.Fatalf("failed to unset env: %v", err)
+		}
+	}()
 
 	inst := utils.GenerateFakeCapacity(nodeName)
 	client := fakeclient.NewSimpleClientset(inst)
@@ -210,8 +216,14 @@ func TestAllocateEmulated(t *testing.T) {
 
 func TestAllocateMultipleDevices(t *testing.T) {
 	nodeName := "test-node"
-	os.Setenv("NODE_NAME", nodeName)
-	defer os.Unsetenv("NODE_NAME")
+	if err := os.Setenv("NODE_NAME", nodeName); err != nil {
+		t.Fatalf("failed to set env: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("NODE_NAME"); err != nil {
+			t.Fatalf("failed to unset env: %v", err)
+		}
+	}()
 
 	inst := utils.GenerateFakeCapacity(nodeName)
 	client := fakeclient.NewSimpleClientset(inst)

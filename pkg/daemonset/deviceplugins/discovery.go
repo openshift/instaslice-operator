@@ -97,7 +97,11 @@ func (r *RealMigGpuDiscoverer) Discover() (*instav1.NodeAccelerator, error) {
 		return nil, err
 	}
 	klog.InfoS("NVML initialized successfully")
-	defer nvml.Shutdown()
+	defer func() {
+		if ret := nvml.Shutdown(); ret != nvml.SUCCESS {
+			klog.ErrorS(fmt.Errorf("nvml shutdown failed: %v", ret), "nvml shutdown")
+		}
+	}()
 
 	// Ensure Instaslice CR exists
 	instaslice := &instav1.NodeAccelerator{

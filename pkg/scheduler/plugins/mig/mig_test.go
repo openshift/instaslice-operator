@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"testing"
 
+	"strconv"
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,8 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
-	"strconv"
-	"strings"
 
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	fakeclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/fake"
@@ -115,36 +116,6 @@ func newEphemeralContainerPod(uid, profile string) *corev1.Pod {
 	}
 }
 
-func newTwoContainerPod(uid, profile1, profile2 string) *corev1.Pod {
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			UID:       types.UID(uid),
-			Name:      "pod-" + uid,
-			Namespace: "default",
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name: "c1",
-					Resources: corev1.ResourceRequirements{
-						Limits: corev1.ResourceList{
-							corev1.ResourceName("mig.das.com/" + profile1): resource.MustParse("1"),
-						},
-					},
-				},
-				{
-					Name: "c2",
-					Resources: corev1.ResourceRequirements{
-						Limits: corev1.ResourceList{
-							corev1.ResourceName("mig.das.com/" + profile2): resource.MustParse("1"),
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
 func newMultiContainerPod(uid string, profiles []string) *corev1.Pod {
 	containers := make([]corev1.Container, len(profiles))
 	for i, p := range profiles {
@@ -202,18 +173,6 @@ func newNoProfilePod(uid string) *corev1.Pod {
 			Containers: []corev1.Container{{Name: "c1"}},
 		},
 	}
-}
-
-// singleGPU trims the NodeAccelerator object to expose only one GPU.
-func singleGPU(inst *instav1.NodeAccelerator) *instav1.NodeAccelerator {
-	var res instav1.DiscoveredNodeResources
-	_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
-	if len(res.NodeGPUs) > 1 {
-		res.NodeGPUs = res.NodeGPUs[:1]
-	}
-	raw, _ := json.Marshal(&res)
-	inst.Status.NodeResources.Raw = raw
-	return inst
 }
 
 func newPlugin(objs ...runtime.Object) *Plugin {
@@ -785,7 +744,7 @@ func TestFilterValidCombinationsH100(t *testing.T) {
 		"4g.20gb", "4g.40gb",
 		"7g.40gb", "7g.80gb",
 	)
-	var combos []string
+	combos := make([]string, 0, len(base))
 	for _, c := range base {
 		combos = append(combos, replacer.Replace(c))
 	}
@@ -930,7 +889,7 @@ func TestFilterInvalidCombinationsH100(t *testing.T) {
 		"4g.20gb", "4g.40gb",
 		"7g.40gb", "7g.80gb",
 	)
-	var combos []string
+	combos := make([]string, 0, len(base))
 	for _, c := range base {
 		combos = append(combos, replacer.Replace(c))
 	}
@@ -1023,7 +982,7 @@ func TestFilterValidCombinationsH200(t *testing.T) {
 		"4g.20gb", "4g.71gb",
 		"7g.40gb", "7g.141gb",
 	)
-	var combos []string
+	combos := make([]string, 0, len(base))
 	for _, c := range base {
 		combos = append(combos, replacer.Replace(c))
 	}
@@ -1166,7 +1125,7 @@ func TestFilterInvalidCombinationsH200(t *testing.T) {
 		"4g.20gb", "4g.71gb",
 		"7g.40gb", "7g.141gb",
 	)
-	var combos []string
+	combos := make([]string, 0, len(base))
 	for _, c := range base {
 		combos = append(combos, replacer.Replace(c))
 	}
