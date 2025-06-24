@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -461,5 +462,16 @@ func TestListAndWatchRebootResetsAllocations(t *testing.T) {
 
 	if alloc.Status.State != instav1.AllocationClaimStatusCreated {
 		t.Fatalf("expected allocation state reset to Created, got %s", alloc.Status.State)
+	}
+}
+
+func TestNewServerErrorsWithoutNodeName(t *testing.T) {
+	if err := os.Unsetenv("NODE_NAME"); err != nil {
+		t.Fatalf("failed to unset env: %v", err)
+	}
+	mgr := NewManager("vendor/class", instav1.DiscoveredNodeResources{})
+	_, err := NewServer(mgr, "sock", &rest.Config{}, instav1.EmulatedModeDisabled)
+	if err == nil {
+		t.Fatalf("expected error when NODE_NAME is empty")
 	}
 }

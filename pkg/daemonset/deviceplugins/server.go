@@ -66,6 +66,9 @@ func NewServer(mgr *Manager, socketPath string, kubeConfig *rest.Config, emulate
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 	nodeName := os.Getenv("NODE_NAME")
+	if nodeName == "" {
+		return nil, fmt.Errorf("NODE_NAME environment variable is required")
+	}
 	return &Server{Manager: mgr, SocketPath: socketPath, InstasliceClient: client, KubeClient: kubeClient, NodeName: nodeName, EmulatedMode: emulatedMode}, nil
 }
 

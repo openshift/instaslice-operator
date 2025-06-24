@@ -55,8 +55,11 @@ func (m *Manager) Updates() <-chan []*pluginapi.Device {
 func (m *Manager) Start(ctx context.Context) {
 	klog.InfoS("Starting device manager", "resource", m.ResourceName)
 	parts := strings.SplitN(m.ResourceName, "/", 2)
-	profile := parts[len(parts)-1]
-	profile = unsanitizeProfileName(profile)
+	if len(parts) < 2 {
+		klog.ErrorS(nil, "invalid resource name", "resource", m.ResourceName)
+		return
+	}
+	profile := unsanitizeProfileName(parts[1])
 	num := countDevices(m.resources, profile)
 	devs := make([]*pluginapi.Device, 0, num)
 	for i := 0; i < num; i++ {
