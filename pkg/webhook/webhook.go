@@ -59,7 +59,9 @@ func (s *InstasliceWebhook) Validate(req admissionctl.Request) bool {
 // Authorized implements Webhook interface
 func (s *InstasliceWebhook) Authorized(request admissionctl.Request) admissionctl.Response {
 	var ret admissionctl.Response
+	// basic request metadata for operators
 	klog.InfoS("Webhook Authorized called", "uid", request.UID, "kind", request.Kind.Kind)
+	klog.V(1).InfoS("decoding object")
 
 	pod, err := s.renderPod(request)
 	if err != nil {
@@ -92,6 +94,7 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 		if c.Resources.Limits == nil {
 			return
 		}
+		klog.V(3).InfoS("checking container resources", "container", c.Name)
 		newLimits := corev1.ResourceList{}
 		for name, qty := range c.Resources.Limits {
 			key := string(name)
@@ -99,10 +102,12 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 			case strings.HasPrefix(key, "nvidia.com/mig-"):
 				profile := strings.TrimPrefix(key, "nvidia.com/mig-")
 				newKey := corev1.ResourceName("mig.das.com/" + profile)
+				klog.V(2).InfoS("renaming GPU resource", "from", key, "to", newKey)
 				newLimits[newKey] = qty
 				needsScheduler = true
 			case strings.HasPrefix(key, "nvidia.com/"):
 				newKey := corev1.ResourceName(strings.Replace(key, "nvidia.com/", "mig.das.com/", 1))
+				klog.V(2).InfoS("renaming GPU resource", "from", key, "to", newKey)
 				newLimits[newKey] = qty
 				needsScheduler = true
 			default:
@@ -123,17 +128,83 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 	for i := range mutatedPod.Spec.InitContainers {
 		mutateResources(&mutatedPod.Spec.InitContainers[i])
 	}
+	for i := range mutatedPod.Spec.EphemeralContainers {
+		c := (*corev1.Container)(&mutatedPod.Spec.EphemeralContainers[i].EphemeralContainerCommon)
+		mutateResources(c)
+	}
 
 	if needsScheduler {
 		mutatedPod.Spec.SchedulerName = secondaryScheduler
+		klog.V(1).InfoS("using secondary scheduler", "name", mutatedPod.Name)
+
+		// addEnv injects or overwrites ConfigMap-backed environment variables so
+		// the scheduler can identify which GPU slice was allocated to the pod.
+		addEnv := func(c *corev1.Container) {
+			if mutatedPod.Name == "" {
+				return
+			}
+
+			nvidiaVar := corev1.EnvVar{
+				Name: "NVIDIA_VISIBLE_DEVICES",
+				ValueFrom: &corev1.EnvVarSource{
+					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: mutatedPod.Name},
+						Key:                  "NVIDIA_VISIBLE_DEVICES",
+					},
+				},
+			}
+			cudaVar := corev1.EnvVar{
+				Name: "CUDA_VISIBLE_DEVICES",
+				ValueFrom: &corev1.EnvVarSource{
+					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: mutatedPod.Name},
+						Key:                  "CUDA_VISIBLE_DEVICES",
+					},
+				},
+			}
+
+			replacedNvidia := false
+			replacedCuda := false
+			for i := range c.Env {
+				switch c.Env[i].Name {
+				case "NVIDIA_VISIBLE_DEVICES":
+					c.Env[i] = nvidiaVar
+					replacedNvidia = true
+				case "CUDA_VISIBLE_DEVICES":
+					c.Env[i] = cudaVar
+					replacedCuda = true
+				}
+			}
+			if !replacedNvidia {
+				klog.V(3).InfoS("setting NVIDIA_VISIBLE_DEVICES", "container", c.Name)
+				c.Env = append(c.Env, nvidiaVar)
+			} else {
+				klog.V(3).InfoS("overwriting NVIDIA_VISIBLE_DEVICES", "container", c.Name)
+			}
+			if !replacedCuda {
+				klog.V(3).InfoS("setting CUDA_VISIBLE_DEVICES", "container", c.Name)
+				c.Env = append(c.Env, cudaVar)
+			} else {
+				klog.V(3).InfoS("overwriting CUDA_VISIBLE_DEVICES", "container", c.Name)
+			}
+		}
+
+		for i := range mutatedPod.Spec.Containers {
+			addEnv(&mutatedPod.Spec.Containers[i])
+		}
+		for i := range mutatedPod.Spec.InitContainers {
+			addEnv(&mutatedPod.Spec.InitContainers[i])
+		}
+		for i := range mutatedPod.Spec.EphemeralContainers {
+			c := (*corev1.Container)(&mutatedPod.Spec.EphemeralContainers[i].EphemeralContainerCommon)
+			addEnv(c)
+		}
 	}
 
+	klog.V(4).InfoS("finished pod mutation", "name", mutatedPod.Name)
 	return json.Marshal(mutatedPod)
 }
 
-// renderPod decodes an *corev1.Pod from the incoming request.
-// If the request includes an OldObject (from an update or deletion), it will be
-// preferred, otherwise, the Object will be preferred.
 func (s *InstasliceWebhook) renderPod(request admissionctl.Request) (*corev1.Pod, error) {
 	var err error
 	klog.V(4).InfoS("Rendering Pod from request", "uid", request.UID)
