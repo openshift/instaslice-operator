@@ -121,20 +121,20 @@ clean:
 .PHONY: build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
 
 build-push-scheduler:
-	# docker build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG} .
-	# docker push ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
+	docker build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG} .
+	docker push ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
 
 build-push-daemonset:
-	# docker build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG} .
-	# docker push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
+	docker build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG} .
+	docker push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
 
 build-push-operator:
-	# docker build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
-	# docker push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
+	docker build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
+	docker push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
 
 build-push-webhook:
-	# docker build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
-	# docker push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
+	docker build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
+	docker push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
 
 .PHONY: test-k8s
 test-k8s:
@@ -177,7 +177,9 @@ emulated-k8s: test-k8s
 .PHONY: cleanup-k8s
 cleanup-k8s:
 	@echo "=== Deleting K8s resources ==="
-	kubectl delete -f $(DEPLOY_DIR)/
+	kubectl delete --ignore-not-found --wait=true -f $(DEPLOY_DIR)/
+	# Wait for the operator namespace to be fully removed
+	kubectl wait --for=delete namespace/das-operator --timeout=120s || true
 
 .PHONY: test-ocp
 test-ocp:
@@ -225,8 +227,9 @@ gpu-ocp: test-ocp
 .PHONY: cleanup-ocp
 cleanup-ocp:
 	@echo "=== Deleting OCP resources ==="
-	kubectl delete -f $(DEPLOY_DIR)/
-
+	kubectl delete --ignore-not-found --wait=true -f $(DEPLOY_DIR)/
+	# Wait for the operator namespace to be fully removed
+	kubectl wait --for=delete namespace/das-operator --timeout=120s || true
 
 .PHONY: deploy-cert-manager
 deploy-cert-manager:
