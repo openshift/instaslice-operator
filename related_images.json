@@ -1,5 +1,9 @@
 [
   {
+    "name": "das-scheduler-next",
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/das-scheduler-next@sha256:9792de307ec8d24feaebde12501e5b61a60921419f85f25f632b352188c0a691"
+  },
+  {
     "name": "das-daemonset-next",
     "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/das-daemonset-next@sha256:9792de307ec8d24feaebde12501e5b61a60921419f85f25f632b352188c0a691"
   },
@@ -8,7 +12,7 @@
     "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/das-webhook-next@sha256:a888c05ce31fb9cdea43c3bb1a9094a2faad160d64aaf31ef29efe8fe341916c"
   },
   {
-    "name": "instaslice-operator-next",
-    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next@sha256:ef9634e4a569ab4cc90c1f340db8b92eec984a4b9dee80eaee2cf52dcf8ba54e"
+    "name": "das-operator-next",
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/das-operator-next@sha256:ef9634e4a569ab4cc90c1f340db8b92eec984a4b9dee80eaee2cf52dcf8ba54e"
   }
 ]
