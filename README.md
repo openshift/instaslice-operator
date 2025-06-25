@@ -7,6 +7,7 @@ Dynamic Accelerator Slicer (DAS) is an operator that dynamically partitions GPU 
 - [Getting Started](#getting-started)
   - [Emulated Mode](#emulated-mode)
   - [Running on OpenShift](#running-on-openshift)
+  - [Operator Bundle Development](#operator-bundle-development)
 - [Architecture](#architecture)
   - [MIG scheduler plugin](#mig-scheduler-plugin)
   - [AllocationClaim resource](#allocationclaim-resource)
@@ -62,6 +63,16 @@ If GPUs are present, test with:
 ```bash
 kubectl apply -f test/test-pod.yaml
 ```
+
+### Operator Bundle Development
+
+1. Login into podman and have a repository created for the operator bundle.
+2. Set `BUNDLE_IMAGE` to point to your repository and tag of choice.
+3. Run `make bundle-generate` to generate the bundle manifests.
+4. Run `make bundle-build` to build the `bundle-ocp.Dockerfile`.
+5. Run `make bundle-push` to push the bundle image to your repository.
+6. Run `make deploy-cert-manager` to install the OperatorGroup and Subscription.
+7. Run `operator-sdk run bundle --namespace <namespace> ${BUNDLE_IMAGE}` to deploy the operator.
 
 ## Architecture
 

@@ -28,6 +28,11 @@ GO_BUILD_FLAGS :=-tags strictfipsruntime
 
 IMAGE_REGISTRY ?= quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant
 EMULATED_MODE ?= disabled
+CONTAINER_TOOL ?= podman
+BUNDLE_IMAGE ?= mustchange
+LOCALBIN ?= $(shell pwd)/bin
+OPERATOR_SDK_VERSION ?= v1.38.0
+OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
 
 # This will call a macro called "build-image" which will generate image specific targets based on the parameters:
 # $0 - macro name
@@ -238,3 +243,25 @@ endif
 test-e2e:
 	@echo "=== Running e2e tests ==="
 	GOFLAGS=-mod=vendor go test ./test/e2e -v -count=1 -args $(TEST_E2E_ARGS)
+
+.PHONY: operator-sdk
+operator-sdk:
+	@[ -f $(OPERATOR_SDK) ] || { \
+	set -e ;\
+	mkdir -p $(dir $(OPERATOR_SDK)) ;\
+	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
+	curl -sSLo $(OPERATOR_SDK) https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH};\
+	chmod +x $(OPERATOR_SDK) ;\
+	}
+
+.PHONY: bundle-generate
+bundle-generate: operator-sdk
+	$(OPERATOR_SDK) generate bundle --input-dir $(DEPLOY_DIR)/ --version $(OPERATOR_VERSION) --overwrite
+
+.PHONY: bundle-build
+bundle-build: bundle-generate
+	$(CONTAINER_TOOL) build -f bundle-ocp.Dockerfile -t $(BUNDLE_IMAGE) .
+
+.PHONY: bundle-push
+bundle-push:
+	$(CONTAINER_TOOL) push $(BUNDLE_IMAGE)
