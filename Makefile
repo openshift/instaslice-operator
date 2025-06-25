@@ -6,6 +6,7 @@ SOURCE_GIT_TAG ?=$(shell git describe --long --tags --abbrev=7 --match 'v[0-9]*'
 SOURCE_GIT_COMMIT ?=$(shell git rev-parse --short "HEAD^{commit}" 2>/dev/null)
 IMAGE_TAG ?= latest
 OPERATOR_VERSION ?= 0.1.0
+DEPLOY_DIR ?= deploy
 
 # OS_GIT_VERSION is populated by ART
 # If building out of the ART pipeline, fallback to SOURCE_GIT_TAG
@@ -71,18 +72,18 @@ regen-crd:
 	rm -f manifests/instaslice-operator.crd.yaml
 	./_output/tools/bin/controller-gen crd paths=./pkg/apis/dasoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
 	mv manifests/inference.redhat.com_dasoperators.yaml manifests/instaslice-operator.crd.yaml
-	cp manifests/instaslice-operator.crd.yaml deploy/00_instaslice-operator.crd.yaml
-	cp manifests/inference.redhat.com_nodeaccelerators.yaml deploy/00_nodeaccelerators.crd.yaml
+	cp manifests/instaslice-operator.crd.yaml $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml
+	cp manifests/inference.redhat.com_nodeaccelerators.yaml $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
 
 .PHONY: regen-crd-k8s
 regen-crd-k8s:
-	@echo "Generating CRDs into deploy-k8s directory"
+	@echo "Generating CRDs into deploy directory"
 	go build -o _output/tools/bin/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
-	rm -f deploy-k8s/00_instaslice-operator.crd.yaml
-	rm -f deploy-k8s/00_nodeaccelerators.crd.yaml
-	./_output/tools/bin/controller-gen crd paths=./pkg/apis/dasoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./deploy-k8s
-	mv deploy-k8s/inference.redhat.com_dasoperators.yaml deploy-k8s/00_instaslice-operator.crd.yaml
-	mv deploy-k8s/inference.redhat.com_nodeaccelerators.yaml deploy-k8s/00_nodeaccelerators.crd.yaml
+	rm -f $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml
+	rm -f $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
+	./_output/tools/bin/controller-gen crd paths=./pkg/apis/dasoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./$(DEPLOY_DIR)
+	mv $(DEPLOY_DIR)/inference.redhat.com_dasoperators.yaml $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml
+	mv $(DEPLOY_DIR)/inference.redhat.com_nodeaccelerators.yaml $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
 
 build-images:
 	podman build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
@@ -147,8 +148,8 @@ test-k8s:
 	$(MAKE) regen-crd-k8s
 
 	@echo "=== Applying K8s CRDs ==="
-	       kubectl apply -f deploy-k8s/00_instaslice-operator.crd.yaml \
-                      -f deploy-k8s/00_nodeaccelerators.crd.yaml
+	       kubectl apply -f $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml \
+                      -f $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
 
 	@echo "=== Waiting for CRDs to be established ==="
 	kubectl wait --for=condition=established --timeout=60s \
@@ -157,10 +158,10 @@ test-k8s:
 	@echo "=== Applying K8s core manifests ==="
 	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
 	TMP_DIR=$$(mktemp -d); \
-	cp deploy-k8s/*.yaml $$TMP_DIR/; \
+	cp $(DEPLOY_DIR)/*.yaml $$TMP_DIR/; \
 	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' $$TMP_DIR/09_instaslice_operator.cr.yaml; \
-	env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < deploy-k8s/05_deployment.yaml > $$TMP_DIR/05_deployment.yaml; \
-	env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < deploy-k8s/06_scheduler_deployment.yaml > $$TMP_DIR/06_scheduler_deployment.yaml; \
+	env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < $(DEPLOY_DIR)/05_deployment.yaml > $$TMP_DIR/05_deployment.yaml; \
+	env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < $(DEPLOY_DIR)/06_scheduler_deployment.yaml > $$TMP_DIR/06_scheduler_deployment.yaml; \
 	kubectl apply -f $$TMP_DIR/; \
 	kubectl apply -f $$TMP_DIR/06_scheduler_deployment.yaml
 
@@ -171,7 +172,7 @@ emulated-k8s: test-k8s
 .PHONY: cleanup-k8s
 cleanup-k8s:
 	@echo "=== Deleting K8s resources ==="
-	kubectl delete -f deploy-k8s/
+	kubectl delete -f $(DEPLOY_DIR)/
 
 .PHONY: test-ocp
 test-ocp:
@@ -191,8 +192,8 @@ test-ocp:
 	$(MAKE) regen-crd-k8s
 
 	@echo "=== Applying K8s CRDs ==="
-	       kubectl apply -f deploy-k8s/00_instaslice-operator.crd.yaml \
-                      -f deploy-k8s/00_nodeaccelerators.crd.yaml
+	       kubectl apply -f $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml \
+                      -f $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
 
 	@echo "=== Waiting for CRDs to be established ==="
 	kubectl wait --for=condition=established --timeout=60s \
@@ -201,10 +202,10 @@ test-ocp:
 	@echo "=== Applying K8s core manifests ==="
 	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
 	TMP_DIR=$$(mktemp -d); \
-	cp deploy-k8s/*.yaml $$TMP_DIR/; \
+	cp $(DEPLOY_DIR)/*.yaml $$TMP_DIR/; \
 	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' $$TMP_DIR/09_instaslice_operator.cr.yaml; \
-	env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < deploy-k8s/05_deployment.yaml > $$TMP_DIR/05_deployment.yaml; \
-	env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < deploy-k8s/06_scheduler_deployment.yaml > $$TMP_DIR/06_scheduler_deployment.yaml; \
+	env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < $(DEPLOY_DIR)/05_deployment.yaml > $$TMP_DIR/05_deployment.yaml; \
+	env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < $(DEPLOY_DIR)/06_scheduler_deployment.yaml > $$TMP_DIR/06_scheduler_deployment.yaml; \
 	kubectl apply -f $$TMP_DIR/; \
 	kubectl apply -f $$TMP_DIR/06_scheduler_deployment.yaml
 
@@ -219,7 +220,7 @@ gpu-ocp: test-ocp
 .PHONY: cleanup-ocp
 cleanup-ocp:
 	@echo "=== Deleting OCP resources ==="
-	kubectl delete -f deploy-k8s/
+	kubectl delete -f $(DEPLOY_DIR)/
 
 
 .PHONY: deploy-cert-manager

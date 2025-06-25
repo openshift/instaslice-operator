@@ -16,7 +16,7 @@ spec:
       serviceAccountName: das-scheduler
       containers:
       - name: scheduler
-        image: quay.io/ryan.phillips/das-scheduler
+        image: ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
         imagePullPolicy: Always
         command: ["das-scheduler"]
         args:

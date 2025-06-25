@@ -33,7 +33,7 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ "ALL" ]
-          image: quay.io/ryan.phillips/instaslice-operator
+          image: ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
           volumeMounts:
             - name: tmp
               mountPath: "/tmp"
@@ -41,7 +41,7 @@ spec:
             - containerPort: 60000
               name: metrics
           command:
-            - /usr/bin/instaslice-operator
+            - /usr/bin/das-operator
           args:
             - "operator"
           imagePullPolicy: Always
@@ -49,9 +49,9 @@ spec:
             - name: OPERATOR_NAME
               value: "das-operator"
             - name: RELATED_IMAGE_DAEMONSET_IMAGE
-              value: quay.io/ryan.phillips/das-daemonset
+              value: ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
             - name: RELATED_IMAGE_WEBHOOK_IMAGE
-              value: quay.io/ryan.phillips/das-webhook
+              value: ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
       serviceAccountName: das-operator
       volumes:
         - name: tmp
