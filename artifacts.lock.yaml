@@ -1,0 +1,7 @@
+---
+metadata:
+  version: "1.0"
+artifacts:
+  - download_url: "https://github.com/jqlang/jq/releases/download/jq-1.8.0/jq-linux-amd64"
+    checksum: "sha256:8926c33326111bcd67a47a970b5a5db933ef9194ad925994934c639c76a0605c"
+    filename: "jq"
