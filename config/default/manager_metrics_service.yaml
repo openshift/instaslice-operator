@@ -5,8 +5,8 @@ metadata:
     control-plane: controller-manager
     app.kubernetes.io/name: service
     app.kubernetes.io/instance: controller-manager-metrics-service
-    app.kubernetes.io/created-by: instaslice-operator
-    app.kubernetes.io/part-of: instaslice-operator
+    app.kubernetes.io/created-by: das-operator
+    app.kubernetes.io/part-of: das-operator
     app.kubernetes.io/managed-by: kustomize
   name: controller-manager-metrics-service
   namespace: system

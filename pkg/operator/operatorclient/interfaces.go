@@ -16,37 +16,37 @@ import (
 	"github.com/openshift/library-go/pkg/apiserver/jsonpatch"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 
-	instasliceoperatorapiv1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
-	instasliceoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/applyconfiguration/instasliceoperator/v1alpha1"
-	instasliceoperatorinterface "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/instasliceoperator/v1alpha1"
-	instasliceoperatorlisterv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/listers/instasliceoperator/v1alpha1"
+	instasliceoperatorapiv1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
+	instasliceoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/applyconfiguration/dasoperator/v1alpha1"
+	instasliceoperatorinterface "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1"
+	dasoperatorlisterv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/listers/dasoperator/v1alpha1"
 )
 
 const OperatorConfigName = "cluster"
 
-var _ v1helpers.OperatorClient = &InstasliceOperatorSetClient{}
+var _ v1helpers.OperatorClient = &DASOperatorSetClient{}
 
-type InstasliceOperatorSetClient struct {
+type DASOperatorSetClient struct {
 	Ctx               context.Context
 	SharedInformer    cache.SharedIndexInformer
 	OperatorClient    instasliceoperatorinterface.OpenShiftOperatorV1alpha1Interface
-	Lister            instasliceoperatorlisterv1alpha1.InstasliceOperatorLister
+	Lister            dasoperatorlisterv1alpha1.DASOperatorLister
 	OperatorNamespace string
 }
 
-func (l *InstasliceOperatorSetClient) Informer() cache.SharedIndexInformer {
+func (l *DASOperatorSetClient) Informer() cache.SharedIndexInformer {
 	return l.SharedInformer
 }
 
-func (l *InstasliceOperatorSetClient) GetObjectMeta() (meta *metav1.ObjectMeta, err error) {
-	var instance *instasliceoperatorapiv1alpha1.InstasliceOperator
+func (l *DASOperatorSetClient) GetObjectMeta() (meta *metav1.ObjectMeta, err error) {
+	var instance *instasliceoperatorapiv1alpha1.DASOperator
 	if l.SharedInformer.HasSynced() {
-		instance, err = l.Lister.InstasliceOperators(l.OperatorNamespace).Get(OperatorConfigName)
+		instance, err = l.Lister.DASOperators(l.OperatorNamespace).Get(OperatorConfigName)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		instance, err = l.OperatorClient.InstasliceOperators(l.OperatorNamespace).Get(l.Ctx, OperatorConfigName, metav1.GetOptions{})
+		instance, err = l.OperatorClient.DASOperators(l.OperatorNamespace).Get(l.Ctx, OperatorConfigName, metav1.GetOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -54,33 +54,33 @@ func (l *InstasliceOperatorSetClient) GetObjectMeta() (meta *metav1.ObjectMeta, 
 	return &instance.ObjectMeta, nil
 }
 
-func (l *InstasliceOperatorSetClient) GetOperatorState() (spec *operatorv1.OperatorSpec, status *operatorv1.OperatorStatus, resourceVersion string, err error) {
+func (l *DASOperatorSetClient) GetOperatorState() (spec *operatorv1.OperatorSpec, status *operatorv1.OperatorStatus, resourceVersion string, err error) {
 	if !l.SharedInformer.HasSynced() {
 		return l.GetOperatorStateWithQuorum(l.Ctx)
 	}
-	instance, err := l.Lister.InstasliceOperators(l.OperatorNamespace).Get(OperatorConfigName)
+	instance, err := l.Lister.DASOperators(l.OperatorNamespace).Get(OperatorConfigName)
 	if err != nil {
 		return nil, nil, "", err
 	}
 	return &instance.Spec.OperatorSpec, &instance.Status.OperatorStatus, instance.ResourceVersion, nil
 }
 
-func (l *InstasliceOperatorSetClient) GetOperatorStateWithQuorum(ctx context.Context) (spec *operatorv1.OperatorSpec, status *operatorv1.OperatorStatus, resourceVersion string, err error) {
-	instance, err := l.OperatorClient.InstasliceOperators(l.OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
+func (l *DASOperatorSetClient) GetOperatorStateWithQuorum(ctx context.Context) (spec *operatorv1.OperatorSpec, status *operatorv1.OperatorStatus, resourceVersion string, err error) {
+	instance, err := l.OperatorClient.DASOperators(l.OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, nil, "", err
 	}
 	return &instance.Spec.OperatorSpec, &instance.Status.OperatorStatus, instance.ResourceVersion, nil
 }
 
-func (l *InstasliceOperatorSetClient) UpdateOperatorSpec(ctx context.Context, resourceVersion string, in *operatorv1.OperatorSpec) (out *operatorv1.OperatorSpec, newResourceVersion string, err error) {
-	original, err := l.OperatorClient.InstasliceOperators(l.OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{ResourceVersion: resourceVersion})
+func (l *DASOperatorSetClient) UpdateOperatorSpec(ctx context.Context, resourceVersion string, in *operatorv1.OperatorSpec) (out *operatorv1.OperatorSpec, newResourceVersion string, err error) {
+	original, err := l.OperatorClient.DASOperators(l.OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{ResourceVersion: resourceVersion})
 	if err != nil {
 		return nil, "", err
 	}
 	original.Spec.OperatorSpec = *in
 
-	ret, err := l.OperatorClient.InstasliceOperators(l.OperatorNamespace).Update(ctx, original, metav1.UpdateOptions{})
+	ret, err := l.OperatorClient.DASOperators(l.OperatorNamespace).Update(ctx, original, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, "", err
 	}
@@ -88,39 +88,39 @@ func (l *InstasliceOperatorSetClient) UpdateOperatorSpec(ctx context.Context, re
 	return &ret.Spec.OperatorSpec, ret.ResourceVersion, nil
 }
 
-func (l *InstasliceOperatorSetClient) UpdateOperatorStatus(ctx context.Context, resourceVersion string, in *operatorv1.OperatorStatus) (out *operatorv1.OperatorStatus, err error) {
-	original, err := l.OperatorClient.InstasliceOperators(l.OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{ResourceVersion: resourceVersion})
+func (l *DASOperatorSetClient) UpdateOperatorStatus(ctx context.Context, resourceVersion string, in *operatorv1.OperatorStatus) (out *operatorv1.OperatorStatus, err error) {
+	original, err := l.OperatorClient.DASOperators(l.OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{ResourceVersion: resourceVersion})
 	if err != nil {
 		return nil, err
 	}
 	original.Status.OperatorStatus = *in
 
-	ret, err := l.OperatorClient.InstasliceOperators(l.OperatorNamespace).UpdateStatus(ctx, original, metav1.UpdateOptions{})
+	ret, err := l.OperatorClient.DASOperators(l.OperatorNamespace).UpdateStatus(ctx, original, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, err
 	}
 	return &ret.Status.OperatorStatus, nil
 }
 
-func (l *InstasliceOperatorSetClient) ApplyOperatorSpec(ctx context.Context, fieldManager string, applyConfiguration *operatorapplyconfigurationv1.OperatorSpecApplyConfiguration) (err error) {
+func (l *DASOperatorSetClient) ApplyOperatorSpec(ctx context.Context, fieldManager string, applyConfiguration *operatorapplyconfigurationv1.OperatorSpecApplyConfiguration) (err error) {
 	if applyConfiguration == nil {
 		return fmt.Errorf("applyConfiguration must have a value")
 	}
 
-	desiredSpec := &instasliceoperatorv1alpha1.InstasliceOperatorSpecApplyConfiguration{
+	desiredSpec := &instasliceoperatorv1alpha1.DASOperatorSpecApplyConfiguration{
 		OperatorSpecApplyConfiguration: *applyConfiguration,
 	}
-	desired := instasliceoperatorv1alpha1.InstasliceOperator(OperatorConfigName, l.OperatorNamespace)
+	desired := instasliceoperatorv1alpha1.DASOperator(OperatorConfigName, l.OperatorNamespace)
 	desired.WithSpec(desiredSpec)
 
-	instance, err := l.OperatorClient.InstasliceOperators(l.OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
+	instance, err := l.OperatorClient.DASOperators(l.OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
 	switch {
 	case apierrors.IsNotFound(err):
 	// do nothing and proceed with the apply
 	case err != nil:
 		return fmt.Errorf("unable to get operator configuration: %w", err)
 	default:
-		original, err := instasliceoperatorv1alpha1.ExtractInstasliceOperator(instance, fieldManager)
+		original, err := instasliceoperatorv1alpha1.ExtractDASOperator(instance, fieldManager)
 		if err != nil {
 			return fmt.Errorf("unable to extract operator configuration from spec: %w", err)
 		}
@@ -129,7 +129,7 @@ func (l *InstasliceOperatorSetClient) ApplyOperatorSpec(ctx context.Context, fie
 		}
 	}
 
-	_, err = l.OperatorClient.InstasliceOperators(l.OperatorNamespace).Apply(ctx, desired, metav1.ApplyOptions{
+	_, err = l.OperatorClient.DASOperators(l.OperatorNamespace).Apply(ctx, desired, metav1.ApplyOptions{
 		Force:        true,
 		FieldManager: fieldManager,
 	})
@@ -140,18 +140,18 @@ func (l *InstasliceOperatorSetClient) ApplyOperatorSpec(ctx context.Context, fie
 	return nil
 }
 
-func (l *InstasliceOperatorSetClient) ApplyOperatorStatus(ctx context.Context, fieldManager string, applyConfiguration *operatorapplyconfigurationv1.OperatorStatusApplyConfiguration) (err error) {
+func (l *DASOperatorSetClient) ApplyOperatorStatus(ctx context.Context, fieldManager string, applyConfiguration *operatorapplyconfigurationv1.OperatorStatusApplyConfiguration) (err error) {
 	if applyConfiguration == nil {
 		return fmt.Errorf("applyConfiguration must have a value")
 	}
 
-	desiredStatus := &instasliceoperatorv1alpha1.InstasliceOperatorStatusApplyConfiguration{
+	desiredStatus := &instasliceoperatorv1alpha1.DASOperatorStatusApplyConfiguration{
 		OperatorStatusApplyConfiguration: *applyConfiguration,
 	}
-	desired := instasliceoperatorv1alpha1.InstasliceOperator(OperatorConfigName, l.OperatorNamespace)
+	desired := instasliceoperatorv1alpha1.DASOperator(OperatorConfigName, l.OperatorNamespace)
 	desired.WithStatus(desiredStatus)
 
-	instance, err := l.OperatorClient.InstasliceOperators(l.OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
+	instance, err := l.OperatorClient.DASOperators(l.OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
 	switch {
 	case apierrors.IsNotFound(err):
 		// do nothing and proceed with the apply
@@ -159,7 +159,7 @@ func (l *InstasliceOperatorSetClient) ApplyOperatorStatus(ctx context.Context, f
 	case err != nil:
 		return fmt.Errorf("unable to get operator configuration: %w", err)
 	default:
-		original, err := instasliceoperatorv1alpha1.ExtractInstasliceOperatorStatus(instance, fieldManager)
+		original, err := instasliceoperatorv1alpha1.ExtractDASOperatorStatus(instance, fieldManager)
 		if err != nil {
 			return fmt.Errorf("unable to extract operator configuration from status: %w", err)
 		}
@@ -173,7 +173,7 @@ func (l *InstasliceOperatorSetClient) ApplyOperatorStatus(ctx context.Context, f
 		}
 	}
 
-	_, err = l.OperatorClient.InstasliceOperators(l.OperatorNamespace).ApplyStatus(ctx, desired, metav1.ApplyOptions{
+	_, err = l.OperatorClient.DASOperators(l.OperatorNamespace).ApplyStatus(ctx, desired, metav1.ApplyOptions{
 		Force:        true,
 		FieldManager: fieldManager,
 	})
@@ -184,11 +184,11 @@ func (l *InstasliceOperatorSetClient) ApplyOperatorStatus(ctx context.Context, f
 	return nil
 }
 
-func (l *InstasliceOperatorSetClient) PatchOperatorStatus(ctx context.Context, jsonPatch *jsonpatch.PatchSet) (err error) {
+func (l *DASOperatorSetClient) PatchOperatorStatus(ctx context.Context, jsonPatch *jsonpatch.PatchSet) (err error) {
 	jsonPatchBytes, err := jsonPatch.Marshal()
 	if err != nil {
 		return err
 	}
-	_, err = l.OperatorClient.InstasliceOperators(l.OperatorNamespace).Patch(ctx, OperatorConfigName, types.JSONPatchType, jsonPatchBytes, metav1.PatchOptions{}, "/status")
+	_, err = l.OperatorClient.DASOperators(l.OperatorNamespace).Patch(ctx, OperatorConfigName, types.JSONPatchType, jsonPatchBytes, metav1.PatchOptions{}, "/status")
 	return err
 }

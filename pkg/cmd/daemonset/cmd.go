@@ -13,7 +13,7 @@ import (
 )
 
 func NewDaemonset(ctx context.Context) *cobra.Command {
-	cfg := controllercmd.NewControllerCommandConfig("instaslice-daemonset", version.Get(), daemonset.RunDaemonset, clock.RealClock{})
+	cfg := controllercmd.NewControllerCommandConfig("das-daemonset", version.Get(), daemonset.RunDaemonset, clock.RealClock{})
 	cfg.DisableLeaderElection = true
 
 	cmd := cfg.NewCommandWithContext(ctx)

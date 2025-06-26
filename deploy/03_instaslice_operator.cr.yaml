@@ -1,0 +1,10 @@
+apiVersion: inference.redhat.com/v1alpha1
+kind: DASOperator
+metadata:
+  name: cluster
+  namespace: das-operator
+spec:
+  managementState: Managed
+  logLevel: Normal
+  operatorLogLevel: Normal
+  emulatedMode: "enabled"

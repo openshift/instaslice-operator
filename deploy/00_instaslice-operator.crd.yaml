@@ -4,20 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.17.2
-  name: instasliceoperators.inference.redhat.com
+  name: dasoperators.inference.redhat.com
 spec:
   group: inference.redhat.com
   names:
-    kind: InstasliceOperator
-    listKind: InstasliceOperatorList
-    plural: instasliceoperators
-    singular: instasliceoperator
+    kind: DASOperator
+    listKind: DASOperatorList
+    plural: dasoperators
+    singular: dasoperator
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: InstasliceOperator is the Schema for the InstasliceOperator API
+        description: DASOperator is the Schema for the DASOperator API
         properties:
           apiVersion:
             description: |-
@@ -63,6 +63,12 @@ spec:
                   should manage the component
                 pattern: ^(Managed|Unmanaged|Force|Removed)$
                 type: string
+              nodeSelector:
+                additionalProperties:
+                  type: string
+                description: NodeSelector allows additional node label filters for
+                  the daemonset pods
+                type: object
               observedConfig:
                 description: |-
                   observedConfig holds a sparse config that controller has observed from the cluster state.  It exists in spec because

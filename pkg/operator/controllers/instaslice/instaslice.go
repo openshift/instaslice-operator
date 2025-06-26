@@ -47,7 +47,7 @@ func (c *InstasliceController) sync(ctx context.Context, syncCtx factory.SyncCon
 
 	klog.V(2).InfoS("Instaslice Sync", "queue_key", instasliceName)
 
-	slice, err := c.instasliceClient.OpenShiftOperatorV1alpha1().Instaslices(c.namespace).Get(ctx, instasliceName, metav1.GetOptions{})
+	slice, err := c.instasliceClient.OpenShiftOperatorV1alpha1().NodeAccelerators(c.namespace).Get(ctx, instasliceName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -57,8 +57,6 @@ func (c *InstasliceController) sync(ctx context.Context, syncCtx factory.SyncCon
 	return nil
 }
 
-// queueKeysRuntimeForObj is an adapter on top of queueKeysForObj to be used in
-// factory.Controller queueing functions
 func (c *InstasliceController) nameToKey(obj runtime.Object) []string {
 	metaObj, ok := obj.(metav1.ObjectMetaAccessor)
 	if !ok {

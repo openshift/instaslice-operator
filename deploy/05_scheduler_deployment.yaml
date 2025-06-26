@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: das-scheduler
+  namespace: das-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: das-scheduler
+  template:
+    metadata:
+      labels:
+        app: das-scheduler
+    spec:
+      serviceAccountName: das-scheduler
+      containers:
+      - name: scheduler
+        image: ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
+        imagePullPolicy: Always
+        command: ["das-scheduler"]
+        args:
+        - "--config=/etc/das-scheduler/config.yaml"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/das-scheduler
+      volumes:
+      - name: config
+        configMap:
+          name: das-scheduler-config

@@ -22,7 +22,7 @@ import (
 	time "time"
 
 	versioned "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
-	instasliceoperator "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions/instasliceoperator"
+	dasoperator "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions/dasoperator"
 	internalinterfaces "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions/internalinterfaces"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -252,9 +252,9 @@ type SharedInformerFactory interface {
 	// client.
 	InformerFor(obj runtime.Object, newFunc internalinterfaces.NewInformerFunc) cache.SharedIndexInformer
 
-	OpenShiftOperator() instasliceoperator.Interface
+	OpenShiftOperator() dasoperator.Interface
 }
 
-func (f *sharedInformerFactory) OpenShiftOperator() instasliceoperator.Interface {
-	return instasliceoperator.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) OpenShiftOperator() dasoperator.Interface {
+	return dasoperator.New(f, f.namespace, f.tweakListOptions)
 }

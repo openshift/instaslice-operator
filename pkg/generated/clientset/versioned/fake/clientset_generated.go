@@ -19,8 +19,8 @@ package fake
 import (
 	applyconfiguration "github.com/openshift/instaslice-operator/pkg/generated/applyconfiguration"
 	clientset "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
-	openshiftoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/instasliceoperator/v1alpha1"
-	fakeopenshiftoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/instasliceoperator/v1alpha1/fake"
+	openshiftoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1"
+	fakeopenshiftoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"

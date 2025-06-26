@@ -6,13 +6,13 @@ metadata:
       [
         {
           "apiVersion": "inference.redhat.com/v1alpha1",
-          "kind": "InstasliceOperator",
+          "kind": "DASOperator",
           "metadata": {
             "name": "cluster",
-            "namespace": "instaslice-system"
+            "namespace": "das-operator"
           },
           "spec": {
-            "emulatedMode": "false",
+            "emulatedMode": "enabled",
             "logLevel": "Normal",
             "managementState": "Managed",
             "operatorLogLevel": "Normal"
@@ -20,8 +20,8 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-05-29T19:27:55Z"
-    operators.operatorframework.io/builder: operator-sdk-v1.39.1
+    createdAt: "2025-06-25T10:00:14Z"
+    operators.operatorframework.io/builder: operator-sdk-v1.38.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: instaslice-operator.v0.1.0
   namespace: placeholder
@@ -29,11 +29,14 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - kind: InstasliceOperator
-      name: instasliceoperators.inference.redhat.com
+    - kind: AllocationClaim
+      name: allocationclaims.inference.redhat.com
       version: v1alpha1
-    - kind: Instaslice
-      name: instaslices.inference.redhat.com
+    - kind: DASOperator
+      name: dasoperators.inference.redhat.com
+      version: v1alpha1
+    - kind: NodeAccelerator
+      name: nodeaccelerators.inference.redhat.com
       version: v1alpha1
   description: Instaslice Operator description. TODO.
   displayName: Instaslice Operator
@@ -47,12 +50,15 @@ spec:
         - apiGroups:
           - inference.redhat.com
           resources:
-          - instaslices
-          - instaslices/status
-          - instaslices/finalizers
-          - instasliceoperators
-          - instasliceoperators/status
-          - instasliceoperators/finalizers
+          - nodeaccelerators
+          - nodeaccelerators/status
+          - nodeaccelerators/finalizers
+          - dasoperators
+          - dasoperators/status
+          - dasoperators/finalizers
+          - allocationclaims
+          - allocationclaims/status
+          - allocationclaims/finalizers
           verbs:
           - create
           - delete
@@ -156,19 +162,189 @@ spec:
           - list
           - patch
           - update
-        serviceAccountName: instaslice-operator
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          - pods
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - nodes
+          - nodes/status
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - daemonsets
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - update
+          - watch
+        - apiGroups:
+          - inference.redhat.com
+          resources:
+          - nodeaccelerators
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - inference.redhat.com
+          resources:
+          - nodeaccelerators/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - inference.redhat.com
+          resources:
+          - nodeaccelerators/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes
+          verbs:
+          - list
+        - apiGroups:
+          - security.openshift.io
+          resources:
+          - securitycontextconstraints
+          verbs:
+          - create
+          - get
+          - update
+          - watch
+        - apiGroups:
+          - cert-manager.io
+          resources:
+          - certificates
+          - issuers
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+        serviceAccountName: das-operator
+      - rules:
+        - apiGroups:
+          - ""
+          resourceNames:
+          - extension-apiserver-authentication
+          resources:
+          - configmaps
+          verbs:
+          - get
+        - apiGroups:
+          - ""
+          resources:
+          - nodes
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - pods/binding
+          - pods/status
+          verbs:
+          - create
+          - update
+          - patch
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          - nodes
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          - events.k8s.io
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+          - update
+        - apiGroups:
+          - inference.redhat.com
+          resources:
+          - nodeaccelerators
+          - nodeaccelerators/status
+          - dasoperators
+          - dasoperators/status
+          - allocationclaims
+          - allocationclaims/status
+          - allocationclaims/finalizers
+          verbs:
+          - get
+          - list
+          - watch
+          - update
+          - patch
+          - create
+          - delete
+        - apiGroups:
+          - storage.k8s.io
+          resources:
+          - csinodes
+          - csidrivers
+          - csistoragecapacities
+          - storageclasses
+          - volumeattachments
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - persistentvolumes
+          verbs:
+          - get
+          - list
+          - watch
+        serviceAccountName: das-scheduler
       deployments:
-      - name: instaslice-operator
+      - name: das-operator
         spec:
           replicas: 2
           selector:
             matchLabels:
-              app: instaslice-operator
+              app: das-operator
           strategy: {}
           template:
             metadata:
               labels:
-                app: instaslice-operator
+                app: das-operator
             spec:
               affinity:
                 podAffinity:
@@ -176,22 +352,22 @@ spec:
                   - podAffinityTerm:
                       labelSelector:
                         matchLabels:
-                          app: instalice-operator
+                          app: das-operator
                       topologyKey: kubernetes.io/hostname
                     weight: 100
               containers:
               - args:
                 - operator
                 command:
-                - /usr/bin/instaslice-operator
+                - /usr/bin/das-operator
                 env:
                 - name: OPERATOR_NAME
-                  value: instaslice-operator
+                  value: das-operator
                 - name: RELATED_IMAGE_DAEMONSET_IMAGE
-                  value: quay.io/ryan.phillips/instaslice-daemonset
+                  value: ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
                 - name: RELATED_IMAGE_WEBHOOK_IMAGE
-                  value: quay.io/ryan.phillips/instaslice-webhook
-                image: quay.io/ryan.phillips/instaslice-operator
+                  value: ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
+                image: ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
                 imagePullPolicy: Always
                 name: instaslice-operator
                 ports:
@@ -211,10 +387,50 @@ spec:
                 runAsNonRoot: true
                 seccompProfile:
                   type: RuntimeDefault
-              serviceAccountName: instaslice-operator
+              serviceAccountName: das-operator
               volumes:
               - emptyDir: {}
                 name: tmp
+      - name: das-scheduler
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: das-scheduler
+          strategy: {}
+          template:
+            metadata:
+              labels:
+                app: das-scheduler
+            spec:
+              containers:
+              - args:
+                - --config=/etc/das-scheduler/config.yaml
+                command:
+                - das-scheduler
+                image: ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
+                imagePullPolicy: Always
+                name: scheduler
+                resources: {}
+                volumeMounts:
+                - mountPath: /etc/das-scheduler
+                  name: config
+              serviceAccountName: das-scheduler
+              volumes:
+              - configMap:
+                  name: das-scheduler-config
+                name: config
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          verbs:
+          - get
+          - list
+          - watch
+        serviceAccountName: das-scheduler
     strategy: deployment
   installModes:
   - supported: false
@@ -238,8 +454,8 @@ spec:
     name: Provider Name
     url: https://your.domain
   relatedImages:
-  - image: quay.io/ryan.phillips/instaslice-daemonset
+  - image: ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
     name: daemonset-image
-  - image: quay.io/ryan.phillips/instaslice-webhook
+  - image: ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
     name: webhook-image
   version: 0.1.0

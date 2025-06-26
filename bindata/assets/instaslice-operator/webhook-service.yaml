@@ -3,16 +3,16 @@ kind: Service
 metadata:
   labels:
     app.kubernetes.io/component: webhook
-    app.kubernetes.io/created-by: instaslice-operator
+    app.kubernetes.io/created-by: das-operator
     app.kubernetes.io/instance: webhook-service
-    app.kubernetes.io/managed-by: instaslice-operator
-    app.kubernetes.io/name: instaslice-operator-webhook
-    app.kubernetes.io/part-of: instaslice-operator
-  name: instaslice-operator-webhook
-  namespace: instaslice-system
+    app.kubernetes.io/managed-by: das-operator
+    app.kubernetes.io/name: das-operator-webhook
+    app.kubernetes.io/part-of: das-operator
+  name: das-operator-webhook
+  namespace: das-operator
 spec:
   selector:
-    app.kubernetes.io/name: instaslice-operator-webhook
+    app.kubernetes.io/name: das-operator-webhook
   ports:
   - port: 8443
     protocol: TCP

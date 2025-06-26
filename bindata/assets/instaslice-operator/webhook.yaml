@@ -5,19 +5,19 @@ metadata:
     cert-manager.io/inject-ca-from: CERTIFICATE_NAMESPACE/CERTIFICATE_NAME
   labels:
     app.kubernetes.io/component: webhook
-    app.kubernetes.io/created-by: instaslice-operator
+    app.kubernetes.io/created-by: das-operator
     app.kubernetes.io/instance: mutating-webhook-configuration
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: mutatingwebhookconfiguration
-    app.kubernetes.io/part-of: instaslice-operator
-  name: instaslice-mutating-webhook-configuration
+    app.kubernetes.io/part-of: das-operator
+  name: das-mutating-webhook-configuration
 webhooks:
 - admissionReviewVersions:
   - v1
   clientConfig:
     service:
-      name: instaslice-operator-webhook
-      namespace: instaslice-system
+      name: das-operator-webhook
+      namespace: das-operator
       path: /mutate-pod
   failurePolicy: Ignore
   name: instaslice.redhat.com
@@ -26,7 +26,7 @@ webhooks:
     - key: kubernetes.io/metadata.name
       operator: NotIn
       values:
-      - instaslice-system
+      - das-operator
       - cert-manager
       - kube-system
   rules:

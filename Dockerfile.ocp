@@ -2,15 +2,15 @@ FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.23 AS bui
 
 WORKDIR /workspace
 COPY . .
-RUN GO_BUILD_PACKAGES=./cmd/instaslice-operator make
+RUN GO_BUILD_PACKAGES=./cmd/das-operator make
 
 FROM registry.access.redhat.com/ubi9/ubi-micro@sha256:955512628a9104d74f7b3b0a91db27a6bbecdd6a1975ce0f1b2658d3cd060b98
 WORKDIR /
-COPY --from=build /workspace/instaslice-operator /usr/bin
+COPY --from=build /workspace/das-operator /usr/bin
 USER 65532:65532
 
-ARG NAME=instaslice-operator
-ARG DESCRIPTION="The Instaslice operator."
+ARG NAME=das-operator
+ARG DESCRIPTION="The das operator."
 
 LABEL com.redhat.component=$NAME
 LABEL description=$DESCRIPTION

@@ -26,7 +26,7 @@ function setup_operator_env() {
 	fi
 
 	mkdir -p /var/run/secrets/kubernetes.io/serviceaccount/
-	echo -n "instaslice-system" >/var/run/secrets/kubernetes.io/serviceaccount/namespace
+	echo -n "das-operator" >/var/run/secrets/kubernetes.io/serviceaccount/namespace
 }
 
 function print_usage() {
@@ -64,4 +64,4 @@ fi
 
 setup_operator_env
 
-./instaslice-operator operator --kubeconfig "${KUBECONFIG}"
+./das-operator operator --kubeconfig "${KUBECONFIG}"

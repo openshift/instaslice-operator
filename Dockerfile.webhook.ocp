@@ -2,15 +2,15 @@ FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.23 AS bui
 
 WORKDIR /workspace
 COPY . .
-RUN GO_BUILD_PACKAGES=./cmd/instaslice-webhook make
+RUN GO_BUILD_PACKAGES=./cmd/das-webhook make
 
 FROM registry.access.redhat.com/ubi9/ubi-micro@sha256:955512628a9104d74f7b3b0a91db27a6bbecdd6a1975ce0f1b2658d3cd060b98
 WORKDIR /
-COPY --from=build /workspace/instaslice-webhook /usr/bin
+COPY --from=build /workspace/das-webhook /usr/bin
 USER 65532:65532
 
-ARG NAME=instaslice-webhook
-ARG DESCRIPTION="The Instaslice webhook."
+ARG NAME=das-webhook
+ARG DESCRIPTION="The das webhook."
 
 LABEL com.redhat.component=$NAME
 LABEL description=$DESCRIPTION

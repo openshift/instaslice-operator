@@ -3,7 +3,7 @@ FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.23 AS bui
 WORKDIR /workspace
 
 COPY . .
-RUN GO_BUILD_PACKAGES=./cmd/instaslice-daemonset make
+RUN GO_BUILD_PACKAGES=./cmd/das-daemonset make
 
 FROM nvcr.io/nvidia/cuda:12.9.0-base-ubi9
 
@@ -13,10 +13,10 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
 WORKDIR /
 
-COPY --from=build /workspace/instaslice-daemonset /usr/bin
+COPY --from=build /workspace/das-daemonset /usr/bin
 
-ARG NAME=instaslice-daemonset
-ARG DESCRIPTION="The Instaslice daemonset."
+ARG NAME=das-daemonset
+ARG DESCRIPTION="The das daemonset."
 
 LABEL com.redhat.component=$NAME
 LABEL description=$DESCRIPTION

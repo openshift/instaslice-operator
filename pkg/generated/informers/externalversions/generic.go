@@ -19,7 +19,7 @@ package externalversions
 import (
 	fmt "fmt"
 
-	v1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
+	v1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -51,10 +51,12 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=inference.redhat.com, Version=v1alpha1
-	case v1alpha1.SchemeGroupVersion.WithResource("instaslices"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.OpenShiftOperator().V1alpha1().Instaslices().Informer()}, nil
-	case v1alpha1.SchemeGroupVersion.WithResource("instasliceoperators"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.OpenShiftOperator().V1alpha1().InstasliceOperators().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("allocationclaims"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.OpenShiftOperator().V1alpha1().AllocationClaims().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("dasoperators"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.OpenShiftOperator().V1alpha1().DASOperators().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("nodeaccelerators"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.OpenShiftOperator().V1alpha1().NodeAccelerators().Informer()}, nil
 
 	}
 

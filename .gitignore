@@ -13,6 +13,7 @@ Dockerfile.cross
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+_output/*
 
 # Go workspace file
 go.work
@@ -32,6 +33,6 @@ go.work.sum
 report.json
 report.xml
 
-instaslice-daemonset
-instaslice-operator
-instaslice-webhook
+das-daemonset
+das-operator
+das-webhook

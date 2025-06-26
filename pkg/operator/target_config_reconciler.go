@@ -22,9 +22,9 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/openshift/instaslice-operator/bindata"
-	slicev1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/instasliceoperator/v1alpha1"
-	instasliceoperatorv1alphaclientset "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/instasliceoperator/v1alpha1"
-	operatorclientv1alpha1informers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions/instasliceoperator/v1alpha1"
+	slicev1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
+	instasliceoperatorv1alphaclientset "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1"
+	operatorclientv1alpha1informers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions/dasoperator/v1alpha1"
 
 	"github.com/openshift/instaslice-operator/pkg/operator/operatorclient"
 	"github.com/openshift/library-go/pkg/controller/factory"
@@ -49,27 +49,28 @@ type TargetConfigReconciler struct {
 	dynamicClient              dynamic.Interface
 	eventRecorder              events.Recorder
 	generations                []operatorsv1.GenerationStatus
-	instasliceoperatorClient   *operatorclient.InstasliceOperatorSetClient
+	instasliceoperatorClient   *operatorclient.DASOperatorSetClient
 	kubeClient                 kubernetes.Interface
 	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces
 	namespace                  string
-	operatorClient             instasliceoperatorv1alphaclientset.InstasliceOperatorInterface
+	operatorClient             instasliceoperatorv1alphaclientset.DASOperatorInterface
 	resourceCache              resourceapply.ResourceCache
 	secretLister               v1.SecretLister
 	targetDaemonsetImage       string
 	targetWebhookImage         string
 	emulatedMode               slicev1alpha1.EmulatedMode
+	nodeSelector               map[string]string
 }
 
 func NewTargetConfigReconciler(
 	targetDaemonsetImage string,
 	targetWebhookImage string,
 	namespace string,
-	operatorConfigClient instasliceoperatorv1alphaclientset.InstasliceOperatorInterface,
-	operatorClientInformer operatorclientv1alpha1informers.InstasliceOperatorInformer,
+	operatorConfigClient instasliceoperatorv1alphaclientset.DASOperatorInterface,
+	operatorClientInformer operatorclientv1alpha1informers.DASOperatorInformer,
 	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces,
 	appsClient appsv1client.DaemonSetsGetter,
-	instasliceoperatorClient *operatorclient.InstasliceOperatorSetClient,
+	instasliceoperatorClient *operatorclient.DASOperatorSetClient,
 	dynamicClient dynamic.Interface,
 	discoveryClient discovery.DiscoveryInterface,
 	kubeClient kubernetes.Interface,
@@ -108,7 +109,7 @@ func NewTargetConfigReconciler(
 	).ResyncEvery(time.Minute*5).
 		WithSync(c.sync).
 		WithSyncDegradedOnError(instasliceoperatorClient).
-		ToController("InstasliceOperatorController", eventRecorder)
+		ToController("DASOperatorController", eventRecorder)
 }
 
 func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncContext) error {
@@ -131,10 +132,11 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	}
 
 	c.emulatedMode = sliceOperator.Spec.EmulatedMode
+	c.nodeSelector = sliceOperator.Spec.NodeSelector
 
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "inference.redhat.com/v1alpha1",
-		Kind:       "InstasliceOperator",
+		Kind:       "DASOperator",
 		Name:       sliceOperator.Name,
 		UID:        sliceOperator.UID,
 	}
@@ -249,6 +251,15 @@ func (c *TargetConfigReconciler) manageDaemonset(ctx context.Context, ownerRefer
 	required.Namespace = c.namespace
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
+	}
+	// Merge user-specified nodeSelector labels (if any)
+	if len(c.nodeSelector) > 0 {
+		if required.Spec.Template.Spec.NodeSelector == nil {
+			required.Spec.Template.Spec.NodeSelector = make(map[string]string)
+		}
+		for k, v := range c.nodeSelector {
+			required.Spec.Template.Spec.NodeSelector[k] = v
+		}
 	}
 	for i := range required.Spec.Template.Spec.Containers {
 		if c.targetDaemonsetImage != "" {

@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: instaslice-daemonset
-  namespace: instaslice-system
+  name: das-daemonset
+  namespace: das-operator
   labels:
-    k8s-app: instaslice-daemonset
+    k8s-app: das-daemonset
 spec:
   selector:
     matchLabels:
-      name: instaslice-daemonset
+      name: das-daemonset
   template:
     metadata:
       labels:
-        name: instaslice-daemonset
+        name: das-daemonset
     spec:
       nodeSelector:
         nvidia.com/mig.capable: "true"
@@ -20,20 +20,35 @@ spec:
         runAsNonRoot: false
         seccompProfile:
           type: RuntimeDefault
-      serviceAccountName: instaslice-operator
+      serviceAccountName: das-operator
+      volumes:
+      - name: device-plugins
+        hostPath:
+          path: /var/lib/kubelet/device-plugins
+          type: DirectoryOrCreate
+      - name: cdi-dir
+        hostPath:
+          path: /var/run/cdi
+          type: DirectoryOrCreate
       containers:
-      - name: instaslice-daemonset
+      - name: das-daemonset
         securityContext:
           allowPrivilegeEscalation: true
           privileged: true
           readOnlyRootFilesystem: false
           capabilities:
             drop: [ "ALL" ]
-        image: quay.io/ryan.phillips/instaslice-daemonset
+        image: quay.io/ryan.phillips/das-daemonset
+        imagePullPolicy: Always
         command:
-          - /usr/bin/instaslice-daemonset
+          - /usr/bin/das-daemonset
         args:
           - "daemonset"
+        volumeMounts:
+          - name: device-plugins
+            mountPath: /var/lib/kubelet/device-plugins
+          - name: cdi-dir
+            mountPath: /var/run/cdi
         env:
           - name: NODE_NAME
             valueFrom:
@@ -43,3 +58,10 @@ spec:
             value: "false"
           - name: NVIDIA_MIG_CONFIG_DEVICES
             value: "all"
+        lifecycle:
+          preStop:
+            exec:
+              command:
+                - "/bin/sh"
+                - "-c"
+                - "echo PreStop hook placeholder: waiting for GPU ops to complete; sleep 30"
