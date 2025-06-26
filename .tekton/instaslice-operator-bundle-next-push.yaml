@@ -195,6 +195,8 @@ spec:
         workspace: git-auth
       - name: netrc
         workspace: netrc
+    - name: prefetch-input
+      value: '{"type": "generic", "path": "."}'
     - name: build-container
       params:
       - name: IMAGE
@@ -224,6 +226,7 @@ spec:
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
       runAfter:
       - prefetch-dependencies
+      - prefetch-input
       taskRef:
         params:
         - name: name

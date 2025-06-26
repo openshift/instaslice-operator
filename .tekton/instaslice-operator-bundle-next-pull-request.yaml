@@ -172,6 +172,8 @@ spec:
       workspaces:
       - name: basic-auth
         workspace: git-auth
+    - name: prefetch-input
+      value: '{"type": "generic", "path": "."}'
     - name: prefetch-dependencies
       params:
       - name: input
@@ -183,6 +185,7 @@ spec:
       - name: ociArtifactExpiresAfter
         value: $(params.image-expires-after)
       runAfter:
+      - prefetch-input
       - clone-repository
       taskRef:
         params:
