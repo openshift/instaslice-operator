@@ -62,7 +62,15 @@ func (d *Dispatcher) HandleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	SendResponse(w, d.hook.Authorized(request))
+	resp := d.hook.Authorized(request)
+	if err := resp.Complete(request); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		klog.ErrorS(err, "Failed to complete response")
+		SendResponse(w, admissionctl.Errored(http.StatusInternalServerError, err))
+		return
+	}
+
+	SendResponse(w, resp)
 }
 
 // SendResponse Send the AdmissionReview.

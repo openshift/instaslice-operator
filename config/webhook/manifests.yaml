@@ -10,7 +10,7 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-v1-pod
+      path: /mutate-pod
   failurePolicy: Fail
   name: instaslice.redhat.com
   rules:

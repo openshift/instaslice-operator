@@ -234,7 +234,7 @@ spec:
                   periodSeconds: 20
                 name: manager
                 ports:
-                - containerPort: 9443
+                - containerPort: 8443
                   name: webhook-server
                   protocol: TCP
                 readinessProbe:
@@ -257,9 +257,9 @@ spec:
                     - ALL
                   runAsUser: 1000
                 volumeMounts:
-                - mountPath: /tmp/k8s-webhook-server/serving-certs
-                  name: cert
-                  readOnly: true
+                - mountPath: /etc/webhook/certs
+              name: cert
+              readOnly: true
               securityContext:
                 runAsNonRoot: false
                 seccompProfile:
@@ -373,6 +373,6 @@ spec:
       resources:
       - pods
     sideEffects: None
-    targetPort: 9443
+    targetPort: 8443
     type: MutatingAdmissionWebhook
-    webhookPath: /mutate-v1-pod
+    webhookPath: /mutate-pod

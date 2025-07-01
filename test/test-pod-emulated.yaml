@@ -1,32 +1,17 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: test-das
+  name: test-pod
 spec:
-  schedulerName: das-scheduler
+  restartPolicy: OnFailure
   containers:
-  - name: busy
-    image: quay.io/prometheus/busybox
-    env:
-    - name: NVIDIA_VISIBLE_DEVICES  # TODO - Remove this once webhook starts working
-      valueFrom:
-        configMapKeyRef:
-          name: test-das
-          key: NVIDIA_VISIBLE_DEVICES
-    - name: CUDA_VISIBLE_DEVICES
-      valueFrom:
-        configMapKeyRef:
-          name: test-das
-          key: CUDA_VISIBLE_DEVICES
-    command: ["sh","-c","sleep 3600"]
-    securityContext:
-      allowPrivilegeEscalation: false
-      capabilities:
-        drop: ["ALL"]
-      runAsNonRoot: true
-      runAsUser: 1000
-      seccompProfile:
-        type: RuntimeDefault
+  - name: test-pod
+    image: "quay.io/prometheus/busybox"
     resources:
       limits:
-        mig.das.com/1g.5gb: "1"
+        nvidia.com/mig-1g.5gb: "1"
+    command:
+      - sh
+      - -c
+      - "sleep 3600"
+

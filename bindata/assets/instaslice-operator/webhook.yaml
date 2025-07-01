@@ -19,6 +19,7 @@ webhooks:
       name: das-operator-webhook
       namespace: das-operator
       path: /mutate-pod
+      port: 8443
   failurePolicy: Ignore
   name: instaslice.redhat.com
   namespaceSelector:
@@ -29,6 +30,8 @@ webhooks:
       - das-operator
       - cert-manager
       - kube-system
+      - openshift-operators
+      - openshift-marketplace
   rules:
   - apiGroups:
     - ""

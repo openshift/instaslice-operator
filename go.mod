@@ -5,6 +5,7 @@ go 1.23.0
 require (
 	github.com/NVIDIA/go-nvml v0.12.4-1
 	github.com/fsnotify/fsnotify v1.7.0
+	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.22.1
 	github.com/onsi/gomega v1.36.2
 	github.com/openshift/api v0.0.0-20250226153854-e8e096a21cb3
@@ -69,7 +70,6 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.24.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

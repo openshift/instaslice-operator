@@ -3,25 +3,13 @@ kind: Pod
 metadata:
   name: cuda-vectoradd-1
 spec:
-  schedulerName: das-scheduler
   restartPolicy: OnFailure
   containers:
   - name: cuda-vectoradd-1
-    image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8"
-    env:
-    - name: NVIDIA_VISIBLE_DEVICES  # TODO - Remove this once webhook starts working
-      valueFrom:
-        configMapKeyRef:
-          name: cuda-vectoradd-1
-          key: NVIDIA_VISIBLE_DEVICES
-    - name: CUDA_VISIBLE_DEVICES
-      valueFrom:
-        configMapKeyRef:
-          name: cuda-vectoradd-1
-          key: CUDA_VISIBLE_DEVICES
+    image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8" # requires real GPUs
     resources:
       limits:
-        mig.das.com/1g.5gb: "1"
+        nvidia.com/mig-1g.5gb: "1"
     command:
       - sh
       - -c
