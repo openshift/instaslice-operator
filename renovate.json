@@ -15,8 +15,6 @@
   "rebaseLabel": "needs-rebase",
   "rebaseWhen": "behind-base-branch",
   "recreateWhen": "always",
-  "schedule": "0 6,15 * * 1-5",
-  "timezone": "America/New_York",
   "tekton": {
     "enabled": true,
     "packageRules": [
