@@ -1,22 +1,21 @@
 FROM registry.redhat.io/ubi9/ubi-minimal:9.6 as builder
+RUN cp /cachi2/output/deps/generic/jq /usr/local/bin/jq
+RUN chmod +x /usr/local/bin/jq
+
 ARG RELATED_IMAGE_FILE=related_images.json
 ARG CSV_FILE=bundle-ocp/manifests/das-operator.clusterserviceversion.yaml
-ARG OPERATOR_IMAGE_ORIGINAL=quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/das-operator-next:latest
-ARG WEBHOOK_IMAGE_ORIGINAL=quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/das-webhook-next:latest
-ARG SCHEDULER_IMAGE_ORIGINAL=quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/das-scheduler-next:latest
-ARG DAEMONSET_IMAGE_ORIGINAL=quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/das-daemonset-next:latest
-
-RUN microdnf install -y jq
+ARG OPERATOR_IMAGE_ORIGINAL=quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next:latest
+ARG WEBHOOK_IMAGE_ORIGINAL=quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next:latest
+ARG SCHEDULER_IMAGE_ORIGINAL=quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-scheduler-next:latest
+ARG DAEMONSET_IMAGE_ORIGINAL=quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset-next:latest
 
 COPY ${CSV_FILE} /manifests/das-operator.clusterserviceversion.yaml
 COPY ${RELATED_IMAGE_FILE} /${RELATED_IMAGE_FILE}
 
-RUN OPERATOR_IMAGE=$(jq -r '.[] | select(.name == "das-operator-next") | .image' /${RELATED_IMAGE_FILE}) && sed -i "s|${OPERATOR_IMAGE_ORIGINAL}|${OPERATOR_IMAGE}|g" /manifests/das-operator.clusterserviceversion.yaml
-RUN WEBHOOK_IMAGE=$(jq -r '.[] | select(.name == "das-webhook-next") | .image' /${RELATED_IMAGE_FILE}) && sed -i "s|${WEBHOOK_IMAGE_ORIGINAL}|${WEBHOOK_IMAGE}|g" /manifests/das-operator.clusterserviceversion.yaml
-RUN SCHEDULER_IMAGE=$(jq -r '.[] | select(.name == "das-scheduler-next") | .image' /${RELATED_IMAGE_FILE}) && sed -i "s|${SCHEDULER_IMAGE_ORIGINAL}|${SCHEDULER_IMAGE}|g" /manifests/das-operator.clusterserviceversion.yaml
-RUN DAEMONSET_IMAGE=$(jq -r '.[] | select(.name == "das-daemonset-next") | .image' /${RELATED_IMAGE_FILE}) && sed -i "s|${DAEMONSET_IMAGE_ORIGINAL}|${DAEMONSET_IMAGE}|g" /manifests/das-operator.clusterserviceversion.yaml
-
-RUN cat /manifests/das-operator.clusterserviceversion.yaml
+RUN OPERATOR_IMAGE=$(jq -r '.[] | select(.name == "instaslice-operator-next") | .image' /${RELATED_IMAGE_FILE}) && sed -i "s|${OPERATOR_IMAGE_ORIGINAL}|${OPERATOR_IMAGE}|g" /manifests/das-operator.clusterserviceversion.yaml
+RUN WEBHOOK_IMAGE=$(jq -r '.[] | select(.name == "instaslice-webhook-next") | .image' /${RELATED_IMAGE_FILE}) && sed -i "s|${WEBHOOK_IMAGE_ORIGINAL}|${WEBHOOK_IMAGE}|g" /manifests/das-operator.clusterserviceversion.yaml
+RUN SCHEDULER_IMAGE=$(jq -r '.[] | select(.name == "instaslice-scheduler-next") | .image' /${RELATED_IMAGE_FILE}) && sed -i "s|${SCHEDULER_IMAGE_ORIGINAL}|${SCHEDULER_IMAGE}|g" /manifests/das-operator.clusterserviceversion.yaml
+RUN DAEMONSET_IMAGE=$(jq -r '.[] | select(.name == "instaslice-daemonset-next") | .image' /${RELATED_IMAGE_FILE}) && sed -i "s|${DAEMONSET_IMAGE_ORIGINAL}|${DAEMONSET_IMAGE}|g" /manifests/das-operator.clusterserviceversion.yaml
 
 FROM scratch
 
