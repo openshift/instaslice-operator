@@ -37,7 +37,7 @@ import (
 
 const (
 	WebhookCertificateSecretName  = "webhook-server-cert"
-	WebhookCertificateName        = "instaslice-serving-cert"
+	WebhookCertificateName        = "das-serving-cert"
 	CertManagerInjectCaAnnotation = "cert-manager.io/inject-ca-from"
 )
 

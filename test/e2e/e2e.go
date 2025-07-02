@@ -32,7 +32,6 @@ func gpuSlicePodSpec(profile string, mode instav1.EmulatedMode) corev1.PodSpec {
 		command = []string{"sh", "-c", "/cuda-samples/vectorAdd && env && sleep 3600"}
 	}
 	return corev1.PodSpec{
-		SchedulerName: "das-scheduler",
 		Containers: []corev1.Container{
 			{
 				Name:    "busy",
@@ -40,7 +39,7 @@ func gpuSlicePodSpec(profile string, mode instav1.EmulatedMode) corev1.PodSpec {
 				Command: command,
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
-						corev1.ResourceName(fmt.Sprintf("mig.das.com/%s", profile)): resource.MustParse("1"),
+						corev1.ResourceName(fmt.Sprintf("nvidia.com/mig-%s", profile)): resource.MustParse("1"),
 					},
 				},
 				SecurityContext: &corev1.SecurityContext{
@@ -60,7 +59,7 @@ func defaultGPUSlicePodSpec() corev1.PodSpec {
 
 func multiGPUSlicePodSpec(count int) corev1.PodSpec {
 	spec := gpuSlicePodSpec("1g.5gb", emulatedMode)
-	spec.Containers[0].Resources.Limits[corev1.ResourceName("mig.das.com/1g.5gb")] = resource.MustParse(fmt.Sprintf("%d", count))
+	spec.Containers[0].Resources.Limits[corev1.ResourceName("nvidia.com/mig-1g.5gb")] = resource.MustParse(fmt.Sprintf("%d", count))
 	return spec
 }
 
@@ -497,29 +496,6 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 func createPods(ctx context.Context, namespace string, pods []*corev1.Pod) error {
 	for _, pod := range pods {
 		pod.Spec.RestartPolicy = corev1.RestartPolicyOnFailure
-		// TODO - remove this once the webhook starts working properly
-		if len(pod.Spec.Containers) > 0 {
-			pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env,
-				corev1.EnvVar{
-					Name: "NVIDIA_VISIBLE_DEVICES",
-					ValueFrom: &corev1.EnvVarSource{
-						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{Name: pod.Name},
-							Key:                  "NVIDIA_VISIBLE_DEVICES",
-						},
-					},
-				},
-				corev1.EnvVar{
-					Name: "CUDA_VISIBLE_DEVICES",
-					ValueFrom: &corev1.EnvVarSource{
-						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{Name: pod.Name},
-							Key:                  "CUDA_VISIBLE_DEVICES",
-						},
-					},
-				},
-			)
-		}
 		if _, err := kubeClient.CoreV1().Pods(namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
 			return err
 		}

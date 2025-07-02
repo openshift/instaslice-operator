@@ -47,10 +47,11 @@ spec:
         args:
           - serve
           - --tls=true
-          - --tlskey=/tmp/k8s-webhook-server/serving-certs/tls.key
-          - --tlscert=/tmp/k8s-webhook-server/serving-certs/tls.crt
-          - --cacert=/tmp/k8s-webhook-server/serving-certs/ca.crt
+          - --tlskey=/etc/webhook/certs/tls.key
+          - --tlscert=/etc/webhook/certs/tls.crt
+          - --cacert=/etc/webhook/certs/ca.crt
         image: quay.io/ryan.phillips/das-webhook
+        imagePullPolicy: Always
         name: das-operator-webhook
         livenessProbe:
           httpGet:
@@ -59,6 +60,13 @@ spec:
             port: https
           initialDelaySeconds: 15
           periodSeconds: 20
+        startupProbe:
+          exec:
+            command:
+            - cat
+            - /etc/webhook/certs/ca.crt
+          initialDelaySeconds: 5
+          periodSeconds: 5
         readinessProbe:
           httpGet:
             scheme: HTTPS
@@ -76,7 +84,7 @@ spec:
         securityContext: {}
         terminationMessagePolicy: FallbackToLogsOnError
         volumeMounts:
-        - mountPath: /tmp/k8s-webhook-server/serving-certs
+        - mountPath: /etc/webhook/certs
           name: cert
           readOnly: true
       priorityClassName: system-cluster-critical
@@ -87,3 +95,10 @@ spec:
         secret:
           defaultMode: 420
           secretName: webhook-server-cert
+          items:
+          - key: ca.crt
+            path: ca.crt
+          - key: tls.crt
+            path: tls.crt
+          - key: tls.key
+            path: tls.key

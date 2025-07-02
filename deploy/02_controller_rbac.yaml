@@ -114,6 +114,12 @@ rules:
       - update
       - watch
   - apiGroups:
+      - config.openshift.io
+    resources:
+      - infrastructures
+    verbs:
+      - get
+  - apiGroups:
     - cert-manager.io
     resources:
     - certificates
@@ -137,3 +143,16 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: das-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: das-operator-privileged-scc
+subjects:
+- kind: ServiceAccount
+  name: das-operator
+  namespace: das-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:privileged

@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/name: certificate
     app.kubernetes.io/part-of: das-operator
   name: das-serving-cert
-  namespace: inststaslice-operator
+  namespace: das-operator
 spec:
   dnsNames:
   - SERVICE_NAME.SERVICE_NAMESPACE.svc
