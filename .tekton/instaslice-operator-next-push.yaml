@@ -10,7 +10,8 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "next" && !files.all.exists(path, path.matches('cmd/das-daemonset/|pkg/version/|pkg/cmd/daemonset/|pkg/daemonset|Dockerfile.daemonset.ocp|.tekton/das-daemonset-next-*|cmd/das-webhook/|/pkg/version/|pkg/cmd/webhook/|pkg/webhook/|Dockerfile.webhook.ocp|.tekton/das-webhook-next-*|bundle-ocp/|bundle-ocp.Dockerfile|.tekton/instaslice-operator-bundle-next-*|related_images.json'))
+      == "next" &&
+      files.all.exists(path, path.matches('cmd/das-operator/|pkg/version/|pkg/cmd/operator/|pkg/operator|Dockerfile.operator.ocp|.tekton/instaslice-operator-next-*|cmd/das-operator/|/pkg/version/|pkg/cmd/operator/|pkg/operator/|Dockerfile.webhook.ocp|.tekton/instaslice-operator-next-*|bundle-ocp/|bundle-ocp.Dockerfile|.tekton/instaslice-operator-bundle-next-*'))
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: dynamicacceleratorslicer-next
