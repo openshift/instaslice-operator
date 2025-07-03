@@ -21,9 +21,11 @@ import (
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	fakeclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/fake"
 	utils "github.com/openshift/instaslice-operator/test/utils"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	kubefake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 )
@@ -462,6 +464,42 @@ func TestListAndWatchRebootResetsAllocations(t *testing.T) {
 
 	if alloc.Status.State != instav1.AllocationClaimStatusCreated {
 		t.Fatalf("expected allocation state reset to Created, got %s", alloc.Status.State)
+	}
+}
+
+func TestEnsureEnvConfigMapUsesAnnotation(t *testing.T) {
+	cmName := "cm-uuid"
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "p1",
+			Namespace:   "default",
+			UID:         "uid1",
+			Annotations: map[string]string{envConfigMapAnnotationKey: cmName},
+		},
+	}
+	specObj := instav1.AllocationClaimSpec{
+		PodRef:       corev1.ObjectReference{Name: pod.Name, Namespace: pod.Namespace, UID: pod.UID},
+		MigPlacement: instav1.Placement{Start: 0, Size: 1},
+		GPUUUID:      "gpu1",
+		Nodename:     "node1",
+	}
+	raw, _ := json.Marshal(&specObj)
+	alloc := &instav1.AllocationClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "a1", Namespace: "default"},
+		Spec:       runtime.RawExtension{Raw: raw},
+	}
+
+	kube := kubefake.NewSimpleClientset(pod)
+	srv := &Server{KubeClient: kube}
+
+	srv.ensureEnvConfigMap(context.Background(), alloc, "NVIDIA_VISIBLE_DEVICES=foo")
+
+	cm, err := kube.CoreV1().ConfigMaps(pod.Namespace).Get(context.Background(), cmName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected configmap: %v", err)
+	}
+	if cm.Data["NVIDIA_VISIBLE_DEVICES"] != "foo" || cm.Data["CUDA_VISIBLE_DEVICES"] != "foo" {
+		t.Fatalf("unexpected data: %v", cm.Data)
 	}
 }
 
