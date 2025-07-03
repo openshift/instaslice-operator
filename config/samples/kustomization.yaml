@@ -1,4 +1,0 @@
-## Append samples of your project ##
-resources:
-- inference_v1alpha1_instaslice.yaml
-#+kubebuilder:scaffold:manifestskustomizesamples
