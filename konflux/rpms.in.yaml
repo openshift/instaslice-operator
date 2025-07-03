@@ -1,0 +1,4 @@
+packages: [jq] 
+contentOrigin:
+  repofiles: ["./ubi.repo"] 
+arches: [x86_64] 

@@ -1,6 +1,5 @@
-FROM registry.redhat.io/ubi9/ubi-minimal:9.6 as builder
-RUN cp /cachi2/output/deps/generic/jq /usr/local/bin/jq
-RUN chmod +x /usr/local/bin/jq
+FROM registry.redhat.io/ubi9/ubi:9.6 as builder
+RUN dnf -y install jq
 
 ARG RELATED_IMAGE_FILE=related_images.json
 ARG CSV_FILE=bundle-ocp/manifests/das-operator.clusterserviceversion.yaml
