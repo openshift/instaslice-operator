@@ -33,7 +33,7 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ "ALL" ]
-          image: ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
+          image: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next:latest
           volumeMounts:
             - name: tmp
               mountPath: "/tmp"
@@ -49,9 +49,11 @@ spec:
             - name: OPERATOR_NAME
               value: "das-operator"
             - name: RELATED_IMAGE_DAEMONSET_IMAGE
-              value: ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
+              value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset-next:latest
             - name: RELATED_IMAGE_WEBHOOK_IMAGE
-              value: ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
+              value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next:latest
+            - name: RELATED_IMAGE_SCHEDULER_IMAGE
+              value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-scheduler-next:latest
       serviceAccountName: das-operator
       volumes:
         - name: tmp

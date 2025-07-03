@@ -1,6 +1,6 @@
 all: build
 .PHONY: all
-SHELL := /bin/bash
+SHELL := /usr/bin/env bash
 
 SOURCE_GIT_TAG ?=$(shell git describe --long --tags --abbrev=7 --match 'v[0-9]*' || echo 'v1.0.0-$(SOURCE_GIT_COMMIT)')
 SOURCE_GIT_COMMIT ?=$(shell git rev-parse --short "HEAD^{commit}" 2>/dev/null)
@@ -259,7 +259,7 @@ operator-sdk:
 
 .PHONY: bundle-generate
 bundle-generate: operator-sdk
-	$(OPERATOR_SDK) generate bundle --input-dir $(DEPLOY_DIR)/ --version $(OPERATOR_VERSION) --overwrite
+	$(OPERATOR_SDK) generate bundle --input-dir $(DEPLOY_DIR)/ --version $(OPERATOR_VERSION) --output-dir=bundle-ocp --package das-operator
 
 .PHONY: bundle-build
 bundle-build: bundle-generate
