@@ -61,13 +61,13 @@ func TestMutatePodNvidiaResource(t *testing.T) {
 	var nvidiaEnv, cudaEnv bool
 	for _, e := range envs {
 		if e.Name == envNvidia {
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != testName || e.ValueFrom.ConfigMapKeyRef.Key != envNvidia {
+			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Key != envNvidia || e.ValueFrom.ConfigMapKeyRef.Name == "" {
 				t.Fatalf("invalid NVIDIA_VISIBLE_DEVICES env")
 			}
 			nvidiaEnv = true
 		}
 		if e.Name == envCUDA {
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != testName || e.ValueFrom.ConfigMapKeyRef.Key != envCUDA {
+			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Key != envCUDA || e.ValueFrom.ConfigMapKeyRef.Name == "" {
 				t.Fatalf("invalid CUDA_VISIBLE_DEVICES env")
 			}
 			cudaEnv = true
@@ -121,13 +121,13 @@ func TestMutatePodEphemeralNvidiaResource(t *testing.T) {
 	var nvidiaEnv, cudaEnv bool
 	for _, e := range envs {
 		if e.Name == envNvidia {
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != "ephem" || e.ValueFrom.ConfigMapKeyRef.Key != envNvidia {
+			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Key != envNvidia || e.ValueFrom.ConfigMapKeyRef.Name == "" {
 				t.Fatalf("invalid NVIDIA_VISIBLE_DEVICES env")
 			}
 			nvidiaEnv = true
 		}
 		if e.Name == envCUDA {
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != "ephem" || e.ValueFrom.ConfigMapKeyRef.Key != envCUDA {
+			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Key != envCUDA || e.ValueFrom.ConfigMapKeyRef.Name == "" {
 				t.Fatalf("invalid CUDA_VISIBLE_DEVICES env")
 			}
 			cudaEnv = true
@@ -183,11 +183,11 @@ func TestMutatePodOverrideValues(t *testing.T) {
 	for _, e := range envs {
 		switch e.Name {
 		case envNvidia:
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != "override" || e.ValueFrom.ConfigMapKeyRef.Key != envNvidia {
+			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Key != envNvidia || e.ValueFrom.ConfigMapKeyRef.Name == "" {
 				t.Fatalf("NVIDIA env not correctly set")
 			}
 		case envCUDA:
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != "override" || e.ValueFrom.ConfigMapKeyRef.Key != envCUDA {
+			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Key != envCUDA || e.ValueFrom.ConfigMapKeyRef.Name == "" {
 				t.Fatalf("CUDA env not correctly set")
 			}
 		default:
@@ -234,13 +234,13 @@ func TestMutatePodInstaResource(t *testing.T) {
 	var nvidiaEnv, cudaEnv bool
 	for _, e := range envs {
 		if e.Name == envNvidia {
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != testName || e.ValueFrom.ConfigMapKeyRef.Key != envNvidia {
+			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Key != envNvidia || e.ValueFrom.ConfigMapKeyRef.Name == "" {
 				t.Fatalf("invalid NVIDIA_VISIBLE_DEVICES env")
 			}
 			nvidiaEnv = true
 		}
 		if e.Name == envCUDA {
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != testName || e.ValueFrom.ConfigMapKeyRef.Key != envCUDA {
+			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Key != envCUDA || e.ValueFrom.ConfigMapKeyRef.Name == "" {
 				t.Fatalf("invalid CUDA_VISIBLE_DEVICES env")
 			}
 			cudaEnv = true

@@ -8,15 +8,17 @@ import (
 	admissionctl "sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	corev1 "k8s.io/api/core/v1"
+	utiluuid "k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/klog/v2"
 )
 
 const (
-	URI                  string = "/mutate-pod"
-	ReadinessEndpointURI string = "/readyz"
-	HealthzEndpointURI   string = "/healthz"
-	WebhookName          string = "das-webhook"
-	secondaryScheduler   string = "das-scheduler"
+	URI                       string = "/mutate-pod"
+	ReadinessEndpointURI      string = "/readyz"
+	HealthzEndpointURI        string = "/healthz"
+	WebhookName               string = "das-webhook"
+	secondaryScheduler        string = "das-scheduler"
+	envConfigMapAnnotationKey string = "mig.das.com/env-configmap"
 )
 
 // Webhook interface
@@ -155,18 +157,20 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 		mutatedPod.Spec.SchedulerName = secondaryScheduler
 		klog.InfoS("using secondary scheduler", "name", mutatedPod.Name)
 
+		cmName := string(utiluuid.NewUUID())
+		if mutatedPod.Annotations == nil {
+			mutatedPod.Annotations = map[string]string{}
+		}
+		mutatedPod.Annotations[envConfigMapAnnotationKey] = cmName
+
 		// addEnv injects or overwrites ConfigMap-backed environment variables so
 		// the scheduler can identify which GPU slice was allocated to the pod.
 		addEnv := func(c *corev1.Container) {
-			if mutatedPod.Name == "" {
-				return
-			}
-
 			nvidiaVar := corev1.EnvVar{
 				Name: "NVIDIA_VISIBLE_DEVICES",
 				ValueFrom: &corev1.EnvVarSource{
 					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{Name: mutatedPod.Name},
+						LocalObjectReference: corev1.LocalObjectReference{Name: cmName},
 						Key:                  "NVIDIA_VISIBLE_DEVICES",
 					},
 				},
@@ -175,7 +179,7 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 				Name: "CUDA_VISIBLE_DEVICES",
 				ValueFrom: &corev1.EnvVarSource{
 					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{Name: mutatedPod.Name},
+						LocalObjectReference: corev1.LocalObjectReference{Name: cmName},
 						Key:                  "CUDA_VISIBLE_DEVICES",
 					},
 				},
