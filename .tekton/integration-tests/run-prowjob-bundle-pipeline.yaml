@@ -1,0 +1,43 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: run-prowjob-bundle-pipeline
+spec:
+  description: >-
+    Run a parameterized prowjob using gangway.
+  params:
+  - name: SNAPSHOT
+    description: 'Snapshot of the application'
+  - name: GANGWAY_TOKEN
+    type: string
+    default: gangway-token
+    description: Token to authenticate with gangway
+  tasks:
+  - name: run-prowjob
+    displayName: "Running prowjob $(params.PROWJOB_NAME)"
+    taskRef:
+      resolver: git
+      params:
+      - name: url
+        value: https://github.com/openshift/konflux-tasks
+      - name: revision
+        value: main
+      - name: pathInRepo
+        value: tasks/run-prowjob.yaml
+    params:
+    - name: SNAPSHOT
+      value: $(params.SNAPSHOT)
+    - name: CLOUD_PROVIDER
+      value: "gcp"
+    - name: OPENSHIFT_VERSION
+      value: "4.18"
+    - name: ARTIFACTS_BUILD_ROOT
+      value: quay-proxy.ci.openshift.org/openshift/ci:ocp_builder_rhel-9-golang-1.23-openshift-4.18
+    - name: DOCKERFILE_ADDITIONS
+      value: RUN make build
+    - name: DEPLOY_TEST_COMMAND
+      value: "CLEANUP=true USE_OLM=false ./hack/deploy-and-e2e.sh"
+    - name: BUNDLE_NS
+      value: openshift-multiarch-tuning-operator
+    - name: BUNDLE_PRE_TEST_COMMAND
+      value: "oc apply -k ./deploy/envs/prow-konflux-bundle"
