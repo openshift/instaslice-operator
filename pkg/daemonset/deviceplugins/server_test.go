@@ -413,7 +413,7 @@ func TestWriteCDISpecForResourceWait(t *testing.T) {
 	}
 }
 
-func TestListAndWatchRebootResetsAllocations(t *testing.T) {
+func TestListAndWatchRebootDeletesAllocations(t *testing.T) {
 	dir := t.TempDir()
 	if err := cdi.Configure(cdi.WithSpecDirs(dir), cdi.WithAutoRefresh(false)); err != nil {
 		t.Fatalf("failed to configure cdi: %v", err)
@@ -462,8 +462,9 @@ func TestListAndWatchRebootResetsAllocations(t *testing.T) {
 		t.Fatalf("expected no devices, got %d", len(resp.Devices))
 	}
 
-	if alloc.Status.State != instav1.AllocationClaimStatusCreated {
-		t.Fatalf("expected allocation state reset to Created, got %s", alloc.Status.State)
+	key := fmt.Sprintf("%s/%s", alloc.Namespace, alloc.Name)
+	if _, exists, _ := allocationIndexer.GetByKey(key); exists {
+		t.Fatalf("expected allocation to be deleted from indexer")
 	}
 }
 

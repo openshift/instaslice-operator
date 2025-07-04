@@ -140,6 +140,11 @@ build-push-webhook:
 test-k8s:
 	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') \
 		nvidia.com/mig.capable=true --overwrite
+	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') \
+		node-role.kubernetes.io/control-plane="" --overwrite
+	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') \
+		node-role.kubernetes.io/master="" --overwrite
+
 
 	@echo "=== Building and pushing images in parallel ==="
 	$(MAKE) -j16 build-push-scheduler build-push-daemonset build-push-operator build-push-webhook

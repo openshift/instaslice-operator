@@ -23,6 +23,9 @@ import (
 	"k8s.io/utils/ptr"
 
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	kubernetes "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -46,6 +49,7 @@ type Server struct {
 	SocketPath       string
 	InstasliceClient instaclient.Interface
 	KubeClient       kubernetes.Interface
+	DynamicClient    dynamic.Interface
 	NodeName         string
 	EmulatedMode     instav1.EmulatedMode
 	allocMutex       sync.Mutex
@@ -66,11 +70,15 @@ func NewServer(mgr *Manager, socketPath string, kubeConfig *rest.Config, emulate
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
+	dynClient, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
+	}
 	nodeName := os.Getenv("NODE_NAME")
 	if nodeName == "" {
 		return nil, fmt.Errorf("NODE_NAME environment variable is required")
 	}
-	return &Server{Manager: mgr, SocketPath: socketPath, InstasliceClient: client, KubeClient: kubeClient, NodeName: nodeName, EmulatedMode: emulatedMode}, nil
+	return &Server{Manager: mgr, SocketPath: socketPath, InstasliceClient: client, KubeClient: kubeClient, DynamicClient: dynClient, NodeName: nodeName, EmulatedMode: emulatedMode}, nil
 }
 
 func (s *Server) Start(ctx context.Context) error {
@@ -167,34 +175,24 @@ func (s *Server) ListAndWatch(req *pluginapi.Empty, stream pluginapi.DevicePlugi
 	}
 
 	if len(inUseAllocs) != len(initDevices) {
-		klog.InfoS("Detected reboot, resetting allocations", "resource", s.Manager.ResourceName, "inUse", len(inUseAllocs), "specs", len(initDevices))
+		klog.InfoS("Detected reboot, deleting allocations", "resource", s.Manager.ResourceName, "inUse", len(inUseAllocs), "specs", len(initDevices))
 		for _, alloc := range inUseAllocs {
-			alloc.Status.State = instav1.AllocationClaimStatusCreated
-			updated := alloc
 			if s.InstasliceClient != nil {
-				var err error
-				updated, err = UpdateAllocationStatus(stream.Context(), s.InstasliceClient, alloc, instav1.AllocationClaimStatusCreated)
-				if err != nil {
-					klog.ErrorS(err, "failed to update allocation status", "allocation", alloc.Name)
-					continue
+				err := s.InstasliceClient.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Delete(stream.Context(), alloc.Name, metav1.DeleteOptions{})
+				if err != nil && !apierrors.IsNotFound(err) {
+					klog.ErrorS(err, "failed to delete allocation", "allocation", alloc.Name)
 				}
-			} else {
-				cond := metav1.Condition{
-					Type:               "State",
-					Status:             metav1.ConditionTrue,
-					Reason:             string(instav1.AllocationClaimStatusCreated),
-					Message:            fmt.Sprintf("Allocation is %s", instav1.AllocationClaimStatusCreated),
-					ObservedGeneration: alloc.Generation,
-				}
-				meta.SetStatusCondition(&updated.Status.Conditions, cond)
 			}
-
-			s.allocMutex.Lock()
-			if err := allocationIndexer.Update(updated); err != nil {
-				klog.ErrorS(err, "failed to update allocation in indexer", "allocation", updated.Name)
+			if allocationIndexer != nil {
+				s.allocMutex.Lock()
+				allocationIndexer.Delete(alloc)
+				s.allocMutex.Unlock()
 			}
-			s.allocMutex.Unlock()
 		}
+	}
+
+	if err := s.waitForClusterPolicy(stream.Context()); err != nil {
+		return err
 	}
 
 	// send initial device list
@@ -215,6 +213,45 @@ func (s *Server) ListAndWatch(req *pluginapi.Empty, stream pluginapi.DevicePlugi
 			}
 		}
 	}
+}
+
+func (s *Server) waitForClusterPolicy(ctx context.Context) error {
+	if s.DynamicClient == nil {
+		return nil
+	}
+
+	gvr := schema.GroupVersionResource{Group: "nvidia.com", Version: "v1", Resource: "clusterpolicies"}
+	return wait.PollUntilContextCancel(ctx, 5*time.Second, true, func(ctx context.Context) (bool, error) {
+		obj, err := s.DynamicClient.Resource(gvr).Get(ctx, "gpu-cluster-policy", metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				klog.InfoS("Waiting for ClusterPolicy", "name", "gpu-cluster-policy")
+				return false, nil
+			}
+			klog.ErrorS(err, "failed to get ClusterPolicy")
+			return false, nil
+		}
+
+		state, _, _ := unstructured.NestedString(obj.Object, "status", "state")
+		if strings.EqualFold(state, "ready") {
+			return true, nil
+		}
+
+		if conds, found, _ := unstructured.NestedSlice(obj.Object, "status", "conditions"); found {
+			for _, c := range conds {
+				if m, ok := c.(map[string]interface{}); ok {
+					t, _, _ := unstructured.NestedString(m, "type")
+					st, _, _ := unstructured.NestedString(m, "status")
+					if t == "Ready" && strings.EqualFold(st, "True") {
+						return true, nil
+					}
+				}
+			}
+		}
+
+		klog.InfoS("ClusterPolicy not ready", "state", state)
+		return false, nil
+	})
 }
 
 func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {

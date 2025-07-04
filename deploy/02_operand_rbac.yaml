@@ -66,6 +66,14 @@ rules:
   - patch
   - update
 - apiGroups:
+  - nvidia.com
+  resources:
+  - clusterpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - route.openshift.io
   resources:
   - routes

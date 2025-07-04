@@ -31,15 +31,22 @@ spec:
         app.kubernetes.io/part-of: das-operator
         app.kubernetes.io/version: 0.0.1
     spec:
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
       affinity:
-        podAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - podAffinityTerm:
-              topologyKey: kubernetes.io/hostname
-              labelSelector:
-                matchLabels:
-                  app.kubernetes.io/part-of: das-operator
-            weight: 100
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: das-operator-webhook
+            topologyKey: kubernetes.io/hostname
       automountServiceAccountToken: false
       containers:
       - command:
