@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cuda-vectoradd
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cuda-vectoradd
+  template:
+    metadata:
+      labels:
+        app: cuda-vectoradd
+    spec:
+      restartPolicy: Always
+      containers:
+      - name: cuda-vectoradd
+        image: nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8
+        resources:
+          limits:
+            nvidia.com/mig-1g.5gb: "1"
+        command:
+          - sh
+          - -c
+          - |
+            env && /cuda-samples/vectorAdd && sleep 3600

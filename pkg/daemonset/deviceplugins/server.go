@@ -52,6 +52,7 @@ type Server struct {
 }
 
 const allocationAnnotationKey = "mig.das.com/allocation"
+const envConfigMapAnnotationKey = "mig.das.com/env-configmap"
 
 func NewServer(mgr *Manager, socketPath string, kubeConfig *rest.Config, emulatedMode instav1.EmulatedMode) (*Server, error) {
 	cfg := rest.CopyConfig(kubeConfig)
@@ -323,9 +324,22 @@ func (s *Server) ensureEnvConfigMap(ctx context.Context, alloc *instav1.Allocati
 		return
 	}
 
+	pod, err := s.getPodForConfigMap(ctx, specObj.PodRef.Namespace, specObj.PodRef.Name)
+	if err != nil {
+		klog.ErrorS(err, "failed to get pod for configmap", "pod", specObj.PodRef.Name)
+		return
+	}
+
+	cmName := specObj.PodRef.Name
+	if pod != nil {
+		if ann, ok := pod.Annotations[envConfigMapAnnotationKey]; ok && ann != "" {
+			cmName = ann
+		}
+	}
+
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      specObj.PodRef.Name,
+			Name:      cmName,
 			Namespace: specObj.PodRef.Namespace,
 			OwnerReferences: []metav1.OwnerReference{
 				{
@@ -343,36 +357,67 @@ func (s *Server) ensureEnvConfigMap(ctx context.Context, alloc *instav1.Allocati
 		},
 	}
 
-	if _, err := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Create(ctx, cm, metav1.CreateOptions{}); err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			existing, getErr := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Get(ctx, cm.Name, metav1.GetOptions{})
-			if getErr != nil {
-				klog.ErrorS(getErr, "failed to get existing ConfigMap", "configMap", cm.Name)
-				return
-			}
-
-			nvidiaValue := strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES=")
-			cudaValue := strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES=")
-
-			if v, ok := existing.Data["NVIDIA_VISIBLE_DEVICES"]; ok && v != "" {
-				nvidiaValue = fmt.Sprintf("%s,%s", v, nvidiaValue)
-			}
-			if v, ok := existing.Data["CUDA_VISIBLE_DEVICES"]; ok && v != "" {
-				cudaValue = fmt.Sprintf("%s,%s", v, cudaValue)
-			}
-
-			existing.Data["NVIDIA_VISIBLE_DEVICES"] = nvidiaValue
-			existing.Data["CUDA_VISIBLE_DEVICES"] = cudaValue
-
-			if _, err := s.KubeClient.CoreV1().ConfigMaps(existing.Namespace).Update(ctx, existing, metav1.UpdateOptions{}); err != nil {
-				klog.ErrorS(err, "failed to update ConfigMap", "configMap", existing.Name)
-			}
-		} else {
-			klog.ErrorS(err, "failed to create ConfigMap", "configMap", cm.Name)
-		}
-	} else {
-		klog.InfoS("created ConfigMap for env var", "configMap", cm.Name)
+	if err := s.createConfigMap(ctx, cm); err != nil {
+		klog.ErrorS(err, "failed to ensure ConfigMap", "configMap", cm.Name)
 	}
+}
+
+// getPodForConfigMap fetches the pod with retries to handle transient failures.
+func (s *Server) getPodForConfigMap(ctx context.Context, namespace, name string) (*corev1.Pod, error) {
+	var pod *corev1.Pod
+	err := wait.ExponentialBackoffWithContext(ctx, wait.Backoff{Duration: 100 * time.Millisecond, Factor: 2, Steps: 5}, func(ctx context.Context) (bool, error) {
+		var err error
+		pod, err = s.KubeClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return false, err
+			}
+			klog.ErrorS(err, "failed to get pod for configmap; retrying", "pod", name)
+			return false, nil
+		}
+		return true, nil
+	})
+	return pod, err
+}
+
+// createConfigMap creates or updates the provided ConfigMap with retries.
+func (s *Server) createConfigMap(ctx context.Context, cm *corev1.ConfigMap) error {
+	return wait.ExponentialBackoffWithContext(ctx, wait.Backoff{Duration: 100 * time.Millisecond, Factor: 2, Steps: 5}, func(ctx context.Context) (bool, error) {
+		if _, err := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Create(ctx, cm, metav1.CreateOptions{}); err != nil {
+			if apierrors.IsAlreadyExists(err) {
+				existing, getErr := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Get(ctx, cm.Name, metav1.GetOptions{})
+				if getErr != nil {
+					klog.ErrorS(getErr, "failed to get existing ConfigMap", "configMap", cm.Name)
+					return false, nil
+				}
+
+				nvidiaValue := cm.Data["NVIDIA_VISIBLE_DEVICES"]
+				cudaValue := cm.Data["CUDA_VISIBLE_DEVICES"]
+
+				if v, ok := existing.Data["NVIDIA_VISIBLE_DEVICES"]; ok && v != "" {
+					nvidiaValue = fmt.Sprintf("%s,%s", v, nvidiaValue)
+				}
+				if v, ok := existing.Data["CUDA_VISIBLE_DEVICES"]; ok && v != "" {
+					cudaValue = fmt.Sprintf("%s,%s", v, cudaValue)
+				}
+
+				existing.Data["NVIDIA_VISIBLE_DEVICES"] = nvidiaValue
+				existing.Data["CUDA_VISIBLE_DEVICES"] = cudaValue
+
+				if _, err := s.KubeClient.CoreV1().ConfigMaps(existing.Namespace).Update(ctx, existing, metav1.UpdateOptions{}); err != nil {
+					klog.ErrorS(err, "failed to update ConfigMap", "configMap", existing.Name)
+					return false, nil
+				}
+				return true, nil
+			}
+
+			klog.ErrorS(err, "failed to create ConfigMap", "configMap", cm.Name)
+			return false, nil
+		}
+
+		klog.InfoS("created ConfigMap for env var", "configMap", cm.Name)
+		return true, nil
+	})
 }
 
 // markAllocationInUse updates the AllocationClaim status to InUse and stores it
