@@ -16,7 +16,7 @@ spec:
       serviceAccountName: das-scheduler
       containers:
       - name: scheduler
-        image: ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
+        image: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-scheduler-next:latest
         imagePullPolicy: Always
         command: ["das-scheduler"]
         args:

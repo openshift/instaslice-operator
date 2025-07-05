@@ -30,9 +30,8 @@ LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v4
 
 # Copy files to locations specified by labels.
 
-COPY deploy/ /manifests/
-# todo fix the metadata
-COPY bundle-ocp/metadata /metadata/
+COPY bundle-ocp/manifests /manifests
+COPY bundle-ocp/metadata /metadata
 COPY --from=builder manifests/das-operator.clusterserviceversion.yaml /manifests/${CSV_FILE}
 
 ARG NAME=das-operator-bundle
