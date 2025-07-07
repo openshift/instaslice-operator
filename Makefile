@@ -28,7 +28,7 @@ GO_BUILD_FLAGS :=-tags strictfipsruntime
 
 IMAGE_REGISTRY ?= quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant
 EMULATED_MODE ?= disabled
-CONTAINER_TOOL ?= podman
+PODMAN ?= podman
 BUNDLE_IMAGE ?= mustchange
 LOCALBIN ?= $(shell pwd)/bin
 OPERATOR_SDK_VERSION ?= v1.38.0
@@ -91,16 +91,16 @@ regen-crd-k8s:
 	mv $(DEPLOY_DIR)/inference.redhat.com_nodeaccelerators.yaml $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
 
 build-images:
-	podman build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
-	podman build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG} .
-	podman build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG} .
-	podman build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
+	${PODMAN} build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
+	${PODMAN} build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG} .
+	${PODMAN} build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG} .
+	${PODMAN} build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
 
 build-push-images:
-	podman push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
-	podman push ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
-	podman push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
-	podman push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
+	${PODMAN} push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
+	${PODMAN} push ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
+	${PODMAN} push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
+	${PODMAN} push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
 
 generate: regen-crd regen-crd-k8s generate-clients
 .PHONY: generate
@@ -121,20 +121,20 @@ clean:
 .PHONY: build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
 
 build-push-scheduler:
-	docker build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG} .
-	docker push ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
+	${PODMAN} build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG} .
+	${PODMAN} push ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
 
 build-push-daemonset:
-	docker build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG} .
-	docker push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
+	${PODMAN} build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG} .
+	${PODMAN} push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
 
 build-push-operator:
-	docker build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
-	docker push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
+	${PODMAN} build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
+	${PODMAN} push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
 
 build-push-webhook:
-	docker build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
-	docker push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
+	${PODMAN} build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
+	${PODMAN} push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
 
 .PHONY: test-k8s
 test-k8s:
