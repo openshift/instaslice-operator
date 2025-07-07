@@ -263,8 +263,8 @@ bundle-generate: operator-sdk
 
 .PHONY: bundle-build
 bundle-build: bundle-generate
-	$(CONTAINER_TOOL) build -f bundle-ocp.Dockerfile -t $(BUNDLE_IMAGE) .
+	$(PODMAN) build -f bundle-ocp.Dockerfile -t $(BUNDLE_IMAGE) .
 
 .PHONY: bundle-push
 bundle-push:
-	$(CONTAINER_TOOL) push $(BUNDLE_IMAGE)
+	$(PODMAN) push $(BUNDLE_IMAGE)
