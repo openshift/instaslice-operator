@@ -166,9 +166,7 @@ test-k8s:
 	cp $(DEPLOY_DIR)/*.yaml $$TMP_DIR/; \
        sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' $$TMP_DIR/03_instaslice_operator.cr.yaml; \
        env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < $(DEPLOY_DIR)/04_deployment.yaml > $$TMP_DIR/04_deployment.yaml; \
-       env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < $(DEPLOY_DIR)/05_scheduler_deployment.yaml > $$TMP_DIR/05_scheduler_deployment.yaml; \
        kubectl apply -f $$TMP_DIR/; \
-       kubectl apply -f $$TMP_DIR/05_scheduler_deployment.yaml
 
 .PHONY: emulated-k8s
 emulated-k8s: EMULATED_MODE=enabled
@@ -212,9 +210,7 @@ test-ocp:
 	cp $(DEPLOY_DIR)/*.yaml $$TMP_DIR/; \
        sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' $$TMP_DIR/03_instaslice_operator.cr.yaml; \
        env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < $(DEPLOY_DIR)/04_deployment.yaml > $$TMP_DIR/04_deployment.yaml; \
-       env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < $(DEPLOY_DIR)/05_scheduler_deployment.yaml > $$TMP_DIR/05_scheduler_deployment.yaml; \
        kubectl apply -f $$TMP_DIR/; \
-       kubectl apply -f $$TMP_DIR/05_scheduler_deployment.yaml
 
 .PHONY: emulated-ocp
 emulated-ocp: EMULATED_MODE=enabled
