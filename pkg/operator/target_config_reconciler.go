@@ -59,6 +59,7 @@ type TargetConfigReconciler struct {
 	secretLister               v1.SecretLister
 	targetDaemonsetImage       string
 	targetWebhookImage         string
+	targetSchedulerImage       string
 	emulatedMode               slicev1alpha1.EmulatedMode
 	nodeSelector               map[string]string
 }
@@ -66,6 +67,7 @@ type TargetConfigReconciler struct {
 func NewTargetConfigReconciler(
 	targetDaemonsetImage string,
 	targetWebhookImage string,
+	targetSchedulerImage string,
 	namespace string,
 	operatorConfigClient instasliceoperatorv1alphaclientset.DASOperatorInterface,
 	operatorClientInformer operatorclientv1alpha1informers.DASOperatorInformer,
@@ -93,6 +95,7 @@ func NewTargetConfigReconciler(
 		secretLister:               kubeInformersForNamespaces.SecretLister(),
 		targetDaemonsetImage:       targetDaemonsetImage,
 		targetWebhookImage:         targetWebhookImage,
+		targetSchedulerImage:       targetSchedulerImage,
 		cache:                      resourceapply.NewResourceCache(),
 		emulatedMode:               slicev1alpha1.EmulatedModeDisabled,
 	}
@@ -346,6 +349,11 @@ func (c *TargetConfigReconciler) manageScheduler(ctx context.Context, ownerRefer
 	scheduler.Namespace = c.namespace
 	scheduler.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
+	}
+	if c.targetSchedulerImage != "" {
+		for i := range scheduler.Spec.Template.Spec.Containers {
+			scheduler.Spec.Template.Spec.Containers[i].Image = c.targetSchedulerImage
+		}
 	}
 	return resourceapply.ApplyDeployment(ctx, c.kubeClient.AppsV1(), c.eventRecorder, scheduler, resourcemerge.ExpectedDeploymentGeneration(scheduler, c.generations))
 }

@@ -76,6 +76,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	targetConfigReconciler := NewTargetConfigReconciler(
 		os.Getenv("RELATED_IMAGE_DAEMONSET_IMAGE"),
 		os.Getenv("RELATED_IMAGE_WEBHOOK_IMAGE"),
+		os.Getenv("RELATED_IMAGE_SCHEDULER_IMAGE"),
 		namespace,
 		operatorConfigClient.OpenShiftOperatorV1alpha1().DASOperators(namespace),
 		operatorConfigInformers.OpenShiftOperator().V1alpha1().DASOperators(),
