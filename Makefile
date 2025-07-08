@@ -29,6 +29,7 @@ GO_BUILD_FLAGS :=-tags strictfipsruntime
 IMAGE_REGISTRY ?= quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant
 EMULATED_MODE ?= disabled
 PODMAN ?= podman
+KUBECTL ?= oc
 BUNDLE_IMAGE ?= mustchange
 LOCALBIN ?= $(shell pwd)/bin
 OPERATOR_SDK_VERSION ?= v1.38.0
@@ -138,7 +139,7 @@ build-push-webhook:
 
 .PHONY: test-k8s
 test-k8s:
-	kubectl label node $$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}') \
+	${KUBECTL} label node $$(${KUBECTL} get nodes -o jsonpath='{.items[*].metadata.name}') \
 		nvidia.com/mig.capable=true --overwrite
 
 	@echo "=== Building and pushing images in parallel ==="
@@ -153,11 +154,11 @@ test-k8s:
 	$(MAKE) regen-crd-k8s
 
 	@echo "=== Applying K8s CRDs ==="
-	       kubectl apply -f $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml \
+	       ${KUBECTL} apply -f $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml \
                       -f $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
 
 	@echo "=== Waiting for CRDs to be established ==="
-	kubectl wait --for=condition=established --timeout=60s \
+	${KUBECTL} wait --for=condition=established --timeout=60s \
                      crd dasoperators.inference.redhat.com
 
 	@echo "=== Applying K8s core manifests ==="
@@ -166,7 +167,7 @@ test-k8s:
 	cp $(DEPLOY_DIR)/*.yaml $$TMP_DIR/; \
        sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' $$TMP_DIR/03_instaslice_operator.cr.yaml; \
        env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < $(DEPLOY_DIR)/04_deployment.yaml > $$TMP_DIR/04_deployment.yaml; \
-       kubectl apply -f $$TMP_DIR/; \
+       ${KUBECTL} apply -f $$TMP_DIR/
 
 .PHONY: emulated-k8s
 emulated-k8s: EMULATED_MODE=enabled
@@ -175,13 +176,13 @@ emulated-k8s: test-k8s
 .PHONY: cleanup-k8s
 cleanup-k8s:
 	@echo "=== Deleting K8s resources ==="
-	kubectl delete --ignore-not-found --wait=true -f $(DEPLOY_DIR)/
+	${KUBECTL} delete --ignore-not-found --wait=true -f $(DEPLOY_DIR)/
 	# Wait for the operator namespace to be fully removed
-	kubectl wait --for=delete namespace/das-operator --timeout=120s || true
+	${KUBECTL} wait --for=delete namespace/das-operator --timeout=120s || true
 
 .PHONY: test-ocp
 test-ocp:
-	kubectl label node $$(kubectl get nodes -l node-role.kubernetes.io/worker \
+	${KUBECTL} label node $$(${KUBECTL} get nodes -l node-role.kubernetes.io/worker \
                                 -o jsonpath='{range .items[*]}{.metadata.name}{" "}{end}') \
         nvidia.com/mig.capable=true --overwrite
 
@@ -197,11 +198,11 @@ test-ocp:
 	$(MAKE) regen-crd-k8s
 
 	@echo "=== Applying K8s CRDs ==="
-	       kubectl apply -f $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml \
+	       ${KUBECTL} apply -f $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml \
                       -f $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
 
 	@echo "=== Waiting for CRDs to be established ==="
-	kubectl wait --for=condition=established --timeout=60s \
+	${KUBECTL} wait --for=condition=established --timeout=60s \
                      crd dasoperators.inference.redhat.com
 
 	@echo "=== Applying K8s core manifests ==="
@@ -210,7 +211,7 @@ test-ocp:
 	cp $(DEPLOY_DIR)/*.yaml $$TMP_DIR/; \
        sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' $$TMP_DIR/03_instaslice_operator.cr.yaml; \
        env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < $(DEPLOY_DIR)/04_deployment.yaml > $$TMP_DIR/04_deployment.yaml; \
-       kubectl apply -f $$TMP_DIR/; \
+       ${KUBECTL} apply -f $$TMP_DIR/
 
 .PHONY: emulated-ocp
 emulated-ocp: EMULATED_MODE=enabled
@@ -223,15 +224,40 @@ gpu-ocp: test-ocp
 .PHONY: cleanup-ocp
 cleanup-ocp:
 	@echo "=== Deleting OCP resources ==="
-	kubectl delete --ignore-not-found --wait=true -f $(DEPLOY_DIR)/
+	${KUBECTL} delete --ignore-not-found --wait=true -f $(DEPLOY_DIR)/
 	# Wait for the operator namespace to be fully removed
-	kubectl wait --for=delete namespace/das-operator --timeout=120s || true
+	${KUBECTL} wait --for=delete namespace/das-operator --timeout=120s || true
 
 .PHONY: deploy-cert-manager
 deploy-cert-manager:
 	export KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
 		hack/deploy-cert-manager.sh
 
+.PHONY: deploy-cert-manager-ocp
+deploy-cert-manager-ocp:
+	${KUBECTL} apply -f hack/manifests/cert-manager-rh.yaml
+
+.PHONY: undeploy-cert-manager-ocp
+undeploy-cert-manager-ocp:
+	${KUBECTL} delete -f hack/manifests/cert-manager-rh.yaml
+
+.PHONY: deploy-nfd-ocp
+deploy-nfd-ocp:
+	hack/deploy-nfd.sh
+
+.PHONY: undeploy-nfd-ocp
+undeploy-nfd-ocp:
+	${KUBECTL} delete -f hack/manifests/nfd-instance.yaml
+	${KUBECTL} delete -f hack/manifests/nfd.yaml
+
+.PHONY: deploy-nvidia-ocp
+deploy-nvidia-ocp:
+	hack/deploy-nvidia.sh
+
+.PHONY: undeploy-nvidia-ocp
+undeploy-nvidia-ocp:
+	${KUBECTL} delete -f hack/manifests/gpu-cluster-policy.yaml
+	${KUBECTL} delete -f hack/manifests/nvidia-cpu-operator.yaml
 
 TEST_E2E_ARGS := -ginkgo.v
 ifdef FOCUS

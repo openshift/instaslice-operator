@@ -3,7 +3,7 @@
 set -eou pipefail
 set -x
 
-KUBECTL=${KUBECTL:-kubectl}
+KUBECTL=${KUBECTL:-oc}
 TIMEOUT=${TIMEOUT:-600}
 NODE_TIMEOUT=${NODE_TIMEOUT:-900}
 
