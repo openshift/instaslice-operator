@@ -137,15 +137,10 @@ build-push-webhook:
 	${PODMAN} build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
 	${PODMAN} push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
 
-.PHONY: test-k8s
-test-k8s:
+.PHONY: deploy-das-k8s
+deploy-das-k8s:
 	${KUBECTL} label node $$(${KUBECTL} get nodes -o jsonpath='{.items[*].metadata.name}') \
 		nvidia.com/mig.capable=true --overwrite
-
-	@echo "=== Building and pushing images in parallel ==="
-	$(MAKE) -j16 build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
-
-	@echo "=== All images built & pushed ==="
 
 	@echo "=== Deploying Cert Manager ==="
 	$(MAKE) deploy-cert-manager
@@ -171,7 +166,7 @@ test-k8s:
 
 .PHONY: emulated-k8s
 emulated-k8s: EMULATED_MODE=enabled
-emulated-k8s: test-k8s
+emulated-k8s: build-push-images-parallel deploy-das-k8s
 
 .PHONY: cleanup-k8s
 cleanup-k8s:
@@ -180,20 +175,11 @@ cleanup-k8s:
 	# Wait for the operator namespace to be fully removed
 	${KUBECTL} wait --for=delete namespace/das-operator --timeout=120s || true
 
-.PHONY: test-ocp
-test-ocp:
+.PHONY: deploy-das-ocp
+deploy-das-ocp:
 	${KUBECTL} label node $$(${KUBECTL} get nodes -l node-role.kubernetes.io/worker \
                                 -o jsonpath='{range .items[*]}{.metadata.name}{" "}{end}') \
         nvidia.com/mig.capable=true --overwrite
-
-	@echo "=== Building and pushing images in parallel ==="
-	$(MAKE) -j16 build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
-
-	@echo "=== Allowing quay to refresh the images ==="
-	sleep 15
-
-	@echo "=== All images built & pushed ==="
-
 	@echo "=== Generating CRDs for K8s ==="
 	$(MAKE) regen-crd-k8s
 
@@ -215,11 +201,19 @@ test-ocp:
 
 .PHONY: emulated-ocp
 emulated-ocp: EMULATED_MODE=enabled
-emulated-ocp: test-ocp
+emulated-ocp: deploy-das-ocp
+
+.PHONY: build-push-images-parallel
+build-push-images-parallel:
+	@echo "=== Building and pushing images in parallel ==="
+	$(MAKE) -j16 build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
+	@echo "=== Allowing quay to refresh the images ==="
+	sleep 15
+	@echo "=== All images built & pushed ==="
 
 .PHONY: gpu-ocp
 gpu-ocp: EMULATED_MODE=disabled
-gpu-ocp: test-ocp
+gpu-ocp: build-push-images-parallel deploy-das-ocp
 
 .PHONY: cleanup-ocp
 cleanup-ocp:
