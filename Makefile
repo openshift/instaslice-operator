@@ -290,3 +290,12 @@ bundle-build: bundle-generate
 .PHONY: bundle-push
 bundle-push:
 	$(PODMAN) push $(BUNDLE_IMAGE)
+
+run-local:
+	${KUBECTL} apply -f deploy/00_instaslice-operator.crd.yaml
+	${KUBECTL} apply -f deploy/00_instaslice-operator.crd.yaml
+	${KUBECTL} apply -f deploy/01_namespace.yaml
+	${KUBECTL} apply -f deploy/01_operator_sa.yaml
+	${KUBECTL} apply -f deploy/02_privileged_scc_binding.yaml
+	${KUBECTL} apply -f deploy/03_instaslice_operator.cr.yaml
+	go run cmd/das-operator/main.go operator --kubeconfig=${KUBECONFIG} --namespace=das-operator
