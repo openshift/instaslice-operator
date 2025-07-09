@@ -32,7 +32,7 @@ PODMAN ?= podman
 KUBECTL ?= oc
 BUNDLE_IMAGE ?= mustchange
 LOCALBIN ?= $(shell pwd)/bin
-OPERATOR_SDK_VERSION ?= v1.38.0
+OPERATOR_SDK_VERSION ?= v1.40.0
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
 
 # This will call a macro called "build-image" which will generate image specific targets based on the parameters:
