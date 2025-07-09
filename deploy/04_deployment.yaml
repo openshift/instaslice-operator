@@ -33,7 +33,7 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ "ALL" ]
-          image: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next:latest
+          image: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next@sha256:dd946bdf922bab08d5a92463e710c84805cb911c7596aae3ed229b83e15eb4ab
           volumeMounts:
             - name: tmp
               mountPath: "/tmp"
@@ -49,11 +49,11 @@ spec:
             - name: OPERATOR_NAME
               value: "das-operator"
             - name: RELATED_IMAGE_DAEMONSET_IMAGE
-              value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset-next:latest
+              value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset-next@sha256:912be6ada44548de7b124e327cdcef0869181f316a9d3c22594f30f2206c91bc
             - name: RELATED_IMAGE_WEBHOOK_IMAGE
-              value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next:latest
+              value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next@sha256:d7b141204cffc94f029ab3155090faebe7951e60afb1c207859b3d9c9946e8d6
             - name: RELATED_IMAGE_SCHEDULER_IMAGE
-              value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-scheduler-next:latest
+              value: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-scheduler-next@sha256:00e7b2e06f2cf7062878d83404623f7986bcc2a4fcc9179f82ac9ee2a7f9a74e
       serviceAccountName: das-operator
       volumes:
         - name: tmp
