@@ -118,25 +118,6 @@ clean:
 	$(RM) -r ./_tmp
 .PHONY: clean
 
-
-.PHONY: build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
-
-build-push-scheduler:
-	${PODMAN} build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG} .
-	${PODMAN} push ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
-
-build-push-daemonset:
-	${PODMAN} build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG} .
-	${PODMAN} push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
-
-build-push-operator:
-	${PODMAN} build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
-	${PODMAN} push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
-
-build-push-webhook:
-	${PODMAN} build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
-	${PODMAN} push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
-
 .PHONY: deploy-das-k8s
 deploy-das-k8s:
 	${KUBECTL} label node $$(${KUBECTL} get nodes -o jsonpath='{.items[*].metadata.name}') \
@@ -175,45 +156,6 @@ cleanup-k8s:
 	# Wait for the operator namespace to be fully removed
 	${KUBECTL} wait --for=delete namespace/das-operator --timeout=120s || true
 
-.PHONY: deploy-das-ocp
-deploy-das-ocp:
-	${KUBECTL} label node $$(${KUBECTL} get nodes -l node-role.kubernetes.io/worker \
-                                -o jsonpath='{range .items[*]}{.metadata.name}{" "}{end}') \
-        nvidia.com/mig.capable=true --overwrite
-	@echo "=== Generating CRDs for K8s ==="
-	$(MAKE) regen-crd-k8s
-
-	@echo "=== Applying K8s CRDs ==="
-	       ${KUBECTL} apply -f $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml \
-                      -f $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
-
-	@echo "=== Waiting for CRDs to be established ==="
-	${KUBECTL} wait --for=condition=established --timeout=60s \
-                     crd dasoperators.inference.redhat.com
-
-	@echo "=== Applying K8s core manifests ==="
-	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
-	TMP_DIR=$$(mktemp -d); \
-	cp $(DEPLOY_DIR)/*.yaml $$TMP_DIR/; \
-       sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' $$TMP_DIR/03_instaslice_operator.cr.yaml; \
-       env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < $(DEPLOY_DIR)/04_deployment.yaml > $$TMP_DIR/04_deployment.yaml; \
-       ${KUBECTL} apply -f $$TMP_DIR/
-
-.PHONY: emulated-ocp
-emulated-ocp: EMULATED_MODE=enabled
-emulated-ocp: deploy-das-ocp
-
-.PHONY: build-push-images-parallel
-build-push-images-parallel:
-	@echo "=== Building and pushing images in parallel ==="
-	$(MAKE) -j16 build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
-	@echo "=== Allowing quay to refresh the images ==="
-	sleep 15
-	@echo "=== All images built & pushed ==="
-
-.PHONY: gpu-ocp
-gpu-ocp: EMULATED_MODE=disabled
-gpu-ocp: build-push-images-parallel deploy-das-ocp
 
 .PHONY: cleanup-ocp
 cleanup-ocp:
