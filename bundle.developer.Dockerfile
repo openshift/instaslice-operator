@@ -1,7 +1,7 @@
 FROM registry.redhat.io/ubi9/ubi:9.6 as builder
 RUN dnf -y install jq
 
-ARG RELATED_IMAGE_FILE=related_images.public.json
+ARG RELATED_IMAGE_FILE=related_images.developer.json
 ARG CSV_FILE=bundle-ocp/manifests/das-operator.clusterserviceversion.yaml
 ARG OPERATOR_IMAGE_ORIGINAL=quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next:latest
 ARG WEBHOOK_IMAGE_ORIGINAL=quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next:latest
