@@ -285,6 +285,10 @@ bundle-build: bundle-generate
 bundle-push:
 	$(PODMAN) push $(BUNDLE_IMAGE)
 
+
+run-local: export DAEMONSET_IMAGE="${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}"
+run-local: export WEBHOOK_IMAGE="${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}"
+run-local: export SCHEDULER_IMAGE="${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}"
 run-local:
 	${KUBECTL} apply -f deploy/00_instaslice-operator.crd.yaml
 	${KUBECTL} apply -f deploy/00_instaslice-operator.crd.yaml
@@ -292,4 +296,4 @@ run-local:
 	${KUBECTL} apply -f deploy/01_operator_sa.yaml
 	${KUBECTL} apply -f deploy/02_privileged_scc_binding.yaml
 	${KUBECTL} apply -f deploy/03_instaslice_operator.cr.yaml
-	go run cmd/das-operator/main.go operator --kubeconfig=${KUBECONFIG} --namespace=das-operator
+	RELATED_IMAGE_DAEMONSET_IMAGE=${DAEMONSET_IMAGE} RELATED_IMAGE_WEBHOOK_IMAGE=${WEBHOOK_IMAGE} RELATED_IMAGE_SCHEDULER_IMAGE=${SCHEDULER_IMAGE} go run cmd/das-operator/main.go operator --kubeconfig=${KUBECONFIG} --namespace=das-operator
