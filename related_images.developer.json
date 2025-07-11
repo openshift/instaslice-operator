@@ -1,0 +1,22 @@
+[
+  {
+    "name": "instaslice-scheduler-next",
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-scheduler-next@sha256:00e7b2e06f2cf7062878d83404623f7986bcc2a4fcc9179f82ac9ee2a7f9a74e"
+  },
+  {
+    "name": "instaslice-daemonset-next",
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset-next@sha256:912be6ada44548de7b124e327cdcef0869181f316a9d3c22594f30f2206c91bc"
+  },
+  {
+    "name": "instaslice-webhook-next",
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next@sha256:85108eabb38e3ae313021c49ee5887fa025783b3a080d75ac3cdffb4d2016c41"
+  },
+  {
+    "name": "instaslice-operator-next",
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next@sha256:bdb717d5154bef8b3bedd1ae240f76951bac3d28ea56c107dc0cc9ebdc956768"
+  },
+  {
+    "name": "instaslice-operator-bundle-public-next",
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-bundle-public-next@sha256:e12719d39b39c245b673805e50040e8ec413e88c1d63867ea78ffb7135253f35"
+  }
+]

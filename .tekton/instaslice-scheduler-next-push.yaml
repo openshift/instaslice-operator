@@ -2,6 +2,8 @@ apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
   annotations:
+    build.appstudio.openshift.io/build-nudge-files: |
+      related_images.json, related_images.developer.json
     build.appstudio.openshift.io/repo: https://github.com/openshift/instaslice-operator?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
