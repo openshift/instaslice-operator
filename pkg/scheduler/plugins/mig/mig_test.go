@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
 
 	"strconv"
@@ -217,7 +218,8 @@ func newPlugin(objs ...runtime.Object) *Plugin {
 }
 
 func TestGPUAllocatedSlicesNilIndexer(t *testing.T) {
-	_, err := gpuAllocatedSlices(nil, "node1", "gpu1", "")
+	p := &Plugin{}
+	_, err := p.gpuAllocatedSlices("node1", "gpu1", "")
 	if err == nil {
 		t.Fatalf("expected error when indexer is nil")
 	}
@@ -472,6 +474,58 @@ func TestFilter(t *testing.T) {
 				pod := newTestPod("mn2", "1g.5gb")
 				ni := framework.NewNodeInfo()
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node2", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
+				return p, pod, ni
+			},
+			expect: framework.Unschedulable,
+		},
+		{
+			name: "staged gpu ignored",
+			// One GPU has a staged AllocationClaim so Filter should
+			// allocate on the other GPU.
+			setup: func() (*Plugin, *corev1.Pod, *framework.NodeInfo) {
+				inst := utils.GenerateFakeCapacity("node1")
+				var res instav1.DiscoveredNodeResources
+				_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
+				spec1 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 1}}
+				raw1, _ := json.Marshal(&spec1)
+				ex1 := &instav1.AllocationClaim{
+					ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"},
+					Spec:       runtime.RawExtension{Raw: raw1},
+					Status:     instav1.AllocationClaimStatus{State: instav1.AllocationClaimStatusStaged},
+				}
+				p := newPlugin(inst, ex1)
+				pod := newTestPod("sgi", "1g.5gb")
+				ni := framework.NewNodeInfo()
+				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
+				return p, pod, ni
+			},
+			expect: framework.Success,
+		},
+		{
+			name: "all gpus staged",
+			// All GPUs have staged AllocationClaims so Filter should return Unschedulable.
+			setup: func() (*Plugin, *corev1.Pod, *framework.NodeInfo) {
+				inst := utils.GenerateFakeCapacity("node1")
+				var res instav1.DiscoveredNodeResources
+				_ = json.Unmarshal(inst.Status.NodeResources.Raw, &res)
+				spec1 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[0].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 1}}
+				raw1, _ := json.Marshal(&spec1)
+				ex1 := &instav1.AllocationClaim{
+					ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex1"},
+					Spec:       runtime.RawExtension{Raw: raw1},
+					Status:     instav1.AllocationClaimStatus{State: instav1.AllocationClaimStatusStaged},
+				}
+				spec2 := instav1.AllocationClaimSpec{GPUUUID: res.NodeGPUs[1].GPUUUID, Nodename: types.NodeName("node1"), MigPlacement: instav1.Placement{Start: 0, Size: 1}}
+				raw2, _ := json.Marshal(&spec2)
+				ex2 := &instav1.AllocationClaim{
+					ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: "ex2"},
+					Spec:       runtime.RawExtension{Raw: raw2},
+					Status:     instav1.AllocationClaimStatus{State: instav1.AllocationClaimStatusStaged},
+				}
+				p := newPlugin(inst, ex1, ex2)
+				pod := newTestPod("ags", "1g.5gb")
+				ni := framework.NewNodeInfo()
+				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
 			expect: framework.Unschedulable,
@@ -1271,19 +1325,42 @@ func TestScheduleMultipleSliceTypes(t *testing.T) {
 		cycle := framework.NewCycleState()
 		candidates := map[string]int64{}
 
+		type result struct {
+			node  string
+			score int64
+		}
+		resCh := make(chan result, len(nodes))
+		errCh := make(chan error, len(nodes))
+		var wg sync.WaitGroup
+
 		for _, n := range nodes {
-			st := p.Filter(ctx, cycle, pod, nodeInfos[n])
-			if st != nil && st.Code() != framework.Success {
-				continue
-			}
-			if err := syncAllocations(ctx, p); err != nil {
-				return err
-			}
-			score, st := p.Score(ctx, cycle, pod, n)
-			if st != nil && st.Code() != framework.Success {
-				return fmt.Errorf("score failed: %v", st.Code())
-			}
-			candidates[n] = score
+			wg.Add(1)
+			go func(n string) {
+				defer wg.Done()
+				st := p.Filter(ctx, cycle, pod, nodeInfos[n])
+				if st != nil && st.Code() != framework.Success {
+					return
+				}
+				score, st := p.Score(ctx, cycle, pod, n)
+				if st != nil && st.Code() != framework.Success {
+					errCh <- fmt.Errorf("score failed: %v", st.Code())
+					return
+				}
+				resCh <- result{node: n, score: score}
+			}(n)
+		}
+
+		wg.Wait()
+		if err := syncAllocations(ctx, p); err != nil {
+			return err
+		}
+		close(resCh)
+		close(errCh)
+		if err := <-errCh; err != nil {
+			return err
+		}
+		for r := range resCh {
+			candidates[r.node] = r.score
 		}
 		if len(candidates) == 0 {
 			return fmt.Errorf("unschedulable")

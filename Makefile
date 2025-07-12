@@ -244,7 +244,7 @@ deploy-cert-manager:
 
 TEST_E2E_ARGS := -ginkgo.v
 ifdef FOCUS
-TEST_E2E_ARGS += -ginkgo.focus=$(FOCUS)
+TEST_E2E_ARGS += -ginkgo.focus="$(FOCUS)"
 endif
 
 .PHONY: test-e2e
