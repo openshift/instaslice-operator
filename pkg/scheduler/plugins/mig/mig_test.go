@@ -187,6 +187,14 @@ func newPlugin(objs ...runtime.Object) *Plugin {
 			key := fmt.Sprintf("%s/%s", spec.Nodename, spec.GPUUUID)
 			return []string{key}, nil
 		},
+		"pod-uid": func(obj interface{}) ([]string, error) {
+			a := obj.(*instav1.AllocationClaim)
+			spec, err := getAllocationClaimSpec(a)
+			if err != nil {
+				return nil, err
+			}
+			return []string{string(spec.PodRef.UID)}, nil
+		},
 	})
 	ns := "das-operator"
 	for _, obj := range objs {
@@ -1206,5 +1214,144 @@ func TestFilterWorksForAllGPUModels(t *testing.T) {
 				t.Fatalf("expected success, got %v", st.Code())
 			}
 		})
+	}
+}
+
+// syncAllocations copies all AllocationClaims from the fake client to the
+// plugin indexer so that subsequent plugin operations see a consistent view.
+func syncAllocations(ctx context.Context, p *Plugin) error {
+	allocs, err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	objs := make([]interface{}, len(allocs.Items))
+	for i := range allocs.Items {
+		objs[i] = &allocs.Items[i]
+	}
+	return p.allocationIndexer.Replace(objs, "0")
+}
+
+// TestScheduleMultipleSliceTypes simulates scheduling many pods requesting
+// different MIG slice profiles across multiple nodes. It exercises the Filter,
+// Score and PreBind methods.
+func TestScheduleMultipleSliceTypes(t *testing.T) {
+	ctx := context.Background()
+
+	// create three fake nodes with capacity
+	nodes := []string{"node1", "node2", "node3"}
+	var objects []runtime.Object
+	for _, n := range nodes {
+		objects = append(objects, utils.GenerateFakeCapacity(n))
+	}
+
+	p := newPlugin(objects...)
+
+	nodeInfos := map[string]*framework.NodeInfo{}
+	var gpuCount int
+	for _, n := range nodes {
+		ni := framework.NewNodeInfo()
+		ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: n, Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
+		nodeInfos[n] = ni
+
+		inst, err := p.instasliceLister.NodeAccelerators(p.namespace).Get(n)
+		if err != nil {
+			t.Fatalf("failed to get NodeAccelerator: %v", err)
+		}
+		var res instav1.DiscoveredNodeResources
+		if err := json.Unmarshal(inst.Status.NodeResources.Raw, &res); err != nil {
+			t.Fatalf("failed to unmarshal resources: %v", err)
+		}
+		gpuCount += len(res.NodeGPUs)
+	}
+
+	pods1g := gpuCount * 2
+	pods2g := gpuCount * 2
+
+	schedule := func(pod *corev1.Pod) error {
+		cycle := framework.NewCycleState()
+		candidates := map[string]int64{}
+
+		for _, n := range nodes {
+			st := p.Filter(ctx, cycle, pod, nodeInfos[n])
+			if st != nil && st.Code() != framework.Success {
+				continue
+			}
+			if err := syncAllocations(ctx, p); err != nil {
+				return err
+			}
+			score, st := p.Score(ctx, cycle, pod, n)
+			if st != nil && st.Code() != framework.Success {
+				return fmt.Errorf("score failed: %v", st.Code())
+			}
+			candidates[n] = score
+		}
+		if len(candidates) == 0 {
+			return fmt.Errorf("unschedulable")
+		}
+
+		// pick the highest scoring node
+		bestNode := ""
+		bestScore := int64(-1)
+		for n, sc := range candidates {
+			if sc > bestScore || bestNode == "" {
+				bestScore = sc
+				bestNode = n
+			}
+		}
+
+		if err := syncAllocations(ctx, p); err != nil {
+			return err
+		}
+		if st := p.PreBind(ctx, cycle, pod, bestNode); st != nil && st.Code() != framework.Success {
+			return fmt.Errorf("prebind failed: %v", st.Code())
+		}
+		return syncAllocations(ctx, p)
+	}
+
+	// schedule pods requesting 1g.5gb slices
+	for i := 0; i < pods1g; i++ {
+		pod := newTestPod(fmt.Sprintf("1g-%d", i), "1g.5gb")
+		if err := schedule(pod); err != nil {
+			t.Fatalf("schedule 1g pod %s: %v", pod.Name, err)
+		}
+	}
+
+	// schedule pods requesting 2g.10gb slices
+	for i := 0; i < pods2g; i++ {
+		pod := newTestPod(fmt.Sprintf("2g-%d", i), "2g.10gb")
+		if err := schedule(pod); err != nil {
+			t.Fatalf("schedule 2g pod %s: %v", pod.Name, err)
+		}
+	}
+
+	// verify all AllocationClaims are in Created state
+	allocs, err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("list allocations: %v", err)
+	}
+	if len(allocs.Items) != pods1g+pods2g {
+		t.Fatalf("expected %d allocations, got %d", pods1g+pods2g, len(allocs.Items))
+	}
+	for _, a := range allocs.Items {
+		if a.Status.State != instav1.AllocationClaimStatusCreated {
+			t.Fatalf("allocation %s not created", a.Name)
+		}
+	}
+
+	// attempt another 2g pod - should be unschedulable on all nodes
+	over := newTestPod("over", "2g.10gb")
+	cycle := framework.NewCycleState()
+	schedulable := false
+	for _, n := range nodes {
+		st := p.Filter(ctx, cycle, over, nodeInfos[n])
+		if st == nil || st.Code() == framework.Success {
+			schedulable = true
+		}
+		if err := syncAllocations(ctx, p); err != nil {
+			t.Fatalf("sync allocations: %v", err)
+		}
+	}
+	if schedulable {
+		t.Fatalf("expected overcommit pod to be unschedulable")
 	}
 }
