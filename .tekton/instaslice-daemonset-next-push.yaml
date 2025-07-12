@@ -9,7 +9,7 @@ metadata:
       related_images.json, related_images.developer.json
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "next" && files.all.exists(path, path.matches('cmd/das-daemonset/|pkg/version/|pkg/cmd/daemonset/|pkg/daemonset|Dockerfile.daemonset.ocp|.tekton/instaslice-daemonset-next-*'))
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "next" && files.all.exists(path, path.matches('Makefile|cmd/das-daemonset/|pkg/version/|pkg/cmd/daemonset/|pkg/daemonset|Dockerfile.daemonset.ocp|.tekton/instaslice-daemonset-next-*'))
   creationTimestamp:
   labels:
     appstudio.openshift.io/application: dynamicacceleratorslicer-next

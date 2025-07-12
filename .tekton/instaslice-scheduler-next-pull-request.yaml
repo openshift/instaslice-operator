@@ -8,7 +8,7 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "next" && files.all.exists(path, path.matches('cmd/das-scheduler/|pkg/version/|pkg/cmd/scheduler/|pkg/scheduler|Dockerfile.scheduler.ocp|.tekton/instaslice-scheduler-next-*'))
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "next" && files.all.exists(path, path.matches('Makefile|cmd/das-scheduler/|pkg/version/|pkg/cmd/scheduler/|pkg/scheduler|Dockerfile.scheduler.ocp|.tekton/instaslice-scheduler-next-*'))
   creationTimestamp:
   labels:
     appstudio.openshift.io/application: dynamicacceleratorslicer-next
