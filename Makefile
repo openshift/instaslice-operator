@@ -4,7 +4,6 @@ SHELL := /usr/bin/env bash
 
 SOURCE_GIT_TAG ?=$(shell git describe --long --tags --abbrev=7 --match 'v[0-9]*' || echo 'v1.0.0-$(SOURCE_GIT_COMMIT)')
 SOURCE_GIT_COMMIT ?=$(shell git rev-parse --short "HEAD^{commit}" 2>/dev/null)
-IMAGE_TAG ?= latest
 OPERATOR_VERSION ?= 0.1.0
 DEPLOY_DIR ?= deploy
 
@@ -26,7 +25,15 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 GO_TEST_PACKAGES :=./pkg/... ./cmd/...
 GO_BUILD_FLAGS :=-tags strictfipsruntime
 
+# Define the image registry and tag
 IMAGE_REGISTRY ?= quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant
+IMAGE_TAG ?= latest
+# Construct the full image names
+OPERATOR_IMAGE_NAME := $(IMAGE_REGISTRY)/instaslice-operator:$(IMAGE_TAG)
+SCHEDULER_IMAGE_NAME := ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
+WEBHOOK_IMAGE_NAME := ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
+DAEMONSET_IMAGE_NAME := ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
+
 EMULATED_MODE ?= disabled
 PODMAN ?= podman
 KUBECTL ?= oc
@@ -92,16 +99,16 @@ regen-crd-k8s:
 	mv $(DEPLOY_DIR)/inference.redhat.com_nodeaccelerators.yaml $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
 
 build-images:
-	${PODMAN} build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
-	${PODMAN} build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG} .
-	${PODMAN} build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG} .
-	${PODMAN} build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
+	${PODMAN} build -f Dockerfile.ocp -t ${OPERATOR_IMAGE_NAME} .
+	${PODMAN} build -f Dockerfile.scheduler.ocp -t ${SCHEDULER_IMAGE_NAME} .
+	${PODMAN} build -f Dockerfile.daemonset.ocp -t ${DAEMONSET_IMAGE_NAME} .
+	${PODMAN} build -f Dockerfile.webhook.ocp -t ${WEBHOOK_IMAGE_NAME} .
 
 build-push-images:
-	${PODMAN} push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
-	${PODMAN} push ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
-	${PODMAN} push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
-	${PODMAN} push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
+	${PODMAN} push ${OPERATOR_IMAGE_NAME}
+	${PODMAN} push ${SCHEDULER_IMAGE_NAME}
+	${PODMAN} push ${DAEMONSET_IMAGE_NAME}
+	${PODMAN} push ${WEBHOOK_IMAGE_NAME}
 
 generate: regen-crd regen-crd-k8s generate-clients
 .PHONY: generate
@@ -122,20 +129,20 @@ clean:
 .PHONY: build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
 
 build-push-scheduler:
-	${PODMAN} build -f Dockerfile.scheduler.ocp -t ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG} .
-	${PODMAN} push ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
+	${PODMAN} build -f Dockerfile.scheduler.ocp -t ${SCHEDULER_IMAGE_NAME} .
+	${PODMAN} push ${SCHEDULER_IMAGE_NAME}
 
 build-push-daemonset:
-	${PODMAN} build -f Dockerfile.daemonset.ocp -t ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG} .
-	${PODMAN} push ${IMAGE_REGISTRY}/das-daemonset:${IMAGE_TAG}
+	${PODMAN} build -f Dockerfile.daemonset.ocp -t ${DAEMONSET_IMAGE_NAME} .
+	${PODMAN} push ${DAEMONSET_IMAGE_NAME}
 
 build-push-operator:
-	${PODMAN} build -f Dockerfile.ocp -t ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG} .
-	${PODMAN} push ${IMAGE_REGISTRY}/instaslice-operator:${IMAGE_TAG}
+	${PODMAN} build -f Dockerfile.ocp -t ${OPERATOR_IMAGE_NAME} .
+	${PODMAN} push ${OPERATOR_IMAGE_NAME}
 
 build-push-webhook:
-	${PODMAN} build -f Dockerfile.webhook.ocp -t ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG} .
-	${PODMAN} push ${IMAGE_REGISTRY}/das-webhook:${IMAGE_TAG}
+	${PODMAN} build -f Dockerfile.webhook.ocp -t ${WEBHOOK_IMAGE_NAME} .
+	${PODMAN} push ${WEBHOOK_IMAGE_NAME}
 
 .PHONY: deploy-das-k8s
 deploy-das-k8s:
@@ -149,20 +156,25 @@ deploy-das-k8s:
 	$(MAKE) regen-crd-k8s
 
 	@echo "=== Applying K8s CRDs ==="
-	       ${KUBECTL} apply -f $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml \
-                      -f $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
+	${KUBECTL} apply -f $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml \
+		-f $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
 
 	@echo "=== Waiting for CRDs to be established ==="
 	${KUBECTL} wait --for=condition=established --timeout=60s \
-                     crd dasoperators.inference.redhat.com
+		crd dasoperators.inference.redhat.com
 
 	@echo "=== Applying K8s core manifests ==="
 	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
 	TMP_DIR=$$(mktemp -d); \
 	cp $(DEPLOY_DIR)/*.yaml $$TMP_DIR/; \
-       sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' $$TMP_DIR/03_instaslice_operator.cr.yaml; \
-       env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < $(DEPLOY_DIR)/04_deployment.yaml > $$TMP_DIR/04_deployment.yaml; \
-       ${KUBECTL} apply -f $$TMP_DIR/
+	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' $$TMP_DIR/03_instaslice_operator.cr.yaml; \
+	sed \
+		-e "s|quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next:latest|$(OPERATOR_IMAGE_NAME)|g" \
+		-e "s|quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset-next:latest|$(DAEMONSET_IMAGE_NAME)|g" \
+		-e "s|quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next:latest|$(WEBHOOK_IMAGE_NAME)|g" \
+		-e "s|quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-scheduler-next:latest|$(SCHEDULER_IMAGE_NAME)|g" \
+		< $(DEPLOY_DIR)/04_deployment.yaml > $$TMP_DIR/04_deployment.yaml; \
+	${KUBECTL} apply -f $$TMP_DIR/
 
 .PHONY: emulated-k8s
 emulated-k8s: EMULATED_MODE=enabled
@@ -178,26 +190,32 @@ cleanup-k8s:
 .PHONY: deploy-das-ocp
 deploy-das-ocp:
 	${KUBECTL} label node $$(${KUBECTL} get nodes -l node-role.kubernetes.io/worker \
-                                -o jsonpath='{range .items[*]}{.metadata.name}{" "}{end}') \
-        nvidia.com/mig.capable=true --overwrite
+		-o jsonpath='{range .items[*]}{.metadata.name}{" "}{end}') \
+		nvidia.com/mig.capable=true --overwrite
+
 	@echo "=== Generating CRDs for K8s ==="
 	$(MAKE) regen-crd-k8s
 
 	@echo "=== Applying K8s CRDs ==="
-	       ${KUBECTL} apply -f $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml \
-                      -f $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
+	${KUBECTL} apply -f $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml \
+		-f $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
 
 	@echo "=== Waiting for CRDs to be established ==="
 	${KUBECTL} wait --for=condition=established --timeout=60s \
-                     crd dasoperators.inference.redhat.com
+		crd dasoperators.inference.redhat.com
 
 	@echo "=== Applying K8s core manifests ==="
 	@echo "=== Setting emulatedMode to $(EMULATED_MODE) in CR ==="
 	TMP_DIR=$$(mktemp -d); \
 	cp $(DEPLOY_DIR)/*.yaml $$TMP_DIR/; \
-       sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' $$TMP_DIR/03_instaslice_operator.cr.yaml; \
-       env IMAGE_REGISTRY=$(IMAGE_REGISTRY) IMAGE_TAG=$(IMAGE_TAG) envsubst < $(DEPLOY_DIR)/04_deployment.yaml > $$TMP_DIR/04_deployment.yaml; \
-       ${KUBECTL} apply -f $$TMP_DIR/
+	sed -i 's/emulatedMode: .*/emulatedMode: "$(EMULATED_MODE)"/' $$TMP_DIR/03_instaslice_operator.cr.yaml; \
+	sed \
+		-e "s|quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next:latest|$(OPERATOR_IMAGE_NAME)|g" \
+		-e "s|quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset-next:latest|$(DAEMONSET_IMAGE_NAME)|g" \
+		-e "s|quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next:latest|$(WEBHOOK_IMAGE_NAME)|g" \
+		-e "s|quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-scheduler-next:latest|$(SCHEDULER_IMAGE_NAME)|g" \
+		< $(DEPLOY_DIR)/04_deployment.yaml > $$TMP_DIR/04_deployment.yaml; \
+	${KUBECTL} apply -f $$TMP_DIR/
 
 .PHONY: emulated-ocp
 emulated-ocp: EMULATED_MODE=enabled
