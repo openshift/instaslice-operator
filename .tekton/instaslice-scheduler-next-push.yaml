@@ -11,7 +11,7 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
       == "next" &&
-      files.all.exists(path, path.matches('cmd/das-scheduler/|pkg/version/|pkg/cmd/scheduler/|pkg/scheduler|Dockerfile.scheduler.ocp|.tekton/instaslice-scheduler-next-*'))
+      files.all.exists(path, path.matches('Makefile|cmd/das-scheduler/|pkg/version/|pkg/cmd/scheduler/|pkg/scheduler|Dockerfile.scheduler.ocp|.tekton/instaslice-scheduler-next-*'))
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: dynamicacceleratorslicer-next
