@@ -13,18 +13,25 @@
   "recreateWhen": "always",
   "tekton": {
     "enabled": true,
-    "packageRules": [
-      {
-        "matchUpdateTypes": [
-          "minor",
-          "patch",
-          "pin",
-          "digest"
-        ],
-        "automerge": true,
-	"addLabels": ["lgtm", "approved"]
-      }
-    ]
+    "addLabels": [
+      "approved",
+      "lgtm"
+    ],
+    "automerge": true,
+    "automergeType": "pr",
+    "automergeStrategy": "rebase",
+    "commitMessagePrefix": "NO-JIRA:",
+    "fileMatch": [
+      "related_images.json$",
+      "related_images.developer.json$",
+      "\\.yaml$",
+      "\\.yml$"
+    ],
+    "includePaths": [
+      ".tekton/**",
+      "."
+    ],
+    "platformAutomerge": true
   },
   "dockerfile": {
     "enabled": true,
@@ -35,7 +42,10 @@
           "*.Dockerfile"
         ],
         "automerge": true,
-	"addLabels": ["lgtm", "approved"]
+        "addLabels": [
+          "lgtm",
+          "approved"
+        ]
       }
     ]
   },
