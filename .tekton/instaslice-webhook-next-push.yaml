@@ -9,7 +9,7 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "next" && files.all.exists(path, path.matches('Makefile|cmd/das-webhook/|/pkg/version/|pkg/cmd/webhook/|pkg/webhook/|Dockerfile.webhook.ocp|.tekton/instaslice-webhook-next-*'))
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "next" && files.all.exists(path, path.matches('Makefile|go.mod|go.sum|vendor/|cmd/das-webhook/|/pkg/version/|pkg/cmd/webhook/|pkg/webhook/|Dockerfile.webhook.ocp|.tekton/instaslice-webhook-next-*'))
   creationTimestamp:
   labels:
     appstudio.openshift.io/application: dynamicacceleratorslicer-next
