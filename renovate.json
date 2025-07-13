@@ -37,14 +37,17 @@
     "enabled": true,
     "packageRules": [
       {
-        "matchFileNames": [
-          "Dockerfile.*",
-          "*.Dockerfile"
-        ],
-        "automerge": true,
         "addLabels": [
           "lgtm",
           "approved"
+        ],
+        "automerge": true,
+        "automergeType": "pr",
+        "automergeStrategy": "rebase",
+        "commitMessagePrefix": "NO-JIRA:",
+        "matchFileNames": [
+          "Dockerfile.*",
+          "*.Dockerfile"
         ]
       }
     ]
