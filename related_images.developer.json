@@ -16,7 +16,7 @@
     "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next@sha256:c60de815054b60127155c19cd4e2d8d8456e991a31bd5a890f03e529e46435e5"
   },
   {
-    "name": "instaslice-operator-bundle-public-next",
+    "name": "instaslice-operator-bundle-next",
     "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-bundle-developer-next@sha256:61ff013dee3bcc9b736f9aefc9042c02fe614f7d180c52c4b816c71a0c510141"
   }
 ]
