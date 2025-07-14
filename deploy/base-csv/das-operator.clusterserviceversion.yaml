@@ -42,15 +42,6 @@ spec:
   provider:
     name: Codeflare
     url: https://github.com/openshift/instaslice-operator
-  relatedImages:
-  - image: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next:latest
-    name: instaslice-operator-next
-  - image: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next:latest
-    name: instaslice-webhook-next
-  - image: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-scheduler-next:latest
-    name: instaslice-scheduler-next
-  - image: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset-next:latest
-    name: instaslice-daemonset-next   
   keywords:
   - GPU Slicing
   - MIG
