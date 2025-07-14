@@ -3,19 +3,29 @@
 Dynamic Accelerator Slicer (DAS) is an operator that dynamically partitions GPU accelerators in Kubernetes and OpenShift. It currently ships with a reference implementation for NVIDIA Multi-Instance GPU (MIG) and is designed to support additional technologies such as NVIDIA MPS or GPUs from other vendors.
 
 ## Table of Contents
-- [Features](#features)
-- [Getting Started](#getting-started)
-  - [Emulated Mode](#emulated-mode)
-  - [Running on OpenShift](#running-on-openshift)
-  - [Operator Bundle Development](#operator-bundle-development)
-- [Architecture](#architecture)
-  - [MIG scheduler plugin](#mig-scheduler-plugin)
-  - [AllocationClaim resource](#allocationclaim-resource)
-- [Debugging](#debugging)
-- [Running E2E tests](#running-e2e-tests)
-- [Uninstalling](#uninstalling)
-- [Contributing](#contributing)
-- [License](#license)
+- [Dynamic Accelerator Slicer (DAS) Operator](#dynamic-accelerator-slicer-das-operator)
+  - [Table of Contents](#table-of-contents)
+  - [Features](#features)
+  - [Getting Started](#getting-started)
+    - [Kubernetes](#kubernetes)
+    - [Running on OpenShift](#running-on-openshift)
+    - [Operator Bundle Development](#operator-bundle-development)
+  - [Justfile Usage](#justfile-usage)
+    - [Prerequisites](#prerequisites)
+    - [Available Commands](#available-commands)
+    - [Building and Pushing Images](#building-and-pushing-images)
+    - [Deployment](#deployment)
+    - [Use custom developer images](#use-custom-developer-images)
+    - [Configuration](#configuration)
+  - [Architecture](#architecture)
+    - [MIG scheduler plugin](#mig-scheduler-plugin)
+    - [AllocationClaim resource](#allocationclaim-resource)
+  - [Emulated mode](#emulated-mode)
+  - [Debugging](#debugging)
+  - [Running E2E tests](#running-e2e-tests)
+  - [Uninstalling](#uninstalling)
+  - [Contributing](#contributing)
+  - [License](#license)
 
 ## Features
 
@@ -161,6 +171,98 @@ in lexical order will be selected as the base CSV
 The CSV generation details can be found by inspecting the bundle generation code here:
 https://github.com/operator-framework/operator-sdk/blob/0eefc52889ff3dfe4af406038709e6c5ba7398e5/internal/generate/clusterserviceversion/clusterserviceversion.go#L148-L159
 
+=======
+## Justfile Usage
+
+This project includes a [Justfile](https://github.com/casey/just) for convenient task automation. The Justfile provides several commands for building, pushing, and deploying the operator components.
+
+### Prerequisites
+
+Install [just](https://github.com/casey/just) command runner:
+
+```bash
+# On macOS
+brew install just
+
+# On Fedora/RHEL
+dnf install just
+
+# On Ubuntu/Debian
+apt install just
+
+# Or via cargo
+cargo install just
+```
+
+### Available Commands
+
+List all available commands:
+```bash
+just
+```
+
+View current configuration:
+```bash
+just info
+```
+
+### Building and Pushing Images
+
+Build and push individual component images:
+```bash
+just build-push-scheduler   # Build and push scheduler image
+just build-push-daemonset   # Build and push daemonset image
+just build-push-operator    # Build and push operator image
+just build-push-webhook     # Build and push webhook image
+```
+
+Build and push all images in parallel:
+```bash
+just build-push-parallel
+```
+
+### Deployment
+
+Deploy DAS on OpenShift Container Platform:
+```bash
+just deploy-das-ocp
+```
+
+Generate CRDs:
+```bash
+just regen-crd-k8s
+```
+
+### Use custom developer images
+
+Modify the related_images.developer.json file to contain the target developer image repositories to use.
+
+```sh
+quay.io/username/image:latest
+```
+
+Then set the RELATED_IMAGES environment variable to related_images.developer.json.
+
+```sh
+RELATED_IMAGES=related_images.developer.json just
+```
+
+### Configuration
+
+The Justfile uses environment variables for configuration. You can customize these by setting them in your environment or creating a `.env` file:
+
+- `PODMAN` - Container runtime (default: `podman`)
+- `KUBECTL` - Kubernetes CLI (default: `oc`)
+- `EMULATED_MODE` - Enable emulated mode (default: `disabled`)
+- `RELATED_IMAGES` - Path to related images JSON file (default: `related_images.json`)
+- `DEPLOY_DIR` - Deployment directory (default: `deploy`)
+
+Example:
+```bash
+export EMULATED_MODE=enabled
+just deploy-das-ocp
+
+```
 
 ## Architecture
 
