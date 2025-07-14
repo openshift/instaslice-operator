@@ -6,6 +6,7 @@ export DEPLOY_DIR := env('DEPLOY_DIR', 'deploy')
 export OPERATOR_SDK := env('OPERATOR_SDK', 'operator-sdk')
 export OPERATOR_VERSION := env('OPERATOR_VERSION', '0.1.0')
 export GOLANGCI_LINT:= env('GOLANGCI_LINT', 'golangci-lint')
+export MARKDOWNLINT := env('MARKDOWNLINT', 'markdownlint')
 
 export OPERATOR_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-operator-next") | .image' $1""", RELATED_IMAGES)
 export WEBHOOK_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-webhook-next") | .image' $1""", RELATED_IMAGES)
@@ -171,9 +172,23 @@ deploy-nfd-ocp:
   hack/deploy-nfd.sh
 
 # Run golangci-lint on the codebase
-lint:
+lint-go:
   {{GOLANGCI_LINT}} run --timeout 5m ./pkg/...
 
 # Run golangci-lint and automatically fix issues
-lint-fix: lint
+lint-go-fix: lint-go
   {{GOLANGCI_LINT}} run --fix
+
+# Run all linting (markdown and Go)
+lint: lint-md lint-go
+
+# Run markdownlint on markdown files
+lint-md:
+  {{MARKDOWNLINT}} -c .markdownlint.json *.md
+
+# Run markdownlint and automatically fix issues
+lint-md-fix:
+  {{MARKDOWNLINT}} -c .markdownlint.json --fix *.md
+
+# Run all linting fixes (markdown and Go)
+lint-fix: lint-md-fix lint-go-fix
