@@ -89,7 +89,7 @@ file can be placed inside a sub-directory within the `deploy` folder.
 - make sure that the `metadata.name` of the base CSV is the same name as the
 package name provided to the `generate bundle` command, otherwise the 
 `generate bundle` command will ignore the base CSV and will generate on an empty CSV.
-
+- `generate bundle` populates related images inside the generated CSV by iterating through env of all the container and initContainers of the deployment spec in the deploy folder and only the images with the prefix RELATED_IMAGE_.  These environment variables are typically found in the deployement manaifest.
 
 Layout of an example `deploy` folder:
 ```bash
