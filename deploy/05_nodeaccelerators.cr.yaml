@@ -1,0 +1,6 @@
+apiVersion: inference.redhat.com/v1alpha1
+kind: NodeAccelerator
+metadata:
+  name: example
+  namespace: das-operator
+spec: {}
