@@ -13,7 +13,7 @@
   },
   {
     "name": "instaslice-operator-next",
-    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next@sha256:c60de815054b60127155c19cd4e2d8d8456e991a31bd5a890f03e529e46435e5"
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next@sha256:5fe26be3315e8b7903560bac6a4d52458e45893b6af0070cec9e51748935c731"
   },
   {
     "name": "instaslice-operator-bundle-next",
