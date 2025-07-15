@@ -7,6 +7,7 @@ export OPERATOR_SDK := env('OPERATOR_SDK', 'operator-sdk')
 export OPERATOR_VERSION := env('OPERATOR_VERSION', '0.1.0')
 export GOLANGCI_LINT:= env('GOLANGCI_LINT', 'golangci-lint')
 export MARKDOWNLINT := env('MARKDOWNLINT', 'markdownlint')
+export KUBECONFIG := env('KUBECONFIG', '')
 
 export OPERATOR_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-operator-next") | .image' $1""", RELATED_IMAGES)
 export WEBHOOK_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-webhook-next") | .image' $1""", RELATED_IMAGES)
@@ -115,14 +116,14 @@ _build-push-bundle bundleDockerfile:
 
 # Deploy CRDs and run operator locally for development
 run-local:
-	{{KUBECTL}} apply -f deploy/00_instaslice-operator.crd.yaml
-	{{KUBECTL}} apply -f deploy/00_node_allocationclaims.crd.yaml
-	{{KUBECTL}} apply -f deploy/00_nodeaccelerators.crd.yaml
-	{{KUBECTL}} apply -f deploy/01_namespace.yaml
-	{{KUBECTL}} apply -f deploy/01_operator_sa.yaml
-	{{KUBECTL}} apply -f deploy/02_operator_rbac.yaml
-	{{KUBECTL}} apply -f deploy/03_instaslice_operator.cr.yaml
-	RELATED_IMAGE_DAEMONSET_IMAGE={{DAEMONSET_IMAGE}} RELATED_IMAGE_WEBHOOK_IMAGE={{WEBHOOK_IMAGE}} RELATED_IMAGE_SCHEDULER_IMAGE={{SCHEDULER_IMAGE}} go run cmd/das-operator/main.go operator --namespace=das-operator
+  {{KUBECTL}} apply -f deploy/00_instaslice-operator.crd.yaml
+  {{KUBECTL}} apply -f deploy/00_node_allocationclaims.crd.yaml
+  {{KUBECTL}} apply -f deploy/00_nodeaccelerators.crd.yaml
+  {{KUBECTL}} apply -f deploy/01_namespace.yaml
+  {{KUBECTL}} apply -f deploy/01_operator_sa.yaml
+  {{KUBECTL}} apply -f deploy/02_operator_rbac.yaml
+  {{KUBECTL}} apply -f deploy/03_instaslice_operator.cr.yaml
+  RELATED_IMAGE_DAEMONSET_IMAGE={{DAEMONSET_IMAGE}} RELATED_IMAGE_WEBHOOK_IMAGE={{WEBHOOK_IMAGE}} RELATED_IMAGE_SCHEDULER_IMAGE={{SCHEDULER_IMAGE}} go run cmd/das-operator/main.go operator --namespace=das-operator --kubeconfig="{{KUBECONFIG}}"
 
 # Run end-to-end tests with optional focus filter
 test-e2e e2e-args="-ginkgo.v" focus="":
