@@ -58,7 +58,7 @@ deploy-das-ocp: info regen-crd-k8s
   echo "Rewriting Emulated Mode"
   sed -i "s/emulatedMode: .*/emulatedMode: \"${EMULATED_MODE}\"/" ${TMP_DIR}/03_instaslice_operator.cr.yaml
 
-  {{KUBECTL}} apply -f ${TMP_DIR}/
+  hack/deploy-das-ocp.sh ${TMP_DIR}
 
 # Regenerate Custom Resource Definitions (CRDs) for Kubernetes
 regen-crd-k8s:
