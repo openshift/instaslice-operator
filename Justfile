@@ -116,13 +116,22 @@ _build-push-bundle bundleDockerfile:
 
 # Deploy CRDs and run operator locally for development
 run-local:
+  #!/usr/bin/env bash
+  
+  set -eou pipefail
+
+  TMP_DIR=$(mktemp -d)
+  cp ${DEPLOY_DIR}/03_instaslice_operator.cr.yaml ${TMP_DIR}/
+
+  sed -i "s/emulatedMode: .*/emulatedMode: \"${EMULATED_MODE}\"/" ${TMP_DIR}/03_instaslice_operator.cr.yaml
+
   {{KUBECTL}} apply -f deploy/00_instaslice-operator.crd.yaml
   {{KUBECTL}} apply -f deploy/00_node_allocationclaims.crd.yaml
   {{KUBECTL}} apply -f deploy/00_nodeaccelerators.crd.yaml
   {{KUBECTL}} apply -f deploy/01_namespace.yaml
   {{KUBECTL}} apply -f deploy/01_operator_sa.yaml
   {{KUBECTL}} apply -f deploy/02_operator_rbac.yaml
-  {{KUBECTL}} apply -f deploy/03_instaslice_operator.cr.yaml
+  {{KUBECTL}} apply -f ${TMP_DIR}/03_instaslice_operator.cr.yaml
   RELATED_IMAGE_DAEMONSET_IMAGE={{DAEMONSET_IMAGE}} RELATED_IMAGE_WEBHOOK_IMAGE={{WEBHOOK_IMAGE}} RELATED_IMAGE_SCHEDULER_IMAGE={{SCHEDULER_IMAGE}} go run cmd/das-operator/main.go operator --namespace=das-operator --kubeconfig="{{KUBECONFIG}}"
 
 # Run end-to-end tests with optional focus filter
