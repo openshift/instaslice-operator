@@ -138,8 +138,9 @@ For local development:
    # Build and push images first
    just build-push-parallel
 
-   # Or run operator locally
-   just run-local
+   # Run operator locally
+   # Set EMULATED_MODE to control hardware emulation
+   EMULATED_MODE=enabled just run-local
    ```
 
 2. **Run tests**:
@@ -302,7 +303,8 @@ just info
 Run the operator locally for development:
 
 ```bash
-just run-local
+# Set EMULATED_MODE to 'enabled' for simulated GPUs or 'disabled' for real hardware
+EMULATED_MODE=enabled just run-local
 ```
 
 Run end-to-end tests:
