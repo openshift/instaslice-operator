@@ -159,11 +159,10 @@ For local development:
 
 1. Login into podman and have a repository created for the operator bundle.
 2. Set `BUNDLE_IMAGE` to point to your repository and tag of choice.
-3. Run `make bundle-generate` to generate the bundle manifests.
-4. Run `make bundle-build` to build the `bundle-ocp.Dockerfile`.
-5. Run `make bundle-push` to push the bundle image to your repository.
-6. Run `make deploy-cert-manager` to install the OperatorGroup and Subscription.
-7. Run `operator-sdk run bundle --namespace <namespace> ${BUNDLE_IMAGE}` to deploy
+3. Run `just bundle-generate` to generate the bundle manifests.
+4. Run `just build-push-bundle` to build and push the bundle image to your repository.
+5. Run `just deploy-cert-manager-ocp` to install cert-manager on OpenShift.
+6. Run `operator-sdk run bundle --namespace <namespace> ${BUNDLE_IMAGE}` to deploy
    the operator.
 
 #### Using a base CSV for bundle generation
@@ -452,10 +451,14 @@ Deploy DAS on OpenShift Container Platform:
 just deploy-das-ocp
 ```
 
-Generate CRDs:
+Generate CRDs and clients:
 
 ```bash
-just regen-crd-k8s
+just regen-crd           # Generate CRDs into manifests directory
+just regen-crd-k8s       # Generate CRDs directly into deploy directory
+just generate-clients    # Generate client code
+just verify-codegen      # Verify generated client code is up to date
+just generate            # Generate all - CRDs and clients
 ```
 
 ### Use custom developer images

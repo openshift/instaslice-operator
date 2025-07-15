@@ -61,6 +61,15 @@ deploy-das-ocp: info regen-crd-k8s
 
   hack/deploy-das-ocp.sh ${TMP_DIR}
 
+# Regenerate Custom Resource Definitions (CRDs) - generates into manifests directory
+regen-crd:
+  go build -o _output/tools/bin/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
+  rm -f manifests/instaslice-operator.crd.yaml
+  ./_output/tools/bin/controller-gen crd paths=./pkg/apis/dasoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
+  mv manifests/inference.redhat.com_dasoperators.yaml manifests/instaslice-operator.crd.yaml
+  cp manifests/instaslice-operator.crd.yaml {{DEPLOY_DIR}}/00_instaslice-operator.crd.yaml
+  cp manifests/inference.redhat.com_nodeaccelerators.yaml {{DEPLOY_DIR}}/00_nodeaccelerators.crd.yaml
+
 # Regenerate Custom Resource Definitions (CRDs) for Kubernetes
 regen-crd-k8s:
   @echo "Generating CRDs into deploy directory"
@@ -70,6 +79,17 @@ regen-crd-k8s:
   ./_output/tools/bin/controller-gen crd paths=./pkg/apis/dasoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./{{DEPLOY_DIR}}
   mv {{DEPLOY_DIR}}/inference.redhat.com_dasoperators.yaml {{DEPLOY_DIR}}/00_instaslice-operator.crd.yaml
   mv {{DEPLOY_DIR}}/inference.redhat.com_nodeaccelerators.yaml {{DEPLOY_DIR}}/00_nodeaccelerators.crd.yaml
+
+# Generate clients using codegen
+generate-clients:
+  GO=GO111MODULE=on GOFLAGS=-mod=readonly hack/update-codegen.sh
+
+# Verify generated client code is up to date
+verify-codegen:
+  hack/verify-codegen.sh
+
+# Generate all artifacts - CRDs and clients
+generate: regen-crd regen-crd-k8s generate-clients
 
 # Build and push all container images in parallel
 build-push-parallel:

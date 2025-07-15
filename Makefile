@@ -38,34 +38,7 @@ $(call verify-golang-versions,Dockerfile.ocp)
 $(call verify-golang-versions,Dockerfile.daemonset.ocp)
 endif
 
-regen-crd:
-	go build -o _output/tools/bin/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
-	rm -f manifests/instaslice-operator.crd.yaml
-	./_output/tools/bin/controller-gen crd paths=./pkg/apis/dasoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
-	mv manifests/inference.redhat.com_dasoperators.yaml manifests/instaslice-operator.crd.yaml
-	cp manifests/instaslice-operator.crd.yaml $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml
-	cp manifests/inference.redhat.com_nodeaccelerators.yaml $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
 
-.PHONY: regen-crd-k8s
-regen-crd-k8s:
-	@echo "Generating CRDs into deploy directory"
-	go build -o _output/tools/bin/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
-	rm -f $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml
-	rm -f $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
-	./_output/tools/bin/controller-gen crd paths=./pkg/apis/dasoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./$(DEPLOY_DIR)
-	mv $(DEPLOY_DIR)/inference.redhat.com_dasoperators.yaml $(DEPLOY_DIR)/00_instaslice-operator.crd.yaml
-	mv $(DEPLOY_DIR)/inference.redhat.com_nodeaccelerators.yaml $(DEPLOY_DIR)/00_nodeaccelerators.crd.yaml
-
-generate: regen-crd regen-crd-k8s generate-clients
-.PHONY: generate
-
-generate-clients:
-	GO=GO111MODULE=on GOFLAGS=-mod=readonly hack/update-codegen.sh
-.PHONY: generate-clients
-
-verify-codegen:
-	hack/verify-codegen.sh
-.PHONY: verify-codegen
 
 clean:
 	$(RM) -r ./_tmp
