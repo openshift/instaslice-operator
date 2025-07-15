@@ -5,18 +5,18 @@
   },
   {
     "name": "instaslice-daemonset-next",
-    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset-next@sha256:9ca17aadd337bf5fb8245884188e6effc8c76a0b7cd6542e3cac1ac09bc5a5f4"
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset-next@sha256:6df40af4e6aebbe3ae307b16075b662df349c42ad80bd7cfd0a3ac7230b98068"
   },
   {
     "name": "instaslice-webhook-next",
-    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next@sha256:7886658c23de3e8716d899a43681320b08d543e8a3f2b022710382a537026829"
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next@sha256:d335ae8dcfa8476a5f64b713e401ec54d50eaa452718ff1c11c239da02454072"
   },
   {
     "name": "instaslice-operator-next",
-    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next@sha256:c60de815054b60127155c19cd4e2d8d8456e991a31bd5a890f03e529e46435e5"
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next@sha256:5fe26be3315e8b7903560bac6a4d52458e45893b6af0070cec9e51748935c731"
   },
   {
-    "name": "instaslice-operator-bundle-public-next",
-    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-bundle-public-next@sha256:e12719d39b39c245b673805e50040e8ec413e88c1d63867ea78ffb7135253f35"
+    "name": "instaslice-operator-bundle-next",
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-bundle-developer-next@sha256:61ff013dee3bcc9b736f9aefc9042c02fe614f7d180c52c4b816c71a0c510141"
   }
 ]
