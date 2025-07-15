@@ -1,18 +1,7 @@
 all: build
 .PHONY: all
 SHELL := /usr/bin/env bash
-
-SOURCE_GIT_TAG ?=$(shell git describe --long --tags --abbrev=7 --match 'v[0-9]*' || echo 'v1.0.0-$(SOURCE_GIT_COMMIT)')
-SOURCE_GIT_COMMIT ?=$(shell git rev-parse --short "HEAD^{commit}" 2>/dev/null)
-IMAGE_TAG ?= latest
-OPERATOR_VERSION ?= 0.1.0
 DEPLOY_DIR ?= deploy
-
-# OS_GIT_VERSION is populated by ART
-# If building out of the ART pipeline, fallback to SOURCE_GIT_TAG
-ifndef OS_GIT_VERSION
-	OS_GIT_VERSION = $(SOURCE_GIT_TAG)
-endif
 
 # Include the library makefile
 include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
@@ -25,15 +14,7 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 # Exclude e2e tests from unit testing
 GO_TEST_PACKAGES :=./pkg/... ./cmd/...
 GO_BUILD_FLAGS :=-tags strictfipsruntime
-
 IMAGE_REGISTRY ?= quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant
-EMULATED_MODE ?= disabled
-PODMAN ?= podman
-KUBECTL ?= oc
-BUNDLE_IMAGE ?= mustchange
-LOCALBIN ?= $(shell pwd)/bin
-OPERATOR_SDK_VERSION ?= v1.40.0
-OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
 
 # This will call a macro called "build-image" which will generate image specific targets based on the parameters:
 # $0 - macro name
