@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: das-scheduler-config
-  namespace: das-operator
+  namespace: openshift-secondary-scheduler-operator
 data:
   config.yaml: |
     apiVersion: kubescheduler.config.k8s.io/v1

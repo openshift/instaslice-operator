@@ -255,31 +255,17 @@ func (c *TargetConfigReconciler) manageMutatingWebhook(ctx context.Context, owne
 }
 
 func (c *TargetConfigReconciler) manageScheduler(ctx context.Context, ownerReference metav1.OwnerReference) (*appsv1.Deployment, bool, error) {
-	schedulerConfig := resourceread.ReadConfigMapV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_config.yaml"))
-	schedulerConfig.Namespace = c.namespace
-	schedulerConfig.OwnerReferences = []metav1.OwnerReference{
-		ownerReference,
-	}
-	_, _, err := resourceapply.ApplyConfigMap(ctx, c.kubeClient.CoreV1(), c.eventRecorder, schedulerConfig)
-	if err != nil {
-		return nil, false, err
-	}
+	var err error
 
 	schedulerCR := resourceread.ReadClusterRoleV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_rbac_cluster_role.yaml"))
-	schedulerCR.Namespace = c.namespace
-	schedulerCR.OwnerReferences = []metav1.OwnerReference{
-		ownerReference,
-	}
+	schedulerCR.OwnerReferences = []metav1.OwnerReference{ownerReference}
 	_, _, err = resourceapply.ApplyClusterRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, schedulerCR)
 	if err != nil {
 		return nil, false, err
 	}
 
 	schedulerCRbac := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_rbac_cluster_role_binding.yaml"))
-	schedulerCRbac.Namespace = c.namespace
-	schedulerCRbac.OwnerReferences = []metav1.OwnerReference{
-		ownerReference,
-	}
+	schedulerCRbac.OwnerReferences = []metav1.OwnerReference{ownerReference}
 	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, schedulerCRbac)
 	if err != nil {
 		return nil, false, err
@@ -296,40 +282,21 @@ func (c *TargetConfigReconciler) manageScheduler(ctx context.Context, ownerRefer
 	}
 
 	schedulerRoleBinding := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_rbac_role_binding.yaml"))
-	schedulerRoleBinding.Namespace = c.namespace
-	schedulerRoleBinding.OwnerReferences = []metav1.OwnerReference{
-		ownerReference,
-	}
+	schedulerRoleBinding.OwnerReferences = []metav1.OwnerReference{ownerReference}
 	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, schedulerRoleBinding)
 	if err != nil {
 		return nil, false, err
 	}
 
-	schedulerSA := resourceread.ReadServiceAccountV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_rbac_service_account.yaml"))
-	schedulerSA.Namespace = c.namespace
-	schedulerSA.OwnerReferences = []metav1.OwnerReference{
-		ownerReference,
-	}
-	_, _, err = resourceapply.ApplyServiceAccount(ctx, c.kubeClient.CoreV1(), c.eventRecorder, schedulerSA)
-	if err != nil {
-		return nil, false, err
-	}
-
 	schedulerReaderCR := resourceread.ReadClusterRoleV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_rbac_reader_cr.yaml"))
-	schedulerReaderCR.Namespace = c.namespace
-	schedulerReaderCR.OwnerReferences = []metav1.OwnerReference{
-		ownerReference,
-	}
+	schedulerReaderCR.OwnerReferences = []metav1.OwnerReference{ownerReference}
 	_, _, err = resourceapply.ApplyClusterRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, schedulerReaderCR)
 	if err != nil {
 		return nil, false, err
 	}
 
 	schedulerReaderCRB := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_rbac_reader_crb.yaml"))
-	schedulerReaderCRB.Namespace = c.namespace
-	schedulerReaderCRB.OwnerReferences = []metav1.OwnerReference{
-		ownerReference,
-	}
+	schedulerReaderCRB.OwnerReferences = []metav1.OwnerReference{ownerReference}
 	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, schedulerReaderCRB)
 	if err != nil {
 		return nil, false, err
@@ -337,25 +304,14 @@ func (c *TargetConfigReconciler) manageScheduler(ctx context.Context, ownerRefer
 
 	schedulerReaderRB := resourceread.ReadRoleBindingV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_rbac_reader_rb.yaml"))
 	schedulerReaderRB.Namespace = c.namespace
-	schedulerReaderRB.OwnerReferences = []metav1.OwnerReference{
-		ownerReference,
-	}
+	schedulerReaderRB.OwnerReferences = []metav1.OwnerReference{ownerReference}
 	_, _, err = resourceapply.ApplyRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, schedulerReaderRB)
 	if err != nil {
 		return nil, false, err
 	}
 
-	scheduler := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_deployment.yaml"))
-	scheduler.Namespace = c.namespace
-	scheduler.OwnerReferences = []metav1.OwnerReference{
-		ownerReference,
-	}
-	if c.targetSchedulerImage != "" {
-		for i := range scheduler.Spec.Template.Spec.Containers {
-			scheduler.Spec.Template.Spec.Containers[i].Image = c.targetSchedulerImage
-		}
-	}
-	return resourceapply.ApplyDeployment(ctx, c.kubeClient.AppsV1(), c.eventRecorder, scheduler, resourcemerge.ExpectedDeploymentGeneration(scheduler, c.generations))
+	// Secondary scheduler is managed externally via the secondary scheduler operator
+	return nil, false, nil
 }
 
 func (c *TargetConfigReconciler) manageDaemonset(ctx context.Context, ownerReference metav1.OwnerReference) (*appsv1.DaemonSet, bool, error) {

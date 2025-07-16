@@ -491,7 +491,6 @@ environment or creating a `.env` file:
 - `OPERATOR_SDK` - Operator SDK binary (default: `operator-sdk`)
 - `OPERATOR_VERSION` - Operator version for bundle generation (default: `0.1.0`)
 - `GOLANGCI_LINT` - Golangci-lint binary (default: `golangci-lint`)
-
 Example:
 
 ```bash

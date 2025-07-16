@@ -1,0 +1,9 @@
+apiVersion: operator.openshift.io/v1
+kind: SecondaryScheduler
+metadata:
+  name: cluster
+  namespace: openshift-secondary-scheduler-operator
+spec:
+  managementState: Managed
+  schedulerConfig: das-scheduler-config
+  schedulerImage: ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}

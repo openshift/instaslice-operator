@@ -12,6 +12,10 @@ FROM registry.access.redhat.com/ubi9/ubi-micro@sha256:233cce2df15dc7cd790f7f1ddb
 
 WORKDIR /
 COPY --from=build /workspace/das-scheduler /usr/bin
+# The secondary scheduler operator expects the scheduler binary as
+# `/bin/kube-scheduler`. Provide a symlink so that the container works
+# out of the box.
+RUN ln -s /usr/bin/das-scheduler /bin/kube-scheduler
 USER 65532:65532
 
 ARG NAME=das-scheduler
