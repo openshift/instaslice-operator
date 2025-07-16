@@ -9,7 +9,7 @@
   },
   {
     "name": "instaslice-webhook-next",
-    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next@sha256:d335ae8dcfa8476a5f64b713e401ec54d50eaa452718ff1c11c239da02454072"
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next@sha256:2c2103adff68a9ffe518f3de2f9818db91bbcd2b51d8ccc6b41baf039e608e5a"
   },
   {
     "name": "instaslice-operator-next",
