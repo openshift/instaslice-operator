@@ -39,7 +39,7 @@ $(call verify-golang-versions,Dockerfile.daemonset.ocp)
 endif
 
 
-
+# Clean up tmp dir
 clean:
 	$(RM) -r ./_tmp
 .PHONY: clean
