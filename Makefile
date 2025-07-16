@@ -1,7 +1,7 @@
+SHELL := /usr/bin/env bash
+
 all: build
 .PHONY: all
-SHELL := /usr/bin/env bash
-DEPLOY_DIR ?= deploy
 
 # Include the library makefile
 include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
@@ -38,8 +38,6 @@ $(call verify-golang-versions,Dockerfile.ocp)
 $(call verify-golang-versions,Dockerfile.daemonset.ocp)
 endif
 
-
-# Clean up tmp dir
 clean:
 	$(RM) -r ./_tmp
 .PHONY: clean
