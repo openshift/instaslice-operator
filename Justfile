@@ -28,13 +28,30 @@ default:
 # Display environment and image configuration information
 info:
   @echo
-  @echo "Related Images: ${RELATED_IMAGES}"
+  @echo "===== Environment Variables Configuration ====="
   @echo
-  @echo "    Operator Image: {{OPERATOR_IMAGE}}"
-  @echo "     Webhook Image: {{WEBHOOK_IMAGE}}"
-  @echo "   Scheduler Image: {{SCHEDULER_IMAGE}}"
-  @echo "   Daemonset Image: {{DAEMONSET_IMAGE}}"
-  @echo "     Emulated Mode: {{EMULATED_MODE}}"
+  @echo "Container Runtime & CLI Tools:"
+  @echo "  PODMAN: {{PODMAN}}"
+  @echo "  KUBECTL: {{KUBECTL}}"
+  @echo "  KUBECONFIG: {{KUBECONFIG}}"
+  @echo
+  @echo "Operational Configuration:"
+  @echo "  EMULATED_MODE: {{EMULATED_MODE}}"
+  @echo "  RELATED_IMAGES: {{RELATED_IMAGES}}"
+  @echo "  DEPLOY_DIR: {{DEPLOY_DIR}}"
+  @echo
+  @echo "Development Tools:"
+  @echo "  OPERATOR_SDK: {{OPERATOR_SDK}}"
+  @echo "  OPERATOR_VERSION: {{OPERATOR_VERSION}}"
+  @echo "  GOLANGCI_LINT: {{GOLANGCI_LINT}}"
+  @echo "  MARKDOWNLINT: {{MARKDOWNLINT}}"
+  @echo
+  @echo "Container Images (Resolved from JSON):"
+  @echo "  OPERATOR_IMAGE: {{OPERATOR_IMAGE}}"
+  @echo "  WEBHOOK_IMAGE: {{WEBHOOK_IMAGE}}"
+  @echo "  SCHEDULER_IMAGE: {{SCHEDULER_IMAGE}}"
+  @echo "  DAEMONSET_IMAGE: {{DAEMONSET_IMAGE}}"
+  @echo "  BUNDLE_IMAGE: {{BUNDLE_IMAGE}}"
   @echo
 
 # Deploy DAS on OpenShift Container Platform
