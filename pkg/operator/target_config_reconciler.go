@@ -310,8 +310,40 @@ func (c *TargetConfigReconciler) manageScheduler(ctx context.Context, ownerRefer
 		return nil, false, err
 	}
 
-	// Secondary scheduler is managed externally via the secondary scheduler operator
-	return nil, false, nil
+	// Scheduler configuration ConfigMap
+	configMap := resourceread.ReadConfigMapV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_config.yaml"))
+	_, _, err = resourceapply.ApplyConfigMap(ctx, c.kubeClient.CoreV1(), c.eventRecorder, configMap)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// SecondaryScheduler custom resource
+	gvr := schema.GroupVersionResource{
+		Group:    "operator.openshift.io",
+		Version:  "v1",
+		Resource: "secondaryschedulers",
+	}
+	schedCR, err := resourceread.ReadGenericWithUnstructured(bindata.MustAsset("assets/instaslice-operator/secondary_scheduler_cr.yaml"))
+	if err != nil {
+		return nil, false, err
+	}
+	schedUnstructured, ok := schedCR.(*unstructured.Unstructured)
+	if !ok {
+		return nil, false, fmt.Errorf("secondary scheduler CR is not Unstructured")
+	}
+	if c.targetSchedulerImage != "" {
+		klog.InfoS("using custom scheduler image", "image", c.targetSchedulerImage)
+		_ = unstructured.SetNestedField(schedUnstructured.Object, c.targetSchedulerImage, "spec", "schedulerImage")
+	}
+
+	schedUnstructured.SetOwnerReferences(nil)
+
+	_, updated, err := resourceapply.ApplyUnstructuredResourceImproved(ctx, c.dynamicClient, c.eventRecorder, schedUnstructured, c.resourceCache, gvr, nil, nil)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return nil, updated, nil
 }
 
 func (c *TargetConfigReconciler) manageDaemonset(ctx context.Context, ownerReference metav1.OwnerReference) (*appsv1.DaemonSet, bool, error) {

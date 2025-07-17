@@ -6,4 +6,4 @@ metadata:
 spec:
   managementState: Managed
   schedulerConfig: das-scheduler-config
-  schedulerImage: ${IMAGE_REGISTRY}/das-scheduler:${IMAGE_TAG}
+  schedulerImage: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-scheduler-next:latest

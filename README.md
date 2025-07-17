@@ -24,6 +24,7 @@ support additional technologies such as NVIDIA MPS or GPUs from other vendors.
     - [NVIDIA GPU Operator Management](#nvidia-gpu-operator-management)
     - [Cert Manager Operations](#cert-manager-operations)
     - [Node Feature Discovery](#node-feature-discovery)
+    - [Secondary Scheduler Operator](#secondary-scheduler-operator)
     - [Code Quality](#code-quality)
     - [Cleanup](#cleanup)
     - [Building and Pushing Images](#building-and-pushing-images)
@@ -112,6 +113,7 @@ For OpenShift clusters with GPU hardware:
    just deploy-cert-manager-ocp
    just deploy-nfd-ocp
    just deploy-nvidia-ocp
+   just deploy-secondary-scheduler-operator
    ```
 
 2. **Deploy DAS operator**:
@@ -161,9 +163,18 @@ For local development:
 2. Set `BUNDLE_IMAGE` to point to your repository and tag of choice.
 3. Run `just bundle-generate` to generate the bundle manifests.
 4. Run `just build-push-bundle` to build and push the bundle image to your repository.
-5. Run `just deploy-cert-manager-ocp` to install cert-manager on OpenShift.
-6. Run `operator-sdk run bundle --namespace <namespace> ${BUNDLE_IMAGE}` to deploy
-   the operator.
+5. Install prerequisites on OpenShift:
+
+   ```bash
+   just deploy-cert-manager-ocp   # Deploy cert-manager on OpenShift
+   just deploy-nfd-ocp           # Deploy Node Feature Discovery (NFD) operator for OpenShift
+   just deploy-nvidia-ocp        # Deploy NVIDIA GPU operator to OpenShift
+   just deploy-secondary-scheduler-operator  # Deploy the Secondary Scheduler Operator on OpenShift
+   ```
+
+6. Run `just deploy-das-ocp` to deploy DAS on OpenShift Container Platform or run
+   `operator-sdk run bundle --namespace <namespace> ${BUNDLE_IMAGE}` to deploy the
+   operator with OLM.
 
 #### Using a base CSV for bundle generation
 
@@ -380,6 +391,14 @@ Deploy Node Feature Discovery (NFD) operator for OpenShift:
 just deploy-nfd-ocp
 ```
 
+### Secondary Scheduler Operator
+
+Deploy the Secondary Scheduler Operator on OpenShift:
+
+```bash
+just deploy-secondary-scheduler-operator
+```
+
 ### Code Quality
 
 Run all linting (markdown and Go):
@@ -539,10 +558,18 @@ kind: AllocationClaim
 
 ## Debugging
 
-All components run in the `das-operator` namespace:
+All components run in the `das-operator` namespace. The scheduler itself is
+managed by the Secondary Scheduler Operator and runs in the
+`openshift-secondary-scheduler-operator` namespace:
 
 ```console
 kubectl get pods -n das-operator
+```
+
+Check the scheduler pod:
+
+```console
+kubectl get pods -n openshift-secondary-scheduler-operator
 ```
 
 Inspect the active claims:

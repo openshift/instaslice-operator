@@ -63,8 +63,6 @@ deploy-das-ocp: info regen-crd-k8s
   TMP_DIR=$(mktemp -d)
   cp ${DEPLOY_DIR}/*.yaml ${TMP_DIR}/
 
-  sed -i "s/emulatedMode: .*/emulatedMode: \"${EMULATED_MODE}\"/" ${TMP_DIR}/03_instaslice_operator.cr.yaml
-
   echo "Rewriting Operator Image"
   sed -i "s|${OPERATOR_IMAGE_ORIGINAL}|${OPERATOR_IMAGE}|g" ${TMP_DIR}/04_deployment.yaml
   echo "Rewriting Webhook Image"
@@ -75,8 +73,6 @@ deploy-das-ocp: info regen-crd-k8s
   sed -i "s|${DAEMONSET_IMAGE_ORIGINAL}|${DAEMONSET_IMAGE}|g" ${TMP_DIR}/04_deployment.yaml
   echo "Rewriting Emulated Mode"
   sed -i "s/emulatedMode: .*/emulatedMode: \"${EMULATED_MODE}\"/" ${TMP_DIR}/03_instaslice_operator.cr.yaml
-
-  sed -i "s|^  schedulerImage:.*|  schedulerImage: ${SCHEDULER_IMAGE}|" ${TMP_DIR}/06_secondary_scheduler_cr.yaml
 
   hack/deploy-das-ocp.sh ${TMP_DIR}
 
@@ -162,7 +158,6 @@ run-local:
   TMP_DIR=$(mktemp -d)
   cp ${DEPLOY_DIR}/*.yaml ${TMP_DIR}/
 
-  sed -i "s|^  schedulerImage:.*|  schedulerImage: ${SCHEDULER_IMAGE}|" ${TMP_DIR}/06_secondary_scheduler_cr.yaml
   sed -i "s/emulatedMode: .*/emulatedMode: \"${EMULATED_MODE}\"/" ${TMP_DIR}/03_instaslice_operator.cr.yaml
 
   {{KUBECTL}} apply -f ${TMP_DIR}/00_instaslice-operator.crd.yaml
@@ -172,8 +167,6 @@ run-local:
   {{KUBECTL}} apply -f ${TMP_DIR}/01_operator_sa.yaml
   {{KUBECTL}} apply -f ${TMP_DIR}/02_operator_rbac.yaml
   {{KUBECTL}} apply -f ${TMP_DIR}/03_instaslice_operator.cr.yaml
-  {{KUBECTL}} apply -f ${TMP_DIR}/05_scheduler_config.yaml
-  {{KUBECTL}} apply -f ${TMP_DIR}/06_secondary_scheduler_cr.yaml
 
   RELATED_IMAGE_DAEMONSET_IMAGE={{DAEMONSET_IMAGE}} RELATED_IMAGE_WEBHOOK_IMAGE={{WEBHOOK_IMAGE}} RELATED_IMAGE_SCHEDULER_IMAGE={{SCHEDULER_IMAGE}} \
     go run cmd/das-operator/main.go operator --namespace=das-operator --kubeconfig="{{KUBECONFIG}}"
@@ -227,6 +220,10 @@ undeploy-cert-manager-ocp:
 # Deploy Node Feature Discovery (NFD) operator for OpenShift
 deploy-nfd-ocp:
   hack/deploy-nfd.sh
+
+# Deploy Secondary Scheduler operator for OpenShift
+deploy-secondary-scheduler-operator:
+  hack/deploy-secondary-scheduler-operator.sh
 
 # Run golangci-lint on the codebase
 lint-go:
