@@ -33,7 +33,7 @@
       }
     ]
   },
-  "dockerfile": {
+  "docker": {
     "enabled": true,
     "packageRules": [
       {
