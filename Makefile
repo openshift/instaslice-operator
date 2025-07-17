@@ -38,7 +38,6 @@ $(call verify-golang-versions,Dockerfile.ocp)
 $(call verify-golang-versions,Dockerfile.daemonset.ocp)
 endif
 
-# Clean all binaries
 clean:
 	$(RM) -r ./_tmp
 .PHONY: clean
