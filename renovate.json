@@ -39,7 +39,7 @@
       {
         "matchFileNames": [
           "Dockerfile.*",
-          "*.Dockerfile"
+          ".*Dockerfile"
         ],
         "automerge": true,
         "addLabels": [
