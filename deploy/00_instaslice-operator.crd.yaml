@@ -39,10 +39,6 @@ spec:
           spec:
             description: spec holds user settable values for configuration
             properties:
-              emulatedMode:
-                description: EmulatedMode true configures the operator to not use
-                  the GPU backend
-                type: string
               logLevel:
                 default: Normal
                 description: |-

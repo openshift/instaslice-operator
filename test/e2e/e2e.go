@@ -98,11 +98,12 @@ var _ = BeforeSuite(func() {
 	if err != nil {
 		Skip("failed to create das client: " + err.Error())
 	}
-	instOp, err := dasClient.OpenShiftOperatorV1alpha1().DASOperators("das-operator").Get(context.Background(), "cluster", metav1.GetOptions{})
-	if err != nil {
-		Skip("failed to get DASOperator: " + err.Error())
+	emulatedModeStr := os.Getenv("EMULATED_MODE")
+	if emulatedModeStr == "" {
+		emulatedMode = instav1.EmulatedModeDisabled
+	} else {
+		emulatedMode = instav1.EmulatedMode(emulatedModeStr)
 	}
-	emulatedMode = instOp.Spec.EmulatedMode
 })
 
 var _ = Describe("Test pods for requesting single type of extended resource", Ordered, func() {

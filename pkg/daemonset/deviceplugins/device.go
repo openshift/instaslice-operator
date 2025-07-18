@@ -70,14 +70,13 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 		klog.ErrorS(err, "Failed to create operator client", "node", nodeName)
 		return err
 	}
-	opClient := csOp.OpenShiftOperatorV1alpha1().DASOperators(instasliceNamespace)
-	instOp, err := opClient.Get(ctx, "cluster", metav1.GetOptions{})
-	if err != nil {
-		klog.ErrorS(err, "Failed to get DASOperator", "node", nodeName)
-		return err
+	emulatedModeStr := os.Getenv("EMULATED_MODE")
+	var emulatedMode instav1.EmulatedMode
+	if emulatedModeStr == "" {
+		emulatedMode = instav1.EmulatedModeDisabled
+	} else {
+		emulatedMode = instav1.EmulatedMode(emulatedModeStr)
 	}
-
-	emulatedMode := instOp.Spec.EmulatedMode
 	var discoverer MigGpuDiscoverer
 	if emulatedMode == instav1.EmulatedModeEnabled {
 		discoverer = &EmulatedMigGpuDiscoverer{

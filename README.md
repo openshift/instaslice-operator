@@ -256,9 +256,9 @@ The CSV generation details can be found by inspecting the bundle generation code
 
 ### Emulated Mode
 
-When `emulatedMode` is enabled in the `DASOperator` custom resource, the operator publishes synthetic GPU capacity
-and skips NVML calls. This is handy for development and CI environments with no hardware. Set `EMULATED_MODE=enabled`
-when using justfile commands to enable this mode.
+Emulated mode allows the operator to publish synthetic GPU capacity and skip NVML calls. This is handy for development and CI environments with no hardware. Emulated mode is controlled via the `EMULATED_MODE` environment variable.
+
+Set `EMULATED_MODE=enabled` when using justfile commands to enable this mode. The default value is `disabled`.
 
 ## Justfile Usage
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"os"
 	"strings"
 	"time"
 
@@ -135,8 +136,14 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		return fmt.Errorf("unable to get operator configuration %s/%s: %w", c.namespace, operatorclient.OperatorConfigName, err)
 	}
 
-	c.emulatedMode = sliceOperator.Spec.EmulatedMode
 	c.nodeSelector = sliceOperator.Spec.NodeSelector
+
+	emulatedMode := os.Getenv("EMULATED_MODE")
+	if emulatedMode == "" {
+		c.emulatedMode = slicev1alpha1.EmulatedModeDisabled
+	} else {
+		c.emulatedMode = slicev1alpha1.EmulatedMode(emulatedMode)
+	}
 
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "inference.redhat.com/v1alpha1",
