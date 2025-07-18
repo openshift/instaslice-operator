@@ -256,9 +256,48 @@ The CSV generation details can be found by inspecting the bundle generation code
 
 ### Emulated Mode
 
-When `emulatedMode` is enabled in the `DASOperator` custom resource, the operator publishes synthetic GPU capacity
-and skips NVML calls. This is handy for development and CI environments with no hardware. Set `EMULATED_MODE=enabled`
-when using justfile commands to enable this mode.
+Emulated mode allows the operator to publish synthetic GPU capacity and skip NVML calls. This is handy for development and CI environments with no hardware. Emulated mode is controlled via the `EMULATED_MODE` environment variable.
+
+#### Configuration
+
+The `EMULATED_MODE` environment variable is read by the operator at startup and determines how the daemonset components behave:
+
+- **`disabled`** (default): Normal operation mode that requires real MIG compatible GPUs hardware and makes NVML calls
+- **`enabled`**: Emulated mode that simulates MIG capable GPUs capacity without requiring actual hardware
+
+#### Setting Emulated Mode
+
+**For local development:**
+```bash
+# Run operator locally with emulation
+EMULATED_MODE=enabled just run-local
+```
+
+**For deployment:**
+```bash
+# Deploy with emulated mode enabled
+export EMULATED_MODE=enabled
+export RELATED_IMAGES=related_images.your-username.json
+just deploy-das-ocp
+```
+
+**For production with MIG Compatible GPUs:**
+```bash
+# Deploy with emulated mode disabled (default)
+export EMULATED_MODE=disabled
+export RELATED_IMAGES=related_images.your-username.json
+just deploy-das-ocp
+```
+
+#### How it Works
+
+The operator reads the `EMULATED_MODE` environment variable at startup and passes this configuration to the daemonset pods running on each node. When emulated mode is enabled:
+
+1. The daemonset skips hardware detection and NVML library calls
+2. Synthetic GPU resources are published to simulate hardware capacity  
+3. MIG slicing operations are simulated rather than performed on real hardware
+
+This allows for testing and development of the operator functionality without requiring physical GPU hardware.
 
 ## Justfile Usage
 
