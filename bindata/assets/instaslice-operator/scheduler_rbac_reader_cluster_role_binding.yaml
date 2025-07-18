@@ -6,6 +6,9 @@ subjects:
 - kind: ServiceAccount
   name: das-scheduler
   namespace: das-operator
+- kind: ServiceAccount
+  name: secondary-scheduler
+  namespace: openshift-secondary-scheduler-operator
 roleRef:
   kind: ClusterRole
   name: das-scheduler-node-reader

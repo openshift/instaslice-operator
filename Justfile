@@ -57,13 +57,11 @@ info:
 # Deploy DAS on OpenShift Container Platform
 deploy-das-ocp: info regen-crd-k8s
   #!/usr/bin/env bash
-  
+
   set -eou pipefail
 
   TMP_DIR=$(mktemp -d)
   cp ${DEPLOY_DIR}/*.yaml ${TMP_DIR}/
-
-  sed -i "s/emulatedMode: .*/emulatedMode: \"${EMULATED_MODE}\"/" ${TMP_DIR}/03_instaslice_operator.cr.yaml
 
   echo "Rewriting Operator Image"
   sed -i "s|${OPERATOR_IMAGE_ORIGINAL}|${OPERATOR_IMAGE}|g" ${TMP_DIR}/04_deployment.yaml
@@ -171,7 +169,7 @@ run-local:
   {{KUBECTL}} apply -f ${TMP_DIR}/03_instaslice_operator.cr.yaml
 
   RELATED_IMAGE_DAEMONSET_IMAGE={{DAEMONSET_IMAGE}} RELATED_IMAGE_WEBHOOK_IMAGE={{WEBHOOK_IMAGE}} RELATED_IMAGE_SCHEDULER_IMAGE={{SCHEDULER_IMAGE}} \
-  go run cmd/das-operator/main.go operator --namespace=das-operator --kubeconfig="{{KUBECONFIG}}"
+    go run cmd/das-operator/main.go operator --namespace=das-operator --kubeconfig="{{KUBECONFIG}}"
 
 # Run end-to-end tests with optional focus filter
 test-e2e e2e-args="-ginkgo.v" focus="":
@@ -185,7 +183,7 @@ test-e2e e2e-args="-ginkgo.v" focus="":
   fi
 
   echo "=== Running e2e tests ==="
-  GOFLAGS=-mod=vendor go test ./test/e2e -v -count=1 -args ${args[@]}
+  GOFLAGS=-mod=vendor go test ./test/e2e -v -ginkgo.v -count=1 -args ${args[@]}
 
 # Deploy all the pre-req operators, das-operator and execute end-to-end tests on CI
 test-e2e-ci: deploy-cert-manager-ocp deploy-nfd-ocp deploy-nvidia-ocp deploy-das-ocp test-e2e
@@ -222,6 +220,10 @@ undeploy-cert-manager-ocp:
 # Deploy Node Feature Discovery (NFD) operator for OpenShift
 deploy-nfd-ocp:
   hack/deploy-nfd.sh
+
+# Deploy Secondary Scheduler operator for OpenShift
+deploy-secondary-scheduler-operator:
+  hack/deploy-secondary-scheduler-operator.sh
 
 # Run golangci-lint on the codebase
 lint-go:
