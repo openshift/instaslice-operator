@@ -187,6 +187,9 @@ test-e2e e2e-args="-ginkgo.v" focus="":
   echo "=== Running e2e tests ==="
   GOFLAGS=-mod=vendor go test ./test/e2e -v -count=1 -args ${args[@]}
 
+# Deploy all the pre-req operators, das-operator and execute end-to-end tests on CI
+test-e2e-ci: deploy-cert-manager-ocp deploy-nfd-ocp deploy-nvidia-ocp deploy-das-ocp test-e2e
+
 # Remove NVIDIA GPU operator from OpenShift
 undeploy-nvidia-ocp:
   {{KUBECTL}} delete -f hack/manifests/gpu-cluster-policy.yaml
