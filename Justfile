@@ -9,11 +9,11 @@ export GOLANGCI_LINT:= env('GOLANGCI_LINT', 'golangci-lint')
 export MARKDOWNLINT := env('MARKDOWNLINT', 'markdownlint')
 export KUBECONFIG := env('KUBECONFIG', '')
 
-export OPERATOR_IMAGE := `jq -r '.[] | select(.name == "instaslice-operator-next") | .image' {{RELATED_IMAGES}}`
-export WEBHOOK_IMAGE := `jq -r '.[] | select(.name == "instaslice-webhook-next") | .image' {{RELATED_IMAGES}}`
-export SCHEDULER_IMAGE := `jq -r '.[] | select(.name == "instaslice-scheduler-next") | .image' {{RELATED_IMAGES}}`
-export DAEMONSET_IMAGE := `jq -r '.[] | select(.name == "instaslice-daemonset-next") | .image' {{RELATED_IMAGES}}`
-export BUNDLE_IMAGE := `jq -r '.[] | select(.name == "instaslice-operator-bundle-next") | .image' {{RELATED_IMAGES}}`
+export OPERATOR_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-operator-next") | .image' $1""", RELATED_IMAGES)
+export WEBHOOK_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-webhook-next") | .image' $1""", RELATED_IMAGES)
+export SCHEDULER_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-scheduler-next") | .image' $1""", RELATED_IMAGES)
+export DAEMONSET_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-daemonset-next") | .image' $1""", RELATED_IMAGES)
+export BUNDLE_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-operator-bundle-next") | .image' $1""", RELATED_IMAGES)
 
 export OPERATOR_IMAGE_ORIGINAL := "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next:latest"
 export WEBHOOK_IMAGE_ORIGINAL := "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next:latest"
