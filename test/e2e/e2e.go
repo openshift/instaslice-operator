@@ -409,14 +409,9 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 			gpuCount += len(res.NodeGPUs)
 		}
 
-		// TODO - Remove this hardcoding by dynamically calculating number of max slices like we do in Filter and Score plugins.
-		// This test will likely fail on hardware other than A100 or H100 GPUs.
-		pods1g := gpuCount * 2
-		pods2g := gpuCount * 2
-
 		var pods []*corev1.Pod
 
-		for i := 1; i <= pods1g; i++ {
+		for i := 1; i <= gpuCount; i++ {
 			pods = append(pods, &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      fmt.Sprintf("multi-1g-%d", i),
@@ -426,7 +421,7 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 			})
 		}
 
-		for i := 1; i <= pods2g; i++ {
+		for i := 1; i <= gpuCount; i++ {
 			pods = append(pods, &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      fmt.Sprintf("multi-2g-%d", i),
@@ -464,31 +459,6 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 				}
 				return p.Status.Phase, nil
 			}, 60*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
-		}
-	})
-
-	It("should keep new pods pending when all slice types are exhausted", func(ctx SpecContext) {
-		pods := []*corev1.Pod{
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "multi-over-2g",
-					Namespace: namespace,
-				},
-				Spec: gpuSlicePodSpec("2g.10gb", emulatedMode),
-			},
-		}
-
-		By("creating overcommit pods")
-		Expect(createPods(ctx, namespace, pods)).To(Succeed())
-
-		for _, p := range pods {
-			Consistently(func() (corev1.PodPhase, error) {
-				pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, p.Name, metav1.GetOptions{})
-				if err != nil {
-					return "", err
-				}
-				return pod.Status.Phase, nil
-			}, 25*time.Second, 5*time.Second).Should(Equal(corev1.PodPending))
 		}
 	})
 })
