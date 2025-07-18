@@ -40,10 +40,6 @@ type DASOperator struct {
 type DASOperatorSpec struct {
 	operatorv1.OperatorSpec `json:",inline"`
 
-	// EmulatedMode true configures the operator to not use the GPU backend
-	// +optional
-	EmulatedMode EmulatedMode `json:"emulatedMode,omitempty"`
-
 	// NodeSelector allows additional node label filters for the daemonset pods
 	// +optional
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
