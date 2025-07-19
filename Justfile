@@ -9,6 +9,11 @@ export GOLANGCI_LINT:= env('GOLANGCI_LINT', 'golangci-lint')
 export MARKDOWNLINT := env('MARKDOWNLINT', 'markdownlint')
 export KUBECONFIG := env('KUBECONFIG', '')
 
+export DAS_OPERATOR_IMG := env('DAS_OPERATOR_IMG', 'quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next:latest')
+export DAS_WEBHOOK_IMG := env('DAS_WEBHOOK_IMG', 'quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next:latest')
+export DAS_SCHEDULER_IMG := env('DAS_SCHEDULER_IMG', 'quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-scheduler-next:latest')
+export DAS_DAEMONSET_IMG := env('DAS_DAEMONSET_IMG', 'quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-daemonset-next:latest')
+
 export OPERATOR_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-operator-next") | .image' $1""", RELATED_IMAGES)
 export WEBHOOK_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-webhook-next") | .image' $1""", RELATED_IMAGES)
 export SCHEDULER_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-scheduler-next") | .image' $1""", RELATED_IMAGES)
@@ -188,7 +193,19 @@ test-e2e e2e-args="-ginkgo.v" focus="":
   GOFLAGS=-mod=vendor go test ./test/e2e -v -count=1 -args ${args[@]}
 
 # Deploy all the pre-req operators, das-operator and execute end-to-end tests on CI
-test-e2e-ci: deploy-cert-manager-ocp deploy-nfd-ocp deploy-nvidia-ocp deploy-das-ocp test-e2e
+test-e2e-ci: create-related-ci-images deploy-cert-manager-ocp deploy-nfd-ocp deploy-nvidia-ocp deploy-das-ocp test-e2e
+
+# Create a related_images file for the ci to refer and export the RELATED_IMAGES variable
+create-related-ci-images:
+  cat <<EOF > related_images_ci.json
+  [
+    {"name": "instaslice-operator-next", "image": "${DAS_OPERATOR_IMG}"},
+    {"name": "instaslice-webhook-next", "image": "${DAS_WEBHOOK_IMG}"},
+    {"name": "instaslice-scheduler-next", "image": "${DAS_SCHEDULER_IMG}"},
+    {"name": "instaslice-daemonset-next", "image": "${DAS_DAEMONSET_IMG}"}
+  ]
+  EOF
+  export RELATED_IMAGES="related_images_ci.json"
 
 # Remove NVIDIA GPU operator from OpenShift
 undeploy-nvidia-ocp:
