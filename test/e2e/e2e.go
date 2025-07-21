@@ -76,17 +76,18 @@ const (
 )
 
 var _ = BeforeSuite(func() {
-	cfg, err := rest.InClusterConfig()
-	if err != nil {
-		kubeconfig := os.Getenv("KUBECONFIG")
-		if kubeconfig == "" {
-			kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
-		}
-		cfg, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-		if err != nil {
-			Skip("kubernetes config not available: " + err.Error())
-		}
+	//(TODO) Remove the deadcode if this resolves rbac issue while executing e2e test suite in CI
+	// cfg, err := rest.InClusterConfig()
+	// if err != nil {
+	kubeconfig := os.Getenv("KUBECONFIG")
+	if kubeconfig == "" {
+		kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
 	}
+	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		Skip("kubernetes config not available: " + err.Error())
+	}
+	//}
 
 	// TODO - Remove this warning suppression once the webhook starts working properly
 	cfg.WarningHandler = rest.NoWarnings{}
