@@ -1,0 +1,155 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: das-scheduler
+rules:
+  - apiGroups: [""]
+    resources: ["pods/binding", "pods/status"]
+    verbs: ["create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["", "events.k8s.io"]
+    resources: ["events"]
+    verbs: ["create", "patch", "update"]
+  - apiGroups: ["inference.redhat.com"]
+    resources:
+      - "nodeaccelerators"
+      - "nodeaccelerators/status"
+      - "dasoperators"
+      - "dasoperators/status"
+      - "allocationclaims"
+      - "allocationclaims/status"
+      - "allocationclaims/finalizers"
+    verbs:
+      - "get"
+      - "list"
+      - "watch"
+      - "update"
+      - "patch"
+      - "create"
+      - "delete"
+  - apiGroups: ["storage.k8s.io"]
+    resources:
+      - csinodes
+      - csidrivers
+      - csistoragecapacities
+      - storageclasses
+      - volumeattachments
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: das-scheduler
+subjects:
+  - kind: ServiceAccount
+    name: das-scheduler
+    namespace: das-operator
+roleRef:
+  kind: ClusterRole
+  name: das-scheduler
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: das-scheduler-node-reader
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get","list","watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: das-scheduler-node-reader-binding
+subjects:
+  - kind: ServiceAccount
+    name: das-scheduler
+    namespace: das-operator
+roleRef:
+  kind: ClusterRole
+  name: das-scheduler-node-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:extension-apiserver-authentication-reader
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["extension-apiserver-authentication"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: das-scheduler-authentication-reader
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: das-operator
+  - kind: ServiceAccount
+    name: das-scheduler
+    namespace: das-operator
+roleRef:
+  kind: ClusterRole
+  name: system:extension-apiserver-authentication-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: das-scheduler
+  namespace: das-operator
+subjects:
+  - kind: ServiceAccount
+    name: das-scheduler
+    namespace: das-operator
+roleRef:
+  kind: Role
+  name: das-scheduler
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: das-scheduler
+  namespace: das-operator
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get","list","watch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: das-scheduler-view
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: das-operator
+  - kind: ServiceAccount
+    name: das-scheduler
+    namespace: das-operator
+roleRef:
+  kind: ClusterRole
+  name: view
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: das-scheduler
+  namespace: das-operator
