@@ -9,11 +9,11 @@ export GOLANGCI_LINT:= env('GOLANGCI_LINT', 'golangci-lint')
 export MARKDOWNLINT := env('MARKDOWNLINT', 'markdownlint')
 export KUBECONFIG := env('KUBECONFIG', '')
 
-export OPERATOR_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-operator-next") | .image' $1""", RELATED_IMAGES)
-export WEBHOOK_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-webhook-next") | .image' $1""", RELATED_IMAGES)
-export SCHEDULER_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-scheduler-next") | .image' $1""", RELATED_IMAGES)
-export DAEMONSET_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-daemonset-next") | .image' $1""", RELATED_IMAGES)
-export BUNDLE_IMAGE := shell("""jq -r '.[] | select(.name == "instaslice-operator-bundle-next") | .image' $1""", RELATED_IMAGES)
+export OPERATOR_IMAGE := env('OPERATOR_IMAGE', shell("""jq -r '.[] | select(.name == "instaslice-operator-next") | .image' $1""", RELATED_IMAGES))
+export WEBHOOK_IMAGE := env('WEBHOOK_IMAGE', shell("""jq -r '.[] | select(.name == "instaslice-webhook-next") | .image' $1""", RELATED_IMAGES))
+export SCHEDULER_IMAGE := env('SCHEDULER_IMAGE', shell("""jq -r '.[] | select(.name == "instaslice-scheduler-next") | .image' $1""", RELATED_IMAGES))
+export DAEMONSET_IMAGE := env('DAEMONSET_IMAGE', shell("""jq -r '.[] | select(.name == "instaslice-daemonset-next") | .image' $1""", RELATED_IMAGES))
+export BUNDLE_IMAGE := env('BUNDLE_IMAGE', shell("""jq -r '.[] | select(.name == "instaslice-operator-bundle-next") | .image' $1""", RELATED_IMAGES))
 
 export OPERATOR_IMAGE_ORIGINAL := "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next:latest"
 export WEBHOOK_IMAGE_ORIGINAL := "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-webhook-next:latest"
@@ -188,7 +188,23 @@ test-e2e e2e-args="-ginkgo.v" focus="":
   GOFLAGS=-mod=vendor go test ./test/e2e -v -count=1 -args ${args[@]}
 
 # Deploy all the pre-req operators, das-operator and execute end-to-end tests on CI
-test-e2e-ci: deploy-cert-manager-ocp deploy-nfd-ocp deploy-nvidia-ocp deploy-das-ocp test-e2e
+test-e2e-ci: create-related-images deploy-cert-manager-ocp deploy-nfd-ocp deploy-nvidia-ocp deploy-das-ocp test-e2e
+
+# Create a related_images.json file with the provided env variables
+create-related-images filename="related_images.json":
+  #!/usr/bin/env bash
+
+  echo "creating {{filename}}"
+  cat <<EOF > {{filename}}
+  [
+    {"name": "instaslice-operator-next", "image": "{{OPERATOR_IMAGE}}"},
+    {"name": "instaslice-webhook-next", "image": "{{WEBHOOK_IMAGE}}"},
+    {"name": "instaslice-scheduler-next", "image": "{{SCHEDULER_IMAGE}}"},
+    {"name": "instaslice-daemonset-next", "image": "{{DAEMONSET_IMAGE}}"}
+  ]
+  EOF
+
+  cat {{filename}}
 
 # Remove NVIDIA GPU operator from OpenShift
 undeploy-nvidia-ocp:
