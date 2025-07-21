@@ -15,17 +15,14 @@ import (
 )
 
 func NewScheduler(ctx context.Context) *cobra.Command {
-	opts := scheduleroptions.NewOptions()
-	// Disable scheduler leader election by default. The deployment runs a
-	// single replica and doesn't require coordination.
-	opts.LeaderElection.LeaderElect = false
+    opts := scheduleroptions.NewOptions()
 
 	startFn := func(ctx context.Context, cc *controllercmd.ControllerContext) error {
 		return sched.RunScheduler(ctx, cc, opts)
 	}
 
-	cfg := controllercmd.NewControllerCommandConfig("das-scheduler", version.Get(), startFn, clock.RealClock{})
-	cfg.DisableLeaderElection = true
+    cfg := controllercmd.NewControllerCommandConfig("das-scheduler", version.Get(), startFn, clock.RealClock{})
+    cfg.DisableLeaderElection = false
 
 	cmd := cfg.NewCommandWithContext(ctx)
 	cmd.Use = "scheduler"
