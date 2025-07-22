@@ -213,8 +213,7 @@ undeploy:
 # Deploy cert-manager for Kubernetes
 [group('deploy')]
 deploy-cert-manager:
-    export KUBECTL=$(KUBECTL) IMG=$(IMG) IMG_DMST=$(IMG_DMST) && \
-      hack/deploy-cert-manager.sh
+    hack/deploy-cert-manager.sh
 
 # Deploy cert-manager for OpenShift
 [group('deploy')]
