@@ -9,6 +9,9 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "nodes"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: ["config.openshift.io"]
+    resources: ["infrastructures"]
+    verbs: ["get"]
   - apiGroups: ["", "events.k8s.io"]
     resources: ["events"]
     verbs: ["create", "patch", "update"]
@@ -29,6 +32,17 @@ rules:
       - "patch"
       - "create"
       - "delete"
+  - apiGroups: [ "storage.k8s.io" ]
+    resources:
+      - csinodes
+      - csidrivers
+      - csistoragecapacities
+      - storageclasses
+      - volumeattachments
+    verbs: [ "get", "list", "watch" ]
+  - apiGroups: [ "" ]
+    resources: [ "persistentvolumes" ]
+    verbs: [ "get", "list", "watch" ]
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
