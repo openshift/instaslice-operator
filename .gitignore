@@ -36,3 +36,4 @@ report.xml
 das-daemonset
 das-operator
 das-webhook
+das-scheduler
