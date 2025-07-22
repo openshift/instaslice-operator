@@ -9,6 +9,7 @@ import (
 
 	nvml "github.com/NVIDIA/go-nvml/pkg/nvml"
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
+	applyconfigurationdasoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/generated/applyconfiguration/dasoperator/v1alpha1"
 	"github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1"
 	utils "github.com/openshift/instaslice-operator/test/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -17,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	applyconfigurationmetav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -230,7 +232,22 @@ func (r *RealMigGpuDiscoverer) Discover() (*instav1.NodeAccelerator, error) {
 	}
 	meta.SetStatusCondition(&instaslice.Status.Conditions, ready)
 
-	instaslice, err = r.instaClient.UpdateStatus(r.ctx, instaslice, metav1.UpdateOptions{})
+	// Use server-side apply to avoid resource version conflicts.
+	applyConfig := applyconfigurationdasoperatorv1alpha1.NodeAccelerator(instaslice.Name, instaslice.Namespace)
+	applyConfig.WithStatus(&applyconfigurationdasoperatorv1alpha1.NodeAcceleratorStatusApplyConfiguration{})
+	applyConfig.Status.WithNodeResources(instaslice.Status.NodeResources)
+
+	now := metav1.Now()
+	applyConfig.Status.WithConditions(&applyconfigurationmetav1.ConditionApplyConfiguration{
+		Type:               &ready.Type,
+		Status:             &ready.Status,
+		Reason:             &ready.Reason,
+		Message:            &ready.Message,
+		ObservedGeneration: &ready.ObservedGeneration,
+		LastTransitionTime: &now,
+	})
+
+	instaslice, err = r.instaClient.ApplyStatus(r.ctx, applyConfig, metav1.ApplyOptions{FieldManager: "das-daemonset"})
 	if err != nil {
 		return nil, err
 	}

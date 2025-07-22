@@ -7,17 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"bytes"
-	"io"
-
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/yaml"
-
 	operatorsv1 "github.com/openshift/api/operator/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apiextclientv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -271,39 +263,6 @@ func (c *TargetConfigReconciler) manageScheduler(ctx context.Context, ownerRefer
 		return nil, false, err
 	}
 
-	rbacObjects, err := readSchedulerRBACObjects()
-	if err != nil {
-		return nil, false, err
-	}
-	for _, obj := range rbacObjects {
-		accessor, err := meta.Accessor(obj)
-		if err != nil {
-			return nil, false, err
-		}
-		if len(accessor.GetNamespace()) > 0 {
-			accessor.SetNamespace(c.namespace)
-		}
-		accessor.SetOwnerReferences([]metav1.OwnerReference{ownerReference})
-
-		switch t := obj.(type) {
-		case *rbacv1.ClusterRole:
-			_, _, err = resourceapply.ApplyClusterRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, t)
-		case *rbacv1.ClusterRoleBinding:
-			_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, t)
-		case *rbacv1.Role:
-			_, _, err = resourceapply.ApplyRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, t)
-		case *rbacv1.RoleBinding:
-			_, _, err = resourceapply.ApplyRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, t)
-		case *corev1.ServiceAccount:
-			_, _, err = resourceapply.ApplyServiceAccount(ctx, c.kubeClient.CoreV1(), c.eventRecorder, t)
-		default:
-			err = fmt.Errorf("unsupported scheduler RBAC type %T", t)
-		}
-		if err != nil {
-			return nil, false, err
-		}
-	}
-
 	scheduler := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_deployment.yaml"))
 	scheduler.Namespace = c.namespace
 	scheduler.OwnerReferences = []metav1.OwnerReference{
@@ -429,31 +388,4 @@ func injectCertManagerCA(obj metav1.Object, namespace string) error {
 	annotations[CertManagerInjectCaAnnotation] = injectAnnotation
 	obj.SetAnnotations(annotations)
 	return nil
-}
-
-func readSchedulerRBACObjects() ([]runtime.Object, error) {
-	data := bindata.MustAsset("assets/instaslice-operator/scheduler_rbac.yaml")
-	decoder := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 1024)
-	objects := []runtime.Object{}
-
-	for {
-		var raw runtime.RawExtension
-		if err := decoder.Decode(&raw); err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
-		}
-		if len(raw.Raw) == 0 {
-			continue
-		}
-
-		obj, err := resourceread.ReadGenericWithUnstructured(raw.Raw)
-		if err != nil {
-			return nil, err
-		}
-		objects = append(objects, obj)
-	}
-
-	return objects, nil
 }

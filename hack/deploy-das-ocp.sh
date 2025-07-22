@@ -37,4 +37,10 @@ for prefix in $ALL_PREFIXES; do
   done
 done
 
-echo "DAS operator deployed successfully!" 
+echo "DAS operator deployed successfully!"
+
+# Clean up generated files after successful deployment.
+echo "Cleaning up generated files..."
+rm -rf config/ 2>/dev/null || true
+rm -f deploy/inference.redhat.com_allocationclaims.yaml 2>/dev/null || true
+echo "Cleanup completed!" 

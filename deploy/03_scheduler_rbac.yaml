@@ -29,17 +29,6 @@ rules:
       - "patch"
       - "create"
       - "delete"
-  - apiGroups: ["storage.k8s.io"]
-    resources:
-      - csinodes
-      - csidrivers
-      - csistoragecapacities
-      - storageclasses
-      - volumeattachments
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["persistentvolumes"]
-    verbs: ["get", "list", "watch"]
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -55,28 +44,6 @@ subjects:
 roleRef:
   kind: ClusterRole
   name: das-scheduler
-  apiGroup: rbac.authorization.k8s.io
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: das-scheduler-node-reader
-rules:
-  - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["get","list","watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: das-scheduler-node-reader-binding
-subjects:
-  - kind: ServiceAccount
-    name: das-scheduler
-    namespace: das-operator
-roleRef:
-  kind: ClusterRole
-  name: das-scheduler-node-reader
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: rbac.authorization.k8s.io/v1
