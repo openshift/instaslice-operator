@@ -6,6 +6,9 @@
   "assigneesFromCodeOwners": true,
   "automergeStrategy": "auto",
   "automergeType": "pr",
+  "baseBranches": [
+    "next"
+  ],
   "commitMessagePrefix": "NO-JIRA: ",
   "ignoreTests": false,
   "rebaseLabel": "needs-rebase",
@@ -13,41 +16,34 @@
   "recreateWhen": "always",
   "tekton": {
     "enabled": true,
-    "addLabels": [
-      "approved",
-      "lgtm"
-    ],
-    "automerge": true,
-    "automergeType": "pr",
-    "automergeStrategy": "rebase",
-    "commitMessagePrefix": "NO-JIRA:",
-    "fileMatch": [
-      "related_images.json$",
-      "related_images.developer.json$",
-      "\\.yaml$",
-      "\\.yml$"
-    ],
-    "includePaths": [
-      ".tekton/**",
-      "."
-    ],
-    "platformAutomerge": true
+    "packageRules": [
+      {
+        "matchUpdateTypes": [
+          "minor",
+          "patch",
+          "pin",
+          "digest"
+        ],
+        "automerge": true,
+        "addLabels": [
+          "lgtm",
+          "approved"
+        ]
+      }
+    ]
   },
   "dockerfile": {
     "enabled": true,
     "packageRules": [
       {
+        "matchFileNames": [
+          "Dockerfile.*",
+          ".*Dockerfile"
+        ],
+        "automerge": true,
         "addLabels": [
           "lgtm",
           "approved"
-        ],
-        "automerge": true,
-        "automergeType": "pr",
-        "automergeStrategy": "rebase",
-        "commitMessagePrefix": "NO-JIRA:",
-        "matchFileNames": [
-          "Dockerfile.*",
-          "*.Dockerfile"
         ]
       }
     ]
