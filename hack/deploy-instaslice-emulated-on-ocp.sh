@@ -7,7 +7,7 @@ NAMESPACE=${NAMESPACE:-"das-operator"}
 WEBHOOK_TIMEOUT=${WEBHOOK_TIMEOUT:-2m}
 
 _kubectl() {
-        ${KUBECTL} $@
+  ${KUBECTL} $@
 }
 
 echo "Creating namespace ${NAMESPACE}"

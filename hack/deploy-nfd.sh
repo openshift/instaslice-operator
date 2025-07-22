@@ -38,37 +38,37 @@ EOF
 
 CSVName=""
 for ((i = 1; i <= 60; i++)); do
-	output=$(oc get sub nfd -n openshift-nfd -o jsonpath='{.status.currentCSV}' >>/dev/null && echo "exists" || echo "not found")
-	if [ "$output" != "exists" ]; then
-		sleep 2
-		continue
-	fi
-	CSVName=$(oc get sub nfd -n openshift-nfd -o jsonpath='{.status.currentCSV}')
-	if [ "$CSVName" != "" ]; then
-		break
-	fi
-	sleep 10
+  output=$(oc get sub nfd -n openshift-nfd -o jsonpath='{.status.currentCSV}' >>/dev/null && echo "exists" || echo "not found")
+  if [ "$output" != "exists" ]; then
+    sleep 2
+    continue
+  fi
+  CSVName=$(oc get sub nfd -n openshift-nfd -o jsonpath='{.status.currentCSV}')
+  if [ "$CSVName" != "" ]; then
+    break
+  fi
+  sleep 10
 done
 
 _apiReady=0
 echo "* Using CSV: ${CSVName}"
 for ((i = 1; i <= 20; i++)); do
-	sleep 30
-	output=$(oc get csv -n openshift-nfd $CSVName -o jsonpath='{.status.phase}' >>/dev/null && echo "exists" || echo "not found")
-	if [ "$output" != "exists" ]; then
-		continue
-	fi
-	phase=$(oc get csv -n openshift-nfd $CSVName -o jsonpath='{.status.phase}')
-	if [ "$phase" == "Succeeded" ]; then
-		_apiReady=1
-		break
-	fi
-	echo "Waiting for CSV to be ready"
+  sleep 30
+  output=$(oc get csv -n openshift-nfd $CSVName -o jsonpath='{.status.phase}' >>/dev/null && echo "exists" || echo "not found")
+  if [ "$output" != "exists" ]; then
+    continue
+  fi
+  phase=$(oc get csv -n openshift-nfd $CSVName -o jsonpath='{.status.phase}')
+  if [ "$phase" == "Succeeded" ]; then
+    _apiReady=1
+    break
+  fi
+  echo "Waiting for CSV to be ready"
 done
 
 if [ $_apiReady -eq 0 ]; then
-	echo "nfd-operator subscription could not install in the allotted time."
-	exit 1
+  echo "nfd-operator subscription could not install in the allotted time."
+  exit 1
 fi
 echo "nfd-operator installed successfully"
 

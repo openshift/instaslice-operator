@@ -11,11 +11,11 @@ KIND_NODE_NAME=${KIND_NODE_NAME:-"kind-e2e-control-plane"}
 WEBHOOK_TIMEOUT=${WEBHOOK_TIMEOUT:-2m}
 
 _kubectl() {
-        ${KUBECTL} --context ${KIND_CONTEXT} $@
+  ${KUBECTL} --context ${KIND_CONTEXT} $@
 }
 
 _kind() {
-	${KIND} $@
+  ${KIND} $@
 }
 
 _kind load docker-image ${IMG} --name ${KIND_NAME}

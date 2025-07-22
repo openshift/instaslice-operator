@@ -4,7 +4,7 @@ set -eou pipefail
 
 # Source environment variables if available
 if [ -f ".env" ]; then
-	source .env
+  source .env
 fi
 
 # Create temporary directory and copy deployment files
@@ -24,6 +24,6 @@ ${KUBECTL} apply -f ${TMP_DIR}/03_instaslice_operator.cr.yaml
 
 # Run the operator locally
 RELATED_IMAGE_DAEMONSET_IMAGE=${DAEMONSET_IMAGE} \
-	RELATED_IMAGE_WEBHOOK_IMAGE=${WEBHOOK_IMAGE} \
-	RELATED_IMAGE_SCHEDULER_IMAGE=${SCHEDULER_IMAGE} \
-	go run cmd/das-operator/main.go operator --namespace=das-operator --kubeconfig="${KUBECONFIG}"
+  RELATED_IMAGE_WEBHOOK_IMAGE=${WEBHOOK_IMAGE} \
+  RELATED_IMAGE_SCHEDULER_IMAGE=${SCHEDULER_IMAGE} \
+  go run cmd/das-operator/main.go operator --namespace=das-operator --kubeconfig="${KUBECONFIG}"
