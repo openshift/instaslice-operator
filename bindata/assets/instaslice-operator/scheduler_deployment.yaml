@@ -13,6 +13,15 @@ spec:
       labels:
         app: das-scheduler
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app: das-scheduler
       serviceAccountName: das-scheduler
       containers:
       - name: scheduler

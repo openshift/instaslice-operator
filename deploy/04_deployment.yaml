@@ -14,7 +14,7 @@ spec:
         app: das-operator
     spec:
       affinity:
-        podAffinity:
+        podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
           - podAffinityTerm:
               topologyKey: kubernetes.io/hostname

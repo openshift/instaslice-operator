@@ -32,14 +32,14 @@ spec:
         app.kubernetes.io/version: 0.0.1
     spec:
       affinity:
-        podAffinity:
+        podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
-          - podAffinityTerm:
+          - weight: 100
+            podAffinityTerm:
               topologyKey: kubernetes.io/hostname
               labelSelector:
                 matchLabels:
-                  app.kubernetes.io/part-of: das-operator
-            weight: 100
+                  app.kubernetes.io/name: das-operator-webhook
       automountServiceAccountToken: false
       containers:
       - command:
