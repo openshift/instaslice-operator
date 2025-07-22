@@ -65,6 +65,7 @@ type TargetConfigReconciler struct {
 }
 
 func NewTargetConfigReconciler(
+	emulatedMode slicev1alpha1.EmulatedMode,
 	targetDaemonsetImage string,
 	targetWebhookImage string,
 	targetSchedulerImage string,
@@ -97,7 +98,7 @@ func NewTargetConfigReconciler(
 		targetWebhookImage:         targetWebhookImage,
 		targetSchedulerImage:       targetSchedulerImage,
 		cache:                      resourceapply.NewResourceCache(),
-		emulatedMode:               slicev1alpha1.EmulatedModeDisabled,
+		emulatedMode:               emulatedMode,
 	}
 
 	return factory.New().WithInformers(
@@ -135,7 +136,6 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		return fmt.Errorf("unable to get operator configuration %s/%s: %w", c.namespace, operatorclient.OperatorConfigName, err)
 	}
 
-	c.emulatedMode = sliceOperator.Spec.EmulatedMode
 	c.nodeSelector = sliceOperator.Spec.NodeSelector
 
 	ownerReference := metav1.OwnerReference{

@@ -16,6 +16,7 @@ import (
 	appsv1client "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/klog/v2"
 
+	slicev1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	operatorconfigclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	operatorclientinformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
 	instaslicecontroller "github.com/openshift/instaslice-operator/pkg/operator/controllers/instaslice"
@@ -73,7 +74,16 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		OperatorNamespace: namespace,
 	}
 
+	emulatedMode := os.Getenv("EMULATED_MODE")
+	var emMode slicev1alpha1.EmulatedMode
+	if emulatedMode == "" {
+		emMode = slicev1alpha1.EmulatedModeDisabled
+	} else {
+		emMode = slicev1alpha1.EmulatedMode(emulatedMode)
+	}
+
 	targetConfigReconciler := NewTargetConfigReconciler(
+		emMode,
 		os.Getenv("RELATED_IMAGE_DAEMONSET_IMAGE"),
 		os.Getenv("RELATED_IMAGE_WEBHOOK_IMAGE"),
 		os.Getenv("RELATED_IMAGE_SCHEDULER_IMAGE"),
