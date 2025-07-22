@@ -17,30 +17,12 @@ metadata:
             "managementState": "Managed",
             "operatorLogLevel": "Normal"
           }
-        },
-        {
-          "apiVersion": "inference.redhat.com/v1alpha1",
-          "kind": "NodeAccelerator",
-          "metadata": {
-            "name": "example",
-            "namespace": "das-operator"
-          },
-          "spec": {}
-        },
-        {
-          "apiVersion": "inference.redhat.com/v1alpha1",
-          "kind": "AllocationClaim",
-          "metadata": {
-            "name": "example",
-            "namespace": "das-operator"
-          },
-          "spec": {}
         }
       ]
     capabilities: Basic Install
     categories: Drivers and plugins
     containerImage: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next:latest
-    createdAt: "2025-07-15T18:02:50Z"
+    createdAt: "2025-07-10T20:05:15Z"
     description: InstaSlice works with GPU operator to create mig slices on demand
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
@@ -54,7 +36,7 @@ metadata:
     features.operators.openshift.io/token-auth-gcp: "false"
     operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift
       Container Platform", "OpenShift Platform Plus"]'
-    operators.operatorframework.io/builder: operator-sdk-v1.41.1
+    operators.operatorframework.io/builder: operator-sdk-v1.40.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/openshift/instaslice-operator
     support: https://github.com/openshift/instaslice-operator/issues

@@ -1,6 +1,0 @@
-apiVersion: inference.redhat.com/v1alpha1
-kind: AllocationClaim
-metadata:
-  name: example
-  namespace: das-operator
-spec: {}
