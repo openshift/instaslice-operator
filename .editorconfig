@@ -1,0 +1,11 @@
+# top-most EditorConfig file
+root = true
+
+# Tab indentation (no size specified)
+[Makefile]
+indent_style = tab
+
+# Indentation override for all Shell scripts under hack/
+[hack/**.sh]
+indent_style = space
+indent_size = 2

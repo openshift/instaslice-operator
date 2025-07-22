@@ -21,8 +21,8 @@ SCRIPT_ROOT=$(unset CDPATH && cd $(dirname "${BASH_SOURCE[0]}")/.. && pwd)
 source "${SCRIPT_ROOT}/vendor/k8s.io/code-generator/kube_codegen.sh"
 
 kube::codegen::gen_helpers \
-	--boilerplate "${SCRIPT_ROOT}/hack/boilerplate.go.txt" \
-	"${SCRIPT_ROOT}/pkg/apis"
+  --boilerplate "${SCRIPT_ROOT}/hack/boilerplate.go.txt" \
+  "${SCRIPT_ROOT}/pkg/apis"
 
 # NOTE(jchaloup): --applyconfig-openapi-schema needs to point to a valid openapi.json file
 # Steps to generate it:
@@ -32,11 +32,11 @@ kube::codegen::gen_helpers \
 # 4. "make generate-clients" under this repository
 
 kube::codegen::gen_client \
-	--output-dir "${SCRIPT_ROOT}/pkg/generated" \
-	--output-pkg "github.com/openshift/instaslice-operator/pkg/generated" \
-	--applyconfig-externals "github.com/openshift/api/operator/v1.OperatorSpec:github.com/openshift/client-go/operator/applyconfigurations/operator/v1,github.com/openshift/api/operator/v1.OperatorStatus:github.com/openshift/client-go/operator/applyconfigurations/operator/v1,github.com/openshift/api/operator/v1.OperatorCondition:github.com/openshift/client-go/operator/applyconfigurations/operator/v1,github.com/openshift/api/operator/v1.GenerationStatus:github.com/openshift/client-go/operator/applyconfigurations/operator/v1" \
-	--applyconfig-openapi-schema openapi.json \
-	--boilerplate "${SCRIPT_ROOT}/hack/boilerplate.go.txt" \
-	--with-applyconfig \
-	--with-watch \
-	"${SCRIPT_ROOT}/pkg/apis"
+  --output-dir "${SCRIPT_ROOT}/pkg/generated" \
+  --output-pkg "github.com/openshift/instaslice-operator/pkg/generated" \
+  --applyconfig-externals "github.com/openshift/api/operator/v1.OperatorSpec:github.com/openshift/client-go/operator/applyconfigurations/operator/v1,github.com/openshift/api/operator/v1.OperatorStatus:github.com/openshift/client-go/operator/applyconfigurations/operator/v1,github.com/openshift/api/operator/v1.OperatorCondition:github.com/openshift/client-go/operator/applyconfigurations/operator/v1,github.com/openshift/api/operator/v1.GenerationStatus:github.com/openshift/client-go/operator/applyconfigurations/operator/v1" \
+  --applyconfig-openapi-schema openapi.json \
+  --boilerplate "${SCRIPT_ROOT}/hack/boilerplate.go.txt" \
+  --with-applyconfig \
+  --with-watch \
+  "${SCRIPT_ROOT}/pkg/apis"

@@ -6,7 +6,7 @@ KUBECTL=${KUBECTL:-oc}
 NAMESPACE=${NAMESPACE:-"das-operator"}
 
 _kubectl() {
-        ${KUBECTL} $@
+  ${KUBECTL} $@
 }
 
 NODE_NAME=$(${KUBECTL} get pods -l control-plane=controller-manager -n ${NAMESPACE} -o jsonpath='{.items..spec.nodeName}')
