@@ -586,3 +586,103 @@ func verifyVisibleDevicesEnv(ctx context.Context, namespace, podName string, exp
 
 	return true, nil
 }
+
+var _ = Describe("MIG placement start index", Ordered, func() {
+	var (
+		namespace string
+		podNames  []string
+	)
+
+	BeforeAll(func() {
+		if os.Getenv("KUBECONFIG") == "" {
+			Skip("KUBECONFIG is not set; skipping e2e test")
+		}
+	})
+
+	BeforeAll(func() {
+		namespace = "das-e2e-start0"
+
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+		By("creating namespace " + namespace)
+		_, err := kubeClient.CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{})
+		if err != nil && !apierrors.IsAlreadyExists(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		insts, err := dasClient.OpenShiftOperatorV1alpha1().NodeAccelerators("das-operator").List(context.Background(), metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		gpuCount := 0
+		for _, inst := range insts.Items {
+			var res instav1.DiscoveredNodeResources
+			Expect(json.Unmarshal(inst.Status.NodeResources.Raw, &res)).To(Succeed())
+			gpuCount += len(res.NodeGPUs)
+		}
+
+		if gpuCount < 2 {
+			Skip(fmt.Sprintf("need at least 2 GPUs, found %d", gpuCount))
+		}
+
+		pods := []*corev1.Pod{
+			{
+				ObjectMeta: metav1.ObjectMeta{Name: "start0-1", Namespace: namespace},
+				Spec:       gpuSlicePodSpec("1g.5gb", emulatedMode),
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{Name: "start0-2", Namespace: namespace},
+				Spec:       gpuSlicePodSpec("1g.5gb", emulatedMode),
+			},
+		}
+
+		By("creating test pods")
+		Expect(createPods(context.Background(), namespace, pods)).To(Succeed())
+		for _, p := range pods {
+			podNames = append(podNames, p.Name)
+		}
+	})
+
+	AfterAll(func() {
+		By("deleting namespace " + namespace)
+		err := kubeClient.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() bool {
+			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
+			return apierrors.IsNotFound(err)
+		}, 2*time.Minute, time.Second).Should(BeTrue())
+	})
+
+	It("should be running", func(ctx SpecContext) {
+		for _, name := range podNames {
+			Eventually(func() (corev1.PodPhase, error) {
+				p, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+				if err != nil {
+					return "", err
+				}
+				return p.Status.Phase, nil
+			}, 60*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
+		}
+	})
+
+	It("should set start index to 0 in AllocationClaims", func(ctx SpecContext) {
+		Eventually(func() (bool, error) {
+			allocs, err := dasClient.OpenShiftOperatorV1alpha1().AllocationClaims("das-operator").List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return false, err
+			}
+			found := 0
+			for _, alloc := range allocs.Items {
+				var spec instav1.AllocationClaimSpec
+				if err := json.Unmarshal(alloc.Spec.Raw, &spec); err != nil {
+					continue
+				}
+
+				if spec.MigPlacement.Start != 0 { // both pods should have start index 0
+					return false, nil
+				}
+				found++
+			}
+			return found == len(podNames), nil
+		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+	})
+})

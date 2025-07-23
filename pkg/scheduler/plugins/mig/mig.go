@@ -39,6 +39,24 @@ type Plugin struct {
 	allocationIndexer cache.Indexer
 }
 
+func (p *Plugin) indexerAdd(obj *instav1alpha1.AllocationClaim) {
+	if err := p.allocationIndexer.Add(obj); err != nil {
+		klog.ErrorS(err, "failed to add AllocationClaim to indexer", "alloc", klog.KObj(obj))
+	}
+}
+
+func (p *Plugin) indexerUpdate(obj *instav1alpha1.AllocationClaim) {
+	if err := p.allocationIndexer.Update(obj); err != nil {
+		klog.ErrorS(err, "failed to update AllocationClaim in indexer", "alloc", klog.KObj(obj))
+	}
+}
+
+func (p *Plugin) indexerDelete(obj *instav1alpha1.AllocationClaim) {
+	if err := p.allocationIndexer.Delete(obj); err != nil {
+		klog.ErrorS(err, "failed to delete AllocationClaim from indexer", "alloc", klog.KObj(obj))
+	}
+}
+
 func getAllocationClaimSpec(a *instav1alpha1.AllocationClaim) (instav1alpha1.AllocationClaimSpec, error) {
 	if a == nil {
 		return instav1alpha1.AllocationClaimSpec{}, fmt.Errorf("allocation claim is nil")
@@ -71,6 +89,9 @@ func cleanupAllocationClaims(ctx context.Context, client instaclient.Interface, 
 			klog.ErrorS(err, "deleting stale AllocationClaim for deleted pod", "alloc", klog.KObj(alloc), "pod", klog.KObj(pod))
 		} else {
 			klog.InfoS("deleted stale AllocationClaim for deleted pod", "alloc", klog.KObj(alloc), "pod", klog.KObj(pod))
+			if err := indexer.Delete(alloc); err != nil {
+				klog.ErrorS(err, "failed to remove AllocationClaim from indexer", "alloc", klog.KObj(alloc))
+			}
 		}
 	}
 }
@@ -235,28 +256,29 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 	}
 
 	// remove any existing claims for this pod on this node
-	if p.allocationIndexer != nil {
-		items, err := p.allocationIndexer.ByIndex("pod-uid", string(pod.UID))
-		if err == nil {
-			for _, obj := range items {
-				ac, ok := obj.(*instav1alpha1.AllocationClaim)
-				if !ok {
-					continue
-				}
-				spec, err := getAllocationClaimSpec(ac)
-				if err != nil {
-					klog.ErrorS(err, "decoding AllocationClaim", "alloc", klog.KObj(ac))
-					continue
-				}
-				if string(spec.Nodename) == node.Name {
-					klog.InfoS("removing stale AllocationClaim for pod", "pod", klog.KObj(pod), "claim", klog.KObj(ac))
-					if err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-						klog.ErrorS(err, "failed to delete existing AllocationClaim", "AllocationClaim", klog.KObj(ac))
-						return framework.AsStatus(err)
-					}
-				}
-			}
+	items, err := p.allocationIndexer.ByIndex("pod-uid", string(pod.UID))
+	if err != nil {
+		return framework.AsStatus(err)
+	}
+	for _, obj := range items {
+		ac, ok := obj.(*instav1alpha1.AllocationClaim)
+		if !ok {
+			continue
 		}
+		spec, err := getAllocationClaimSpec(ac)
+		if err != nil {
+			klog.ErrorS(err, "decoding AllocationClaim", "alloc", klog.KObj(ac))
+			continue
+		}
+		if string(spec.Nodename) != node.Name {
+			continue
+		}
+		klog.InfoS("removing stale AllocationClaim for pod", "pod", klog.KObj(pod), "claim", klog.KObj(ac))
+		if err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			klog.ErrorS(err, "failed to delete existing AllocationClaim", "AllocationClaim", klog.KObj(ac))
+			return framework.AsStatus(err)
+		}
+		p.indexerDelete(ac)
 	}
 
 	profiles := getPodProfileNames(pod)
@@ -272,14 +294,28 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 		containers = append(containers, corev1.Container{Name: ec.Name, Resources: ec.Resources})
 	}
 
-	// Build map of allocated slices per GPU excluding this pod's claims
+	// Build map of allocated slices per GPU excluding this pod's claims.
+	// GPUs having any staged AllocationClaims are skipped entirely.
 	gpuAllocated := make(map[string][8]int32)
+	gpuUsable := make(map[string]bool)
 	for _, gpu := range resources.NodeGPUs {
-		allocIdx, err := gpuAllocatedSlices(p.allocationIndexer, node.Name, gpu.GPUUUID, pod.UID)
+		allocs, err := p.listGPUAllocations(node.Name, gpu.GPUUUID)
 		if err != nil {
 			return framework.AsStatus(err)
 		}
+		skip := false
+		for _, a := range allocs {
+			if a.claim.Status.State == instav1alpha1.AllocationClaimStatusStaged && a.spec.PodRef.UID != pod.UID {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+		allocIdx := buildAllocatedIndex(allocs, pod.UID)
 		gpuAllocated[gpu.GPUUUID] = allocIdx
+		gpuUsable[gpu.GPUUUID] = true
 	}
 
 	var claims []*instav1alpha1.AllocationClaim
@@ -289,6 +325,9 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 		for j, profileName := range profs {
 			allocated := false
 			for _, gpu := range resources.NodeGPUs {
+				if !gpuUsable[gpu.GPUUUID] {
+					continue
+				}
 				idx := gpuAllocated[gpu.GPUUUID]
 				newStart := getStartIndexFromAllocationResults(resources, profileName, idx)
 				if newStart == int32(9) {
@@ -343,6 +382,7 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 								klog.ErrorS(err, "failed to delete other AllocationClaim", "AllocationClaim", klog.KObj(ac))
 								return framework.AsStatus(err)
 							}
+							p.indexerDelete(ac)
 						}
 						klog.ErrorS(err, "failed to delete created AllocationClaim", "AllocationClaim", klog.KObj(created))
 						return framework.AsStatus(err)
@@ -350,7 +390,8 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 				}
 				// TODO - may be there is no need to have updates done here with the mutation lock, there is no race condition for updating the status
 				// in the scheduler. Removing lock could speed things up a bit.
-				if _, err := deviceplugins.UpdateAllocationStatus(ctx, p.instaClient, created, instav1alpha1.AllocationClaimStatusStaged); err != nil {
+				updated, err := deviceplugins.UpdateAllocationStatus(ctx, p.instaClient, created, instav1alpha1.AllocationClaimStatusStaged)
+				if err != nil {
 					klog.ErrorS(err, "failed to update AllocationClaim status to Staged", "AllocationClaim", klog.KObj(created))
 					for _, ac := range claims {
 						specAC, err2 := getAllocationClaimSpec(ac)
@@ -367,6 +408,7 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 							klog.ErrorS(err, "failed to delete staged AllocationClaim", "AllocationClaim", klog.KObj(ac))
 							return framework.AsStatus(err)
 						}
+						p.indexerDelete(ac)
 					}
 					specCreated, err3 := getAllocationClaimSpec(created)
 					if err3 != nil {
@@ -377,9 +419,11 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 							klog.ErrorS(err2, "failed to delete created AllocationClaim", "AllocationClaim", klog.KObj(created))
 							return framework.AsStatus(err2)
 						}
+						p.indexerDelete(created)
 					}
 					return framework.AsStatus(err)
 				}
+				p.indexerAdd(updated)
 				for i := int32(0); i < size; i++ {
 					idx[newStart+i] = 1
 				}
@@ -435,7 +479,7 @@ func (p *Plugin) Score(ctx context.Context, state *framework.CycleState, pod *co
 
 	var freeSlots, totalSlots int32
 	for _, gpu := range resources.NodeGPUs {
-		idx, err := gpuAllocatedSlices(p.allocationIndexer, nodeName, gpu.GPUUUID, "")
+		idx, err := p.gpuAllocatedSlices(nodeName, gpu.GPUUUID, "")
 		if err != nil {
 			return 0, framework.AsStatus(err)
 		}
@@ -480,14 +524,17 @@ func (p *Plugin) PreBind(ctx context.Context, state *framework.CycleState, pod *
 		}
 		if string(spec.Nodename) == nodeName {
 			if alloc.Status.State != instav1alpha1.AllocationClaimStatusCreated {
-				if _, err := deviceplugins.UpdateAllocationStatus(ctx, p.instaClient, alloc, instav1alpha1.AllocationClaimStatusCreated); err != nil {
+				updated, err := deviceplugins.UpdateAllocationStatus(ctx, p.instaClient, alloc, instav1alpha1.AllocationClaimStatusCreated)
+				if err != nil {
 					return framework.AsStatus(err)
 				}
+				p.indexerUpdate(updated)
 			}
 		} else {
 			if err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Delete(ctx, alloc.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 				return framework.AsStatus(err)
 			}
+			p.indexerDelete(alloc)
 		}
 	}
 	return nil
@@ -616,22 +663,27 @@ func getStartIndexFromAllocationResults(resources instav1alpha1.DiscoveredNodeRe
 	return newStart
 }
 
-func gpuAllocatedSlices(indexer cache.Indexer, nodeName, gpuUUID string, skipUID types.UID) ([8]int32, error) {
-	var gpuAllocatedIndex [8]int32
-	for i := range gpuAllocatedIndex {
-		gpuAllocatedIndex[i] = 0
-	}
-	if indexer == nil {
+// gpuAllocation pairs an AllocationClaim with its decoded spec for convenience.
+type gpuAllocation struct {
+	claim *instav1alpha1.AllocationClaim
+	spec  instav1alpha1.AllocationClaimSpec
+}
+
+// listGPUAllocations returns AllocationClaims for the given node/GPU along with
+// their decoded specs.
+func (p *Plugin) listGPUAllocations(nodeName, gpuUUID string) ([]gpuAllocation, error) {
+	if p.allocationIndexer == nil {
 		err := fmt.Errorf("allocation indexer is nil")
 		klog.ErrorS(err, "indexer not initialized")
-		return gpuAllocatedIndex, err
+		return nil, err
 	}
 	key := fmt.Sprintf("%s/%s", nodeName, gpuUUID)
-	objs, err := indexer.ByIndex("node-gpu", key)
+	objs, err := p.allocationIndexer.ByIndex("node-gpu", key)
 	if err != nil {
 		klog.ErrorS(err, "unable to fetch allocations from indexer")
-		return gpuAllocatedIndex, err
+		return nil, err
 	}
+	allocs := make([]gpuAllocation, 0, len(objs))
 	for _, obj := range objs {
 		alloc, ok := obj.(*instav1alpha1.AllocationClaim)
 		if !ok {
@@ -639,15 +691,36 @@ func gpuAllocatedSlices(indexer cache.Indexer, nodeName, gpuUUID string, skipUID
 		}
 		spec, err := getAllocationClaimSpec(alloc)
 		if err != nil {
-			klog.ErrorS(err, "unable to decode allocation spec")
+			klog.ErrorS(err, "decoding AllocationClaim", "alloc", klog.KObj(alloc))
 			continue
 		}
-		if skipUID != "" && spec.PodRef.UID == skipUID {
+		allocs = append(allocs, gpuAllocation{claim: alloc, spec: spec})
+	}
+	return allocs, nil
+}
+
+func buildAllocatedIndex(allocs []gpuAllocation, skipUID types.UID) [8]int32 {
+	var gpuAllocatedIndex [8]int32
+	for i := range gpuAllocatedIndex {
+		gpuAllocatedIndex[i] = 0
+	}
+	for _, ga := range allocs {
+		if skipUID != "" && ga.spec.PodRef.UID == skipUID {
 			continue
 		}
-		for i := 0; i < int(spec.MigPlacement.Size); i++ {
-			gpuAllocatedIndex[int(spec.MigPlacement.Start)+i] = 1
+		for i := 0; i < int(ga.spec.MigPlacement.Size); i++ {
+			gpuAllocatedIndex[int(ga.spec.MigPlacement.Start)+i] = 1
 		}
 	}
+	return gpuAllocatedIndex
+}
+
+func (p *Plugin) gpuAllocatedSlices(nodeName, gpuUUID string, skipUID types.UID) ([8]int32, error) {
+	var gpuAllocatedIndex [8]int32
+	allocs, err := p.listGPUAllocations(nodeName, gpuUUID)
+	if err != nil {
+		return gpuAllocatedIndex, err
+	}
+	gpuAllocatedIndex = buildAllocatedIndex(allocs, skipUID)
 	return gpuAllocatedIndex, nil
 }
