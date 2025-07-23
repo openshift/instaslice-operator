@@ -131,6 +131,25 @@ spec:
           - update
           - watch
         - apiGroups:
+          - storage.k8s.io
+          resources:
+          - csistoragecapacities
+          - storageclasses
+          - volumeattachments
+          verbs:
+          - create
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - nodes
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
           - apps
           resources:
           - daemonsets
@@ -230,14 +249,6 @@ spec:
           - list
           - patch
           - update
-        - apiGroups:
-          - ""
-          resourceNames:
-          - extension-apiserver-authentication
-          resources:
-          - configmaps
-          verbs:
-          - get
         serviceAccountName: das-operator
       deployments:
       - name: das-operator

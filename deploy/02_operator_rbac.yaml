@@ -25,6 +25,25 @@ rules:
       - update
       - watch
   - apiGroups:
+      - storage.k8s.io
+    resources:
+      - csistoragecapacities
+      - storageclasses
+      - volumeattachments
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
       - apps
     resources:
       - daemonsets
