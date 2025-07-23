@@ -12,7 +12,6 @@ metadata:
             "namespace": "das-operator"
           },
           "spec": {
-            "emulatedMode": "enabled",
             "logLevel": "Normal",
             "managementState": "Managed",
             "operatorLogLevel": "Normal"
@@ -231,6 +230,14 @@ spec:
           - list
           - patch
           - update
+        - apiGroups:
+          - ""
+          resourceNames:
+          - extension-apiserver-authentication
+          resources:
+          - configmaps
+          verbs:
+          - get
         serviceAccountName: das-operator
       deployments:
       - name: das-operator
