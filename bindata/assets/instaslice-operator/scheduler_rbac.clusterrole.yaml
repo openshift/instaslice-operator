@@ -5,6 +5,27 @@ metadata:
   name: das-scheduler
 rules:
 - apiGroups:
+  - policy
+  resources:
+  - poddisruptionbudgets
+  verbs:
+  - create
+  - update
+  - patch
+  - list
+  - watch
+- apiGroups:
+  - "apps"
+  resources:
+  - statefulsets
+  - replicasets
+  verbs:
+  - create
+  - update
+  - patch
+  - list
+  - watch
+- apiGroups:
   - ""
   resources:
   - pods/binding
@@ -13,11 +34,16 @@ rules:
   - create
   - update
   - patch
+  - watch
 - apiGroups:
   - ""
   resources:
   - pods
   - nodes
+  - services
+  - persistentvolumeclaims
+  - replicationcontrollers
+  - namespaces
   verbs:
   - get
   - list
