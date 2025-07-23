@@ -134,6 +134,8 @@ spec:
           - storage.k8s.io
           resources:
           - csistoragecapacities
+          - csidrivers
+          - csinodes
           - storageclasses
           - volumeattachments
           verbs:
@@ -145,16 +147,25 @@ spec:
           - ""
           resources:
           - nodes
+          - persistentvolumeclaims
+          - persistentvolumes
+          - replicationcontrollers
+          - pods/binding
+          - pods/status
           verbs:
           - get
           - list
+          - create
           - watch
+          - update
+          - patch
         - apiGroups:
           - apps
           resources:
           - daemonsets
           - deployments
           - replicasets
+          - statefulsets
           verbs:
           - create
           - delete
@@ -249,6 +260,25 @@ spec:
           - list
           - patch
           - update
+        - apiGroups:
+          - events.k8s.io
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+          - update
+        - apiGroups:
+          - policy
+          resources:
+          - poddisruptionbudgets
+          verbs:
+          - create
+          - update
+          - patch
+          - list
+          - update
+          - watch
         serviceAccountName: das-operator
       deployments:
       - name: das-operator

@@ -129,8 +129,6 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	go targetConfigReconciler.Run(ctx, 1)
 	klog.Infof("Starting Instaslice Controller")
 	go instasliceController.Run(ctx, 1)
-	klog.Infof("Starting Webhook Server")
-	// go mutatingWebhookServer.Run(ctx)
 
 	<-ctx.Done()
 
