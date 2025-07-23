@@ -6,33 +6,27 @@ Finding MIGable GPUs with cloud provider is expensive and hard especially for de
 
 We use Kustomize to enabled emulator mode.
 
+- Create a kind cluster (If running on kind)
+```console
+bash hack/create-kind-cluster.sh
+```
 - Ensure the cert-manager is deployed
 ```console
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.3/cert-manager.yaml
+bash hack/deploy-cert-manager.sh
 ```
-
-- Install the Instaslice CRDs using command
-
-```console
-make install
-```
-
-- Add GPU capacity to the cluster using command
-
-```console
-kubectl apply -f test/e2e/resources/instaslice-fake-capacity.yaml
-```
-
-- Check if InstaSlice object exists using command
-
-```console
-kubectl describe instaslice
-```
-
 - Deploy the controller using command
 
 ```console
-make deploy-emulated
+bash hack/deploy-instaslice-emulated-on-kind.sh
+```
+or (with deploying custom-build images)
+```console
+IMG=<registry>/<controller-image>:<tag> IMG_DMST=<registry>/<daemonset-image>:<tag> bash hack/deploy-instaslice-emulated-on-kind.sh
+```
+- Check if InstaSlice object exists using command
+
+```console
+kubectl describe instaslice -n instaslice-system
 ```
 
 - Wait for controllers to be ready
