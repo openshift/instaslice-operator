@@ -20,7 +20,7 @@ webhooks:
       namespace: das-operator
       path: /mutate-pod
       port: 8443
-  failurePolicy: Ignore
+  failurePolicy: Fail
   name: instaslice.redhat.com
   namespaceSelector:
     matchExpressions:
