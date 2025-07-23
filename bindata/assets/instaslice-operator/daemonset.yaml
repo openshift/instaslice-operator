@@ -54,8 +54,6 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: spec.nodeName
-          - name: EMULATED_MODE
-            value: "false"
           - name: NVIDIA_MIG_CONFIG_DEVICES
             value: "all"
         lifecycle:

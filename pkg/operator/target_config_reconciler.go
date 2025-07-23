@@ -293,10 +293,11 @@ func (c *TargetConfigReconciler) manageDaemonset(ctx context.Context, ownerRefer
 		if c.targetDaemonsetImage != "" {
 			required.Spec.Template.Spec.Containers[i].Image = c.targetDaemonsetImage
 		}
-		for j := range required.Spec.Template.Spec.Containers[i].Env {
-			if required.Spec.Template.Spec.Containers[i].Env[j].Name == "EMULATED_MODE" {
-				required.Spec.Template.Spec.Containers[i].Env[j].Value = fmt.Sprintf("%v", c.emulatedMode)
-			}
+		if c.emulatedMode == slicev1alpha1.EmulatedModeEnabled {
+			required.Spec.Template.Spec.Containers[i].Env = append(required.Spec.Template.Spec.Containers[i].Env, corev1.EnvVar{
+				Name:  "EMULATED_MODE",
+				Value: slicev1alpha1.EmulatedModeEnabled,
+			})
 		}
 	}
 	return resourceapply.ApplyDaemonSet(ctx,
