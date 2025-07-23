@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -20,6 +21,7 @@ import (
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
+	"k8s.io/client-go/dynamic"
 	kubernetes "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -43,6 +45,7 @@ type Server struct {
 	SocketPath       string
 	InstasliceClient instaclient.Interface
 	KubeClient       kubernetes.Interface
+	DynamicClient    dynamic.Interface
 	NodeName         string
 	EmulatedMode     instav1.EmulatedMode
 	allocMutex       sync.Mutex
@@ -62,11 +65,15 @@ func NewServer(mgr *Manager, socketPath string, kubeConfig *rest.Config, emulate
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
+	dynClient, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
+	}
 	nodeName := os.Getenv("NODE_NAME")
 	if nodeName == "" {
 		return nil, fmt.Errorf("NODE_NAME environment variable is required")
 	}
-	return &Server{Manager: mgr, SocketPath: socketPath, InstasliceClient: client, KubeClient: kubeClient, NodeName: nodeName, EmulatedMode: emulatedMode}, nil
+	return &Server{Manager: mgr, SocketPath: socketPath, InstasliceClient: client, KubeClient: kubeClient, DynamicClient: dynClient, NodeName: nodeName, EmulatedMode: emulatedMode}, nil
 }
 
 func (s *Server) Start(ctx context.Context) error {
@@ -84,6 +91,7 @@ func (s *Server) Start(ctx context.Context) error {
 	} else {
 		klog.InfoS("Removed existing socket file", "socket", s.SocketPath)
 	}
+
 	lis, err := net.Listen("unix", s.SocketPath)
 	if err != nil {
 		klog.ErrorS(err, "Failed to listen on socket", "socket", s.SocketPath)
@@ -163,32 +171,16 @@ func (s *Server) ListAndWatch(req *pluginapi.Empty, stream pluginapi.DevicePlugi
 	}
 
 	if len(inUseAllocs) != len(initDevices) {
-		klog.InfoS("Detected reboot, resetting allocations", "resource", s.Manager.ResourceName, "inUse", len(inUseAllocs), "specs", len(initDevices))
+		klog.InfoS("Detected reboot, deleting allocations", "resource", s.Manager.ResourceName, "inUse", len(inUseAllocs), "specs", len(initDevices))
 		for _, alloc := range inUseAllocs {
-			alloc.Status.State = instav1.AllocationClaimStatusCreated
-			updated := alloc
-			if s.InstasliceClient != nil {
-				var err error
-				updated, err = UpdateAllocationStatus(stream.Context(), s.InstasliceClient, alloc, instav1.AllocationClaimStatusCreated)
-				if err != nil {
-					klog.ErrorS(err, "failed to update allocation status", "allocation", alloc.Name)
-					continue
-				}
-			} else {
-				cond := metav1.Condition{
-					Type:               "State",
-					Status:             metav1.ConditionTrue,
-					Reason:             string(instav1.AllocationClaimStatusCreated),
-					Message:            fmt.Sprintf("Allocation is %s", instav1.AllocationClaimStatusCreated),
-					ObservedGeneration: alloc.Generation,
-				}
-				meta.SetStatusCondition(&updated.Status.Conditions, cond)
+			err := s.InstasliceClient.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Delete(stream.Context(), alloc.Name, metav1.DeleteOptions{})
+			if err != nil && !apierrors.IsNotFound(err) {
+				klog.ErrorS(err, "failed to delete allocation", "allocation", alloc.Name)
+				return fmt.Errorf("failed to delete allocation %s: %w", alloc.Name, err)
 			}
 
 			s.allocMutex.Lock()
-			if err := allocationIndexer.Update(updated); err != nil {
-				klog.ErrorS(err, "failed to update allocation in indexer", "allocation", updated.Name)
-			}
+			allocationIndexer.Delete(alloc)
 			s.allocMutex.Unlock()
 		}
 	}
@@ -535,11 +527,9 @@ func (s *Server) getAllocationsByNodeGPU(ctx context.Context, nodeName, profileN
 	// failures here don't masquerade as cache lookup errors.
 	for _, a := range result[:count] {
 		a.Status.State = instav1.AllocationClaimStatusProcessing
-		if s.InstasliceClient != nil {
-			if _, err := UpdateAllocationStatus(ctx, s.InstasliceClient, a, instav1.AllocationClaimStatusProcessing); err != nil {
-				klog.ErrorS(err, "failed to update allocation status", "allocation", a.Name, "status", instav1.AllocationClaimStatusProcessing)
-				return nil, fmt.Errorf("failed to update allocation status for %q: %w", a.Name, err)
-			}
+		if _, err := UpdateAllocationStatus(ctx, s.InstasliceClient, a, instav1.AllocationClaimStatusProcessing); err != nil {
+			klog.ErrorS(err, "failed to update allocation status", "allocation", a.Name, "status", instav1.AllocationClaimStatusProcessing)
+			return nil, fmt.Errorf("failed to update allocation status for %q: %w", a.Name, err)
 		}
 
 		s.allocMutex.Lock()

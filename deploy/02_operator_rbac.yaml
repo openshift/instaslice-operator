@@ -151,14 +151,22 @@ rules:
   - apiGroups:
     - cert-manager.io
     resources:
-    - certificates
-    - issuers
+      - certificates
+      - issuers
     verbs:
-    - create
-    - get
-    - list
-    - patch
-    - update
+      - create
+      - get
+      - list
+      - patch
+      - update
+  - apiGroups:
+      - nvidia.com
+    resources:
+      - clusterpolicies
+    verbs:
+      - get
+      - list
+      - watch
   - apiGroups:
     - events.k8s.io
     resources:

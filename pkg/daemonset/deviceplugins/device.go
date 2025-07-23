@@ -16,6 +16,7 @@ import (
 	instainformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	dynamic "k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
@@ -70,6 +71,14 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 		klog.ErrorS(err, "Failed to create operator client", "node", nodeName)
 		return err
 	}
+	dynClient, err := dynamic.NewForConfig(kubeConfig)
+	if err != nil {
+		klog.ErrorS(err, "Failed to create dynamic client", "node", nodeName)
+		return err
+	}
+	if err := waitForClusterPolicy(ctx, dynClient); err != nil {
+		return err
+	}
 	emulatedModeStr := os.Getenv("EMULATED_MODE")
 	var emulatedMode instav1.EmulatedMode
 	if emulatedModeStr == "" {
@@ -86,9 +95,10 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 		}
 	} else {
 		discoverer = &RealMigGpuDiscoverer{
-			ctx:         ctx,
-			nodeName:    nodeName,
-			instaClient: csOp.OpenShiftOperatorV1alpha1().NodeAccelerators(instasliceNamespace),
+			ctx:           ctx,
+			nodeName:      nodeName,
+			instaClient:   csOp.OpenShiftOperatorV1alpha1().NodeAccelerators(instasliceNamespace),
+			dynamicClient: dynClient,
 		}
 	}
 	instObj, err := discoverer.Discover()
