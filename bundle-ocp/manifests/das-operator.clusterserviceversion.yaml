@@ -131,11 +131,41 @@ spec:
           - update
           - watch
         - apiGroups:
+          - storage.k8s.io
+          resources:
+          - csistoragecapacities
+          - csidrivers
+          - csinodes
+          - storageclasses
+          - volumeattachments
+          verbs:
+          - create
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - nodes
+          - persistentvolumeclaims
+          - persistentvolumes
+          - replicationcontrollers
+          - pods/binding
+          - pods/status
+          verbs:
+          - get
+          - list
+          - create
+          - watch
+          - update
+          - patch
+        - apiGroups:
           - apps
           resources:
           - daemonsets
           - deployments
           - replicasets
+          - statefulsets
           verbs:
           - create
           - delete
@@ -231,13 +261,24 @@ spec:
           - patch
           - update
         - apiGroups:
-          - ""
-          resourceNames:
-          - extension-apiserver-authentication
+          - events.k8s.io
           resources:
-          - configmaps
+          - events
           verbs:
-          - get
+          - create
+          - patch
+          - update
+        - apiGroups:
+          - policy
+          resources:
+          - poddisruptionbudgets
+          verbs:
+          - create
+          - update
+          - patch
+          - list
+          - update
+          - watch
         serviceAccountName: das-operator
       deployments:
       - name: das-operator

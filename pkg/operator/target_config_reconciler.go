@@ -110,7 +110,12 @@ func NewTargetConfigReconciler(
 		kubeInformersForNamespaces.InformersFor(namespace).Apps().V1().Deployments().Informer(),
 		kubeInformersForNamespaces.InformersFor(namespace).Core().V1().ConfigMaps().Informer(),
 		kubeInformersForNamespaces.InformersFor(namespace).Core().V1().Secrets().Informer(),
+		kubeInformersForNamespaces.InformersFor(namespace).Core().V1().ServiceAccounts().Informer(),
 		kubeInformersForNamespaces.InformersFor(namespace).Core().V1().Services().Informer(),
+		kubeInformersForNamespaces.InformersFor(namespace).Rbac().V1().ClusterRoleBindings().Informer(),
+		kubeInformersForNamespaces.InformersFor(namespace).Rbac().V1().ClusterRoles().Informer(),
+		kubeInformersForNamespaces.InformersFor(namespace).Rbac().V1().RoleBindings().Informer(),
+		kubeInformersForNamespaces.InformersFor(namespace).Rbac().V1().Roles().Informer(),
 	).ResyncEvery(time.Minute*5).
 		WithSync(c.sync).
 		WithSyncDegradedOnError(instasliceoperatorClient).
