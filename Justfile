@@ -147,7 +147,7 @@ build-push-bundle: (_build-push-bundle "bundle-ocp.Dockerfile")
 # Private function to build and push a bundle image
 [group('build')]
 _build-push-bundle bundleDockerfile:
-    {{ PODMAN }} build -f {{ bundleDockerfile }} -t {{ BUNDLE_IMAGE }} .
+    {{ PODMAN }} build --build-arg RELATED_IMAGE_FILE="{{ RELATED_IMAGES }}" -f {{ bundleDockerfile }} -t {{ BUNDLE_IMAGE }} .
     {{ PODMAN }} push {{ BUNDLE_IMAGE }}
 
 # Deploy CRDs and run operator locally for development
