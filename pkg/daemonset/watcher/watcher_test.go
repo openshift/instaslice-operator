@@ -58,7 +58,7 @@ func TestCDIWatcherLifecycle(t *testing.T) {
 		t.Fatalf("failed to setup watcher: %v", err)
 	}
 
-	data, _ := json.Marshal(alloc)
+	data, _ := json.Marshal([]instav1.AllocationClaim{*alloc})
 	annotations := map[string]string{allocationAnnotationKey: string(data)}
 	path, _, err := deviceplugins.WriteCDISpecForResource("vendor/class", "test", annotations, "")
 	if err != nil {
@@ -160,7 +160,7 @@ func TestHandleWriteEvent(t *testing.T) {
 func TestProcessDeviceRemoval(t *testing.T) {
 	alloc := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Name: "alloc", Namespace: "default"}}
 	client := fakeclient.NewSimpleClientset(alloc)
-	data, _ := json.Marshal(alloc)
+	data, _ := json.Marshal([]instav1.AllocationClaim{*alloc})
 	annotations := map[string]string{allocationAnnotationKey: string(data)}
 	spec, _, _, _ := deviceplugins.BuildCDIDevices("vendor/class", "class", "id", annotations, "")
 	dev := spec.Devices[0]
@@ -172,6 +172,26 @@ func TestProcessDeviceRemoval(t *testing.T) {
 	}
 }
 
+func TestProcessDeviceRemovalMultiple(t *testing.T) {
+	alloc1 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Name: "alloc1", Namespace: "default"}}
+	alloc2 := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Name: "alloc2", Namespace: "default"}}
+	client := fakeclient.NewSimpleClientset(alloc1, alloc2)
+	data, _ := json.Marshal([]instav1.AllocationClaim{*alloc1, *alloc2})
+	annotations := map[string]string{allocationAnnotationKey: string(data)}
+	spec, _, _, _ := deviceplugins.BuildCDIDevices("vendor/class", "class", "id", annotations, "")
+	dev := spec.Devices[0]
+	ctx := context.Background()
+	processDeviceRemoval(ctx, dev, "dummy", client)
+	_, err := client.OpenShiftOperatorV1alpha1().AllocationClaims(alloc1.Namespace).Get(ctx, alloc1.Name, metav1.GetOptions{})
+	if err == nil || !apierrors.IsNotFound(err) {
+		t.Fatalf("allocation claim 1 not deleted")
+	}
+	_, err = client.OpenShiftOperatorV1alpha1().AllocationClaims(alloc2.Namespace).Get(ctx, alloc2.Name, metav1.GetOptions{})
+	if err == nil || !apierrors.IsNotFound(err) {
+		t.Fatalf("allocation claim 2 not deleted")
+	}
+}
+
 func TestHandleRemoveEvent(t *testing.T) {
 	dir := t.TempDir()
 	if err := cdi.Configure(cdi.WithSpecDirs(dir)); err != nil {
@@ -180,7 +200,7 @@ func TestHandleRemoveEvent(t *testing.T) {
 	cache := NewCDICache(nil)
 	alloc := &instav1.AllocationClaim{ObjectMeta: metav1.ObjectMeta{Name: "alloc2", Namespace: "default"}}
 	client := fakeclient.NewSimpleClientset(alloc)
-	data, _ := json.Marshal(alloc)
+	data, _ := json.Marshal([]instav1.AllocationClaim{*alloc})
 	annotations := map[string]string{allocationAnnotationKey: string(data)}
 	path, _, err := deviceplugins.WriteCDISpecForResource("vendor/class", "test", annotations, "")
 	if err != nil {
@@ -231,7 +251,7 @@ func TestPodDeletionWatcher(t *testing.T) {
 		t.Fatalf("failed to setup pod watcher: %v", err)
 	}
 
-	data, _ := json.Marshal(alloc)
+	data, _ := json.Marshal([]instav1.AllocationClaim{*alloc})
 	annotations := map[string]string{allocationAnnotationKey: string(data)}
 	path, _, err := deviceplugins.WriteCDISpecForResource("vendor/class", "idp", annotations, "")
 	if err != nil {
