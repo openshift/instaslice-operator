@@ -102,10 +102,9 @@ build-push-parallel:
     just build-push-operator
     just build-push-webhook
 
-# Build and push all container images in parallel using just's [parallel]
+# Build and push all container images serially
 # [group: 'build']
-# [parallel]
-# build-push: build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
+build-push: info build-push-scheduler build-push-daemonset build-push-operator build-push-webhook
 
 # Build and push scheduler image
 [group('build')]
@@ -142,7 +141,7 @@ build-push-developer-bundle: (_build-push-bundle "bundle.developer.Dockerfile")
 
 # Build and push the OCP bundle
 [group('build')]
-build-push-bundle: (_build-push-bundle "bundle-ocp.Dockerfile")
+build-push-bundle: info (_build-push-bundle "bundle-ocp.Dockerfile") 
 
 # Private function to build and push a bundle image
 [group('build')]
