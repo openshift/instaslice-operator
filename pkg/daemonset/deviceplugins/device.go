@@ -210,6 +210,47 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 		reg := NewRegistrar(socketPath, res)
 		go reg.Start(ctx)
 	}
+
+	// Create GPU memory resource manager for Kueue integration
+	if err := createGPUMemoryResourceManager(ctx, discovered, kubeConfig, emulatedMode); err != nil {
+		return fmt.Errorf("failed to create GPU memory resource manager: %w", err)
+	}
+
+	return nil
+}
+
+// createGPUMemoryResourceManager creates a device plugin manager for GPU memory resources
+func createGPUMemoryResourceManager(ctx context.Context, discovered instav1.DiscoveredNodeResources, kubeConfig *rest.Config, emulatedMode instav1.EmulatedMode) error {
+	const socketDir = "/var/lib/kubelet/device-plugins"
+	const gpuMemoryResource = "gpu.das.com/mem"
+
+	// Calculate total available GPU memory in GB
+	var totalMemoryGB int64
+	for _, gpu := range discovered.NodeGPUs {
+		totalMemoryGB += gpu.GPUMemory.Value() / (1024 * 1024 * 1024) // Convert bytes to GB
+	}
+
+	if totalMemoryGB == 0 {
+		klog.InfoS("no GPU memory available, skipping GPU memory resource manager")
+		return nil
+	}
+
+	mgr := NewGPUMemoryManager(gpuMemoryResource, discovered)
+	endpoint := "gpu_das_com_mem.sock"
+	socketPath := filepath.Join(socketDir, endpoint)
+
+	srv, err := NewServer(mgr, socketPath, kubeConfig, emulatedMode)
+	if err != nil {
+		return fmt.Errorf("failed to create GPU memory device plugin server: %w", err)
+	}
+	if err := srv.Start(ctx); err != nil {
+		return fmt.Errorf("GPU memory device plugin server failed: %w", err)
+	}
+
+	reg := NewRegistrar(socketPath, gpuMemoryResource)
+	go reg.Start(ctx)
+
+	klog.InfoS("GPU memory resource manager started", "total_memory_gb", totalMemoryGB)
 	return nil
 }
 
