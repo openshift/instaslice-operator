@@ -125,7 +125,6 @@ rules:
     resources:
       - pods
       - configmaps
-      - events
       - namespaces
       - secrets
       - services
@@ -137,6 +136,12 @@ rules:
       - patch
       - update
       - watch
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
   - apiGroups:
       - config.openshift.io
     resources:
@@ -160,8 +165,6 @@ rules:
     - events
     verbs:
     - create
-    - patch
-    - update
   - apiGroups:
     - policy
     resources:
