@@ -19,7 +19,6 @@ import (
 	slicev1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	operatorconfigclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	operatorclientinformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
-	instaslicecontroller "github.com/openshift/instaslice-operator/pkg/operator/controllers/instaslice"
 	"github.com/openshift/instaslice-operator/pkg/operator/operatorclient"
 )
 
@@ -103,22 +102,6 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	// Create the log controller
 	logLevelController := loglevel.NewClusterOperatorLoggingController(instasliceClient, cc.EventRecorder)
 
-	// Create the Instaslice Controller
-	sliceControllerConfig := instaslicecontroller.InstasliceControllerConfig{
-		Namespace:          namespace,
-		OperatorClient:     operatorConfigClient,
-		InstasliceInformer: operatorConfigInformers.OpenShiftOperator().V1alpha1().NodeAccelerators().Informer(),
-		EventRecorder:      cc.EventRecorder,
-	}
-	instasliceController := instaslicecontroller.NewInstasliceController(&sliceControllerConfig)
-
-	// Create the InstasliceNS Controller
-	// Create webhook server
-	// _, err = webhookserver.NewServer(cc.ProtoKubeConfig, "", "", "")
-	// if err != nil {
-	// 	return err
-	// }
-
 	klog.Infof("Starting informers")
 	operatorConfigInformers.Start(ctx.Done())
 	kubeInformersForNamespaces.Start(ctx.Done())
@@ -127,8 +110,6 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	go logLevelController.Run(ctx, 1)
 	klog.Infof("Starting target config reconciler")
 	go targetConfigReconciler.Run(ctx, 1)
-	klog.Infof("Starting Instaslice Controller")
-	go instasliceController.Run(ctx, 1)
 
 	<-ctx.Done()
 
