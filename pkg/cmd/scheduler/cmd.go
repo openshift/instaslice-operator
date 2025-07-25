@@ -15,14 +15,14 @@ import (
 )
 
 func NewScheduler(ctx context.Context) *cobra.Command {
-    opts := scheduleroptions.NewOptions()
+	opts := scheduleroptions.NewOptions()
 
 	startFn := func(ctx context.Context, cc *controllercmd.ControllerContext) error {
 		return sched.RunScheduler(ctx, cc, opts)
 	}
 
-    cfg := controllercmd.NewControllerCommandConfig("das-scheduler", version.Get(), startFn, clock.RealClock{})
-    cfg.DisableLeaderElection = false
+	cfg := controllercmd.NewControllerCommandConfig("das-scheduler", version.Get(), startFn, clock.RealClock{})
+	cfg.DisableLeaderElection = false
 
 	cmd := cfg.NewCommandWithContext(ctx)
 	cmd.Use = "scheduler"
