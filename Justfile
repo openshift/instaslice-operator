@@ -232,7 +232,7 @@ deploy-nfd-ocp:
 # Run golangci-lint on the codebase
 [group('lint')]
 lint-go:
-    {{ GOLANGCI_LINT }} run --timeout 5m ./pkg/...
+    {{ GOLANGCI_LINT }} run --timeout 5m ./pkg/... ./cmd/...
 
 # Run golangci-lint and automatically fix issues
 [group('lint')]
