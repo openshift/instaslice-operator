@@ -13,14 +13,11 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
-	"k8s.io/utils/ptr"
 
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	kubernetes "k8s.io/client-go/kubernetes"
@@ -250,23 +247,34 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 			ids = []string{string(utiluuid.NewUUID())}
 		}
 
-		for _, id := range ids {
+		var envVals []string
+		var annList []instav1.AllocationClaim
+		var annotations map[string]string
+
+		for range ids {
 			var alloc *instav1.AllocationClaim
 			if allocIndex < len(allocations) {
 				alloc = allocations[allocIndex]
 				allocIndex++
 			}
 
-			envVar, annotations, err := s.prepareEnv(ctx, alloc)
+			envVar, ann, err := s.prepareEnv(ctx, alloc)
 			if err != nil {
 				return nil, err
 			}
 
-			_, cdiDevices, err := WriteCDISpecForResource(s.Manager.ResourceName, id, annotations, envVar)
-			if err != nil {
-				return nil, err
+			if eq := strings.Index(envVar, "="); eq != -1 {
+				envVals = append(envVals, envVar[eq+1:])
 			}
-			resp.ContainerResponses[i].CDIDevices = append(resp.ContainerResponses[i].CDIDevices, cdiDevices...)
+
+			if v, ok := ann[allocationAnnotationKey]; ok && v != "" {
+				var a instav1.AllocationClaim
+				if err := json.Unmarshal([]byte(v), &a); err != nil {
+					klog.ErrorS(err, "failed to decode allocation annotation")
+					return nil, fmt.Errorf("failed to decode allocation annotation: %w", err)
+				}
+				annList = append(annList, a)
+			}
 
 			if alloc != nil {
 				if err := s.markAllocationInUse(ctx, alloc); err != nil {
@@ -274,6 +282,26 @@ func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (
 				}
 			}
 		}
+
+		aggregatedEnv := ""
+		if len(envVals) > 0 {
+			aggregatedEnv = fmt.Sprintf("NVIDIA_VISIBLE_DEVICES=%s", strings.Join(envVals, ","))
+		}
+
+		if len(annList) > 0 {
+			data, err := json.Marshal(annList)
+			if err != nil {
+				klog.ErrorS(err, "failed to marshal allocation annotations")
+				return nil, fmt.Errorf("failed to marshal allocation annotations: %w", err)
+			}
+			annotations = map[string]string{allocationAnnotationKey: string(data)}
+		}
+
+		_, cdiDevices, err := WriteCDISpecForResource(s.Manager.ResourceName, string(utiluuid.NewUUID()), annotations, aggregatedEnv)
+		if err != nil {
+			return nil, err
+		}
+		resp.ContainerResponses[i].CDIDevices = append(resp.ContainerResponses[i].CDIDevices, cdiDevices...)
 	}
 
 	return resp, nil
@@ -284,8 +312,7 @@ func (s *Server) PreStartContainer(ctx context.Context, req *pluginapi.PreStartC
 }
 
 // prepareEnv creates the environment variable and annotations for a container
-// based on the given AllocationClaim. If a claim is provided, it also ensures a
-// ConfigMap with the NVIDIA_VISIBLE_DEVICES value exists on the node.
+// based on the given AllocationClaim.
 func (s *Server) prepareEnv(ctx context.Context, alloc *instav1.AllocationClaim) (string, map[string]string, error) {
 	envVar := "NVIDIA_VISIBLE_DEVICES=test"
 	var annotations map[string]string
@@ -306,73 +333,9 @@ func (s *Server) prepareEnv(ctx context.Context, alloc *instav1.AllocationClaim)
 			klog.ErrorS(err, "failed to marshal allocation")
 		}
 
-		if s.KubeClient != nil {
-			s.ensureEnvConfigMap(ctx, alloc, envVar)
-		}
 	}
 
 	return envVar, annotations, nil
-}
-
-// ensureEnvConfigMap creates or updates a ConfigMap storing the environment
-// variable for the pod referenced by the AllocationClaim.
-func (s *Server) ensureEnvConfigMap(ctx context.Context, alloc *instav1.AllocationClaim, envVar string) {
-	specObj, err := getAllocationClaimSpec(alloc)
-	if err != nil {
-		klog.ErrorS(err, "failed to decode allocation spec for configmap", "allocation", alloc.Name)
-		return
-	}
-
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      specObj.PodRef.Name,
-			Namespace: specObj.PodRef.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "v1",
-					Kind:       "Pod",
-					Name:       specObj.PodRef.Name,
-					UID:        specObj.PodRef.UID,
-					Controller: ptr.To(true),
-				},
-			},
-		},
-		Data: map[string]string{
-			"NVIDIA_VISIBLE_DEVICES": strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES="),
-			"CUDA_VISIBLE_DEVICES":   strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES="),
-		},
-	}
-
-	if _, err := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Create(ctx, cm, metav1.CreateOptions{}); err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			existing, getErr := s.KubeClient.CoreV1().ConfigMaps(cm.Namespace).Get(ctx, cm.Name, metav1.GetOptions{})
-			if getErr != nil {
-				klog.ErrorS(getErr, "failed to get existing ConfigMap", "configMap", cm.Name)
-				return
-			}
-
-			nvidiaValue := strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES=")
-			cudaValue := strings.TrimPrefix(envVar, "NVIDIA_VISIBLE_DEVICES=")
-
-			if v, ok := existing.Data["NVIDIA_VISIBLE_DEVICES"]; ok && v != "" {
-				nvidiaValue = fmt.Sprintf("%s,%s", v, nvidiaValue)
-			}
-			if v, ok := existing.Data["CUDA_VISIBLE_DEVICES"]; ok && v != "" {
-				cudaValue = fmt.Sprintf("%s,%s", v, cudaValue)
-			}
-
-			existing.Data["NVIDIA_VISIBLE_DEVICES"] = nvidiaValue
-			existing.Data["CUDA_VISIBLE_DEVICES"] = cudaValue
-
-			if _, err := s.KubeClient.CoreV1().ConfigMaps(existing.Namespace).Update(ctx, existing, metav1.UpdateOptions{}); err != nil {
-				klog.ErrorS(err, "failed to update ConfigMap", "configMap", existing.Name)
-			}
-		} else {
-			klog.ErrorS(err, "failed to create ConfigMap", "configMap", cm.Name)
-		}
-	} else {
-		klog.InfoS("created ConfigMap for env var", "configMap", cm.Name)
-	}
 }
 
 // markAllocationInUse updates the AllocationClaim status to InUse and stores it

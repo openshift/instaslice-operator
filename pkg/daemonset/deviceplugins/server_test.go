@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 	"tags.cncf.io/container-device-interface/pkg/cdi"
-	"tags.cncf.io/container-device-interface/pkg/parser"
 	cdispec "tags.cncf.io/container-device-interface/specs-go"
 
 	"os"
@@ -257,16 +256,8 @@ func TestAllocateMultipleDevices(t *testing.T) {
 		t.Fatalf("expected %d responses, got %d", len(req.ContainerRequests), len(resp.ContainerResponses))
 	}
 	for i, cr := range resp.ContainerResponses {
-		wantIDs := req.ContainerRequests[i].GetDevicesIDs()
-		if len(cr.CDIDevices) != len(wantIDs) {
-			t.Fatalf("response %d expected %d CDI devices, got %d", i, len(wantIDs), len(cr.CDIDevices))
-		}
-		for j, id := range wantIDs {
-			got := cr.CDIDevices[j].Name
-			want := fmt.Sprintf("mig.das.com/c1g.5gb=%s", id)
-			if got != want {
-				t.Fatalf("response %d device %d expected %q, got %q", i, j, want, got)
-			}
+		if len(cr.CDIDevices) != 1 {
+			t.Fatalf("response %d expected 1 CDI device, got %d", i, len(cr.CDIDevices))
 		}
 	}
 
@@ -274,35 +265,28 @@ func TestAllocateMultipleDevices(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read dir: %v", err)
 	}
-	count := 0
+	var specs []string
 	for _, e := range entries {
 		if filepath.Ext(e.Name()) == ".json" {
-			count++
+			specs = append(specs, filepath.Join(dir, e.Name()))
 		}
 	}
-	if count != 4 {
-		t.Fatalf("expected %d spec files, got %d", 4, count)
+	if len(specs) != len(req.ContainerRequests) {
+		t.Fatalf("expected %d spec files, got %d", len(req.ContainerRequests), len(specs))
 	}
 
-	sanitized := "1g.5gb"
-	if err := parser.ValidateClassName(sanitized); err != nil {
-		sanitized = "c" + sanitized
-	}
-
-	for _, ids := range [][]string{{"id1", "id2"}, {"id3", "id4"}} {
-		for _, id := range ids {
-			path := filepath.Join(dir, fmt.Sprintf("%s_%s.cdi.json", sanitized, id))
-			data, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatalf("expected spec file %s: %v", path, err)
-			}
-			var spec cdispec.Spec
-			if err := json.Unmarshal(data, &spec); err != nil {
-				t.Fatalf("failed to parse spec %s: %v", path, err)
-			}
-			if len(spec.Devices) != 1 || spec.Devices[0].Name != id {
-				t.Fatalf("spec %s does not contain expected device %s", path, id)
-			}
+	for _, p := range specs {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("failed to read spec %s: %v", p, err)
+		}
+		var spec cdispec.Spec
+		if err := json.Unmarshal(data, &spec); err != nil {
+			t.Fatalf("failed to parse spec %s: %v", p, err)
+		}
+		env := spec.Devices[0].ContainerEdits.Env
+		if len(env) < 1 || !strings.Contains(env[0], "test,test") {
+			t.Fatalf("spec %s env not aggregated: %v", p, env)
 		}
 	}
 }

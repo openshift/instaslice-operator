@@ -57,24 +57,8 @@ func TestMutatePodNvidiaResource(t *testing.T) {
 		t.Fatalf("expected instaslice resource quantity 1")
 	}
 
-	envs := mutated.Spec.Containers[0].Env
-	var nvidiaEnv, cudaEnv bool
-	for _, e := range envs {
-		if e.Name == envNvidia {
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != testName || e.ValueFrom.ConfigMapKeyRef.Key != envNvidia {
-				t.Fatalf("invalid NVIDIA_VISIBLE_DEVICES env")
-			}
-			nvidiaEnv = true
-		}
-		if e.Name == envCUDA {
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != testName || e.ValueFrom.ConfigMapKeyRef.Key != envCUDA {
-				t.Fatalf("invalid CUDA_VISIBLE_DEVICES env")
-			}
-			cudaEnv = true
-		}
-	}
-	if !nvidiaEnv || !cudaEnv {
-		t.Fatalf("expected env vars not found")
+	if len(mutated.Spec.Containers[0].Env) != 0 {
+		t.Fatalf("env vars should not be added")
 	}
 }
 
@@ -117,24 +101,8 @@ func TestMutatePodEphemeralNvidiaResource(t *testing.T) {
 		t.Fatalf("instaslice resource missing")
 	}
 
-	envs := mutated.Spec.EphemeralContainers[0].Env
-	var nvidiaEnv, cudaEnv bool
-	for _, e := range envs {
-		if e.Name == envNvidia {
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != "ephem" || e.ValueFrom.ConfigMapKeyRef.Key != envNvidia {
-				t.Fatalf("invalid NVIDIA_VISIBLE_DEVICES env")
-			}
-			nvidiaEnv = true
-		}
-		if e.Name == envCUDA {
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != "ephem" || e.ValueFrom.ConfigMapKeyRef.Key != envCUDA {
-				t.Fatalf("invalid CUDA_VISIBLE_DEVICES env")
-			}
-			cudaEnv = true
-		}
-	}
-	if !nvidiaEnv || !cudaEnv {
-		t.Fatalf("expected env vars not found")
+	if len(mutated.Spec.EphemeralContainers[0].Env) != 0 {
+		t.Fatalf("env vars should not be added")
 	}
 }
 
@@ -183,12 +151,12 @@ func TestMutatePodOverrideValues(t *testing.T) {
 	for _, e := range envs {
 		switch e.Name {
 		case envNvidia:
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != "override" || e.ValueFrom.ConfigMapKeyRef.Key != envNvidia {
-				t.Fatalf("NVIDIA env not correctly set")
+			if e.Value != "0" {
+				t.Fatalf("NVIDIA env not preserved")
 			}
 		case envCUDA:
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != "override" || e.ValueFrom.ConfigMapKeyRef.Key != envCUDA {
-				t.Fatalf("CUDA env not correctly set")
+			if e.Value != "0" {
+				t.Fatalf("CUDA env not preserved")
 			}
 		default:
 			t.Fatalf("unexpected env var %s", e.Name)
@@ -230,24 +198,8 @@ func TestMutatePodInstaResource(t *testing.T) {
 		t.Fatalf("instaslice resource missing")
 	}
 
-	envs := mutated.Spec.Containers[0].Env
-	var nvidiaEnv, cudaEnv bool
-	for _, e := range envs {
-		if e.Name == envNvidia {
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != testName || e.ValueFrom.ConfigMapKeyRef.Key != envNvidia {
-				t.Fatalf("invalid NVIDIA_VISIBLE_DEVICES env")
-			}
-			nvidiaEnv = true
-		}
-		if e.Name == envCUDA {
-			if e.ValueFrom == nil || e.ValueFrom.ConfigMapKeyRef == nil || e.ValueFrom.ConfigMapKeyRef.Name != testName || e.ValueFrom.ConfigMapKeyRef.Key != envCUDA {
-				t.Fatalf("invalid CUDA_VISIBLE_DEVICES env")
-			}
-			cudaEnv = true
-		}
-	}
-	if !nvidiaEnv || !cudaEnv {
-		t.Fatalf("expected env vars not found")
+	if len(mutated.Spec.Containers[0].Env) != 0 {
+		t.Fatalf("env vars should not be added")
 	}
 }
 

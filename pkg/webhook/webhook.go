@@ -154,69 +154,6 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 	if needsScheduler {
 		mutatedPod.Spec.SchedulerName = secondaryScheduler
 		klog.InfoS("using secondary scheduler", "name", mutatedPod.Name)
-
-		// addEnv injects or overwrites ConfigMap-backed environment variables so
-		// the scheduler can identify which GPU slice was allocated to the pod.
-		addEnv := func(c *corev1.Container) {
-			if mutatedPod.Name == "" {
-				return
-			}
-
-			nvidiaVar := corev1.EnvVar{
-				Name: "NVIDIA_VISIBLE_DEVICES",
-				ValueFrom: &corev1.EnvVarSource{
-					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{Name: mutatedPod.Name},
-						Key:                  "NVIDIA_VISIBLE_DEVICES",
-					},
-				},
-			}
-			cudaVar := corev1.EnvVar{
-				Name: "CUDA_VISIBLE_DEVICES",
-				ValueFrom: &corev1.EnvVarSource{
-					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{Name: mutatedPod.Name},
-						Key:                  "CUDA_VISIBLE_DEVICES",
-					},
-				},
-			}
-
-			replacedNvidia := false
-			replacedCuda := false
-			for i := range c.Env {
-				switch c.Env[i].Name {
-				case "NVIDIA_VISIBLE_DEVICES":
-					c.Env[i] = nvidiaVar
-					replacedNvidia = true
-				case "CUDA_VISIBLE_DEVICES":
-					c.Env[i] = cudaVar
-					replacedCuda = true
-				}
-			}
-			if !replacedNvidia {
-				klog.InfoS("setting NVIDIA_VISIBLE_DEVICES", "container", c.Name)
-				c.Env = append(c.Env, nvidiaVar)
-			} else {
-				klog.InfoS("overwriting NVIDIA_VISIBLE_DEVICES", "container", c.Name)
-			}
-			if !replacedCuda {
-				klog.InfoS("setting CUDA_VISIBLE_DEVICES", "container", c.Name)
-				c.Env = append(c.Env, cudaVar)
-			} else {
-				klog.InfoS("overwriting CUDA_VISIBLE_DEVICES", "container", c.Name)
-			}
-		}
-
-		for i := range mutatedPod.Spec.Containers {
-			addEnv(&mutatedPod.Spec.Containers[i])
-		}
-		for i := range mutatedPod.Spec.InitContainers {
-			addEnv(&mutatedPod.Spec.InitContainers[i])
-		}
-		for i := range mutatedPod.Spec.EphemeralContainers {
-			c := (*corev1.Container)(&mutatedPod.Spec.EphemeralContainers[i].EphemeralContainerCommon)
-			addEnv(c)
-		}
 	}
 
 	klog.InfoS("finished pod mutation", "mutatedPod", mutatedPod)

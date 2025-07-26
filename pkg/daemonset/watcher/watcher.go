@@ -67,6 +67,21 @@ func (c *CDICache) delete(path string) {
 	delete(c.specs, path)
 }
 
+// parseAllocationAnnotation decodes an allocation annotation which contains an
+// array of AllocationClaim objects.
+func parseAllocationAnnotation(data string) ([]instav1.AllocationClaim, error) {
+	data = strings.TrimSpace(data)
+	if data == "" {
+		return nil, fmt.Errorf("allocation annotation is empty")
+	}
+
+	var list []instav1.AllocationClaim
+	if err := json.Unmarshal([]byte(data), &list); err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 // SetupCDIDeletionWatcher watches the given directory for CDI Spec file changes
 // and updates the provided cache accordingly.
 func SetupCDIDeletionWatcher(ctx context.Context, dir string, cache *CDICache, client versioned.Interface) error {
@@ -144,12 +159,10 @@ func processDeviceRemoval(ctx context.Context, dev cdispec.Device, path string, 
 	if !ok || ann == "" {
 		return
 	}
-	var alloc instav1.AllocationClaim
-	if err := json.Unmarshal([]byte(ann), &alloc); err != nil {
+
+	allocs, err := parseAllocationAnnotation(ann)
+	if err != nil {
 		klog.ErrorS(err, "failed to unmarshal allocation annotation", "path", path)
-		return
-	}
-	if alloc.Name == "" {
 		return
 	}
 
@@ -163,15 +176,21 @@ func processDeviceRemoval(ctx context.Context, dev cdispec.Device, path string, 
 		}
 	}
 	if migUUID != "" && os.Getenv("EMULATED_MODE") != string(instav1.EmulatedModeEnabled) {
-		if err := deleteMigSlice(migUUID); err != nil {
-			klog.ErrorS(err, "failed to delete MIG slice", "uuid", migUUID)
+		for _, u := range strings.Split(migUUID, ",") {
+			if err := deleteMigSlice(u); err != nil {
+				klog.ErrorS(err, "failed to delete MIG slice", "uuid", u)
+			}
 		}
 	}
-
-	if err := client.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Delete(ctx, alloc.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-		klog.ErrorS(err, "failed to delete AllocationClaim", "namespace", alloc.Namespace, "name", alloc.Name)
-	} else {
-		klog.V(3).InfoS("Deleted AllocationClaim for CDI spec", "namespace", alloc.Namespace, "name", alloc.Name)
+	for _, alloc := range allocs {
+		if alloc.Name == "" {
+			continue
+		}
+		if err := client.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Delete(ctx, alloc.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			klog.ErrorS(err, "failed to delete AllocationClaim", "namespace", alloc.Namespace, "name", alloc.Name)
+		} else {
+			klog.V(3).InfoS("Deleted AllocationClaim for CDI spec", "namespace", alloc.Namespace, "name", alloc.Name)
+		}
 	}
 }
 
@@ -316,19 +335,21 @@ func handlePodDeletion(pod *corev1.Pod, cache *CDICache) {
 			if !ok || ann == "" {
 				continue
 			}
-			var alloc instav1.AllocationClaim
-			if err := json.Unmarshal([]byte(ann), &alloc); err != nil {
+			allocs, err := parseAllocationAnnotation(ann)
+			if err != nil {
 				klog.ErrorS(err, "failed to unmarshal allocation annotation", "path", path)
 				continue
 			}
-			specObj, err := getAllocationClaimSpec(&alloc)
-			if err != nil {
-				klog.ErrorS(err, "failed to decode allocation spec", "allocation", alloc.Name)
-				continue
-			}
-			if specObj.PodRef.UID == pod.UID {
-				paths = append(paths, path)
-				break
+			for _, alloc := range allocs {
+				specObj, err := getAllocationClaimSpec(&alloc)
+				if err != nil {
+					klog.ErrorS(err, "failed to decode allocation spec", "allocation", alloc.Name)
+					continue
+				}
+				if specObj.PodRef.UID == pod.UID {
+					paths = append(paths, path)
+					break
+				}
 			}
 		}
 	}
