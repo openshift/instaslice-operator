@@ -1,0 +1,78 @@
+---
+# Sample pod that requests GPU memory via MIG profiles
+# The webhook will automatically inject gpu.das.com/mem resource
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-memory-example
+  namespace: default
+spec:
+  containers:
+  - name: gpu-app
+    image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8"
+    command:
+      - sh
+      - -c
+      - "env && /cuda-samples/vectorAdd && sleep 3600"
+    resources:
+      limits:
+        # Request 2 instances of 1g.5gb MIG profile (5GB each = 10GB total)
+        nvidia.com/mig-1g.5gb: "2"
+        # The webhook will automatically inject: gpu.das.com/mem: "10"
+      requests:
+        nvidia.com/mig-1g.5gb: "2"
+        # The webhook will automatically inject: gpu.das.com/mem: "10"
+---
+# Kueue Queue configuration that uses GPU memory for scheduling
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: Queue
+metadata:
+  name: gpu-queue
+spec:
+  clusterQueue: gpu-cluster-queue
+---
+# Kueue ClusterQueue configuration that defines GPU memory resource
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: gpu-cluster-queue
+spec:
+  resourceGroups:
+  - coveredResources: ["cpu", "memory", "gpu.das.com/mem"]
+    flavors:
+    - name: default
+      resources:
+      - name: cpu
+        nominalQuota: 100
+      - name: memory
+        nominalQuota: 100Gi
+      - name: gpu.das.com/mem
+        nominalQuota: 50  # 50GB of GPU memory total
+  namespaceSelector: {}  # Allow all namespaces
+---
+# Kueue Workload configuration
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: Workload
+metadata:
+  name: gpu-memory-workload
+  namespace: default
+spec:
+  queueName: gpu-queue
+  podSets:
+  - name: main
+    template:
+      spec:
+        containers:
+        - name: gpu-app
+          image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubi8"
+          command:
+          - sh
+          - -c
+          - "env && /cuda-samples/vectorAdd && sleep 3600"
+          resources:
+            limits:
+              nvidia.com/mig-1g.5gb: "2"
+              # The webhook will automatically inject: gpu.das.com/mem: "10"
+            requests:
+              nvidia.com/mig-1g.5gb: "2"
+              # The webhook will automatically inject: gpu.das.com/mem: "10"
