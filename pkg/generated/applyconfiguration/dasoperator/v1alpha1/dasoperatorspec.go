@@ -19,7 +19,6 @@ package v1alpha1
 import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 	v1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
-	dasoperatorv1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -27,8 +26,7 @@ import (
 // with apply.
 type DASOperatorSpecApplyConfiguration struct {
 	v1.OperatorSpecApplyConfiguration `json:",inline"`
-	EmulatedMode                      *dasoperatorv1alpha1.EmulatedMode `json:"emulatedMode,omitempty"`
-	NodeSelector                      map[string]string                 `json:"nodeSelector,omitempty"`
+	NodeSelector                      map[string]string `json:"nodeSelector,omitempty"`
 }
 
 // DASOperatorSpecApplyConfiguration constructs a declarative configuration of the DASOperatorSpec type for use with
@@ -74,14 +72,6 @@ func (b *DASOperatorSpecApplyConfiguration) WithUnsupportedConfigOverrides(value
 // If called multiple times, the ObservedConfig field is set to the value of the last call.
 func (b *DASOperatorSpecApplyConfiguration) WithObservedConfig(value runtime.RawExtension) *DASOperatorSpecApplyConfiguration {
 	b.OperatorSpecApplyConfiguration.ObservedConfig = &value
-	return b
-}
-
-// WithEmulatedMode sets the EmulatedMode field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the EmulatedMode field is set to the value of the last call.
-func (b *DASOperatorSpecApplyConfiguration) WithEmulatedMode(value dasoperatorv1alpha1.EmulatedMode) *DASOperatorSpecApplyConfiguration {
-	b.EmulatedMode = &value
 	return b
 }
 
