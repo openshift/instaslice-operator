@@ -9,7 +9,7 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "next" && files.all.exists(path, path.matches('Makefile|go.mod|go.sum|vendor/|cmd/das-scheduler/|pkg/version/|pkg/cmd/scheduler/|pkg/scheduler|Dockerfile.scheduler.ocp|.tekton/instaslice-scheduler-next-*'))
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "next" && files.all.exists(path, path.matches('Makefile|go.mod|go.sum|vendor/|pkg/generated|cmd/das-scheduler/|pkg/version/|pkg/cmd/scheduler/|pkg/scheduler|Dockerfile.scheduler.ocp|.tekton/instaslice-scheduler-next-*'))
   creationTimestamp:
   labels:
     appstudio.openshift.io/application: dynamicacceleratorslicer-next
