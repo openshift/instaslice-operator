@@ -34,12 +34,16 @@
   },
   "dockerfile": {
     "enabled": true,
+    "fileMatch": [
+      "bundle-ocp.Dockerfile",
+      "bundle-ocp.developer.Dockerfile",
+      "Dockerfile.daemonset.ocp",
+      "Dockerfile.ocp",
+      "Dockerfile.scheduler.ocp",
+      "Dockerfile.webhook.ocp"
+    ],
     "packageRules": [
       {
-        "matchFileNames": [
-          "Dockerfile.*",
-          ".*Dockerfile"
-        ],
         "automerge": true,
         "addLabels": [
           "lgtm",
