@@ -4,6 +4,8 @@ Dynamic Accelerator Slicer (DAS) is an operator that dynamically partitions GPU 
 OpenShift. It currently ships with a reference implementation for NVIDIA Multi-Instance GPU (MIG) and is designed to
 support additional technologies such as NVIDIA MPS or GPUs from other vendors.
 
+Minimum supported OpenShift versions: 4.18.21 and 4.19.6.
+
 ## Table of Contents
 
 - [Dynamic Accelerator Slicer (DAS) Operator](#dynamic-accelerator-slicer-das-operator)
@@ -294,7 +296,7 @@ just deploy-das-ocp
 The operator reads the `EMULATED_MODE` environment variable at startup and passes this configuration to the daemonset pods running on each node. When emulated mode is enabled:
 
 1. The daemonset skips hardware detection and NVML library calls
-2. Synthetic GPU resources are published to simulate hardware capacity  
+2. Synthetic GPU resources are published to simulate hardware capacity
 3. MIG slicing operations are simulated rather than performed on real hardware
 
 This allows for testing and development of the operator functionality without requiring physical GPU hardware.
