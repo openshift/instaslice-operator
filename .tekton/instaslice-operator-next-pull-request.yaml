@@ -8,7 +8,7 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "next" && files.all.exists(path, path.matches('Makefile|bindata/|go.mod|go.sum|vendor/|pkg/generated||cmd/das-operator/|pkg/version/|pkg/cmd/operator/|pkg/operator|Dockerfile.operator.ocp|.tekton/instaslice-operator-next-*|cmd/das-operator/|/pkg/version/|pkg/cmd/operator/|pkg/operator/|Dockerfile.webhook.ocp|.tekton/instaslice-operator-next-*|bundle-ocp/|bundle-ocp.Dockerfile|.tekton/instaslice-operator-bundle-next-*'))
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "next" && files.all.exists(path, path.matches('Makefile|bindata/|go.mod|go.sum|vendor/|pkg/generated|cmd/das-operator/|pkg/version/|pkg/cmd/operator/|pkg/operator|Dockerfile.ocp|.tekton/instaslice-operator-next-*|cmd/das-operator/|/pkg/version/|pkg/cmd/operator/|pkg/operator/|.tekton/instaslice-operator-next-*|bundle-ocp/|bundle-ocp.Dockerfile|.tekton/instaslice-operator-bundle-next-*'))
   creationTimestamp:
   labels:
     appstudio.openshift.io/application: dynamicacceleratorslicer-next
