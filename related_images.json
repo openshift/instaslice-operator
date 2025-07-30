@@ -1,7 +1,7 @@
 [
   {
     "name": "instaslice-scheduler-next",
-    "image": "registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-scheduler-rhel9@sha256:cfee9b1228ae98b1a52a688b84efaf7cb57d5ad041abd1e716c59f38a5bd0e51"
+    "image": "registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-scheduler-rhel9@sha256:351650ae9195eedc98f32c3241f034287cddbf958913b521c43742306d0cb120"
   },
   {
     "name": "instaslice-daemonset-next",
