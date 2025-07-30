@@ -71,16 +71,16 @@ var (
 )
 
 const (
+	dasOperatorNamespace    = "das-operator"
 	testNamespace           = "das-e2e"
 	multiTestNamespace      = "das-e2e-multi"
 	multiResourceNamespace  = "das-e2e-multires"
 	deploymentTestNamespace = "das-e2e-deploy"
+	webhookServiceName      = "das-operator-webhook"
+	webhookPort             = int32(8443)
 )
 
 var _ = BeforeSuite(func() {
-	//(TODO) Remove the deadcode if this resolves rbac issue while executing e2e test suite in CI
-	// cfg, err := rest.InClusterConfig()
-	// if err != nil {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if kubeconfig == "" {
 		kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
@@ -89,7 +89,6 @@ var _ = BeforeSuite(func() {
 	if err != nil {
 		Skip("kubernetes config not available: " + err.Error())
 	}
-	//}
 
 	// TODO - Remove this warning suppression once the webhook starts working properly
 	cfg.WarningHandler = rest.NoWarnings{}
@@ -154,8 +153,10 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 			})
 		}
 
+		Expect(waitForServiceReady(context.Background(), dasOperatorNamespace, webhookServiceName, 2*time.Minute)).To(Succeed())
 		By(fmt.Sprintf("creating %d test pods", len(pods)))
 		Expect(createPods(context.Background(), namespace, pods)).To(Succeed())
+		Expect(waitForPodsReady(context.Background(), namespace, pods, 2*time.Minute)).To(Succeed())
 
 		for _, p := range pods {
 			podNames = append(podNames, p.Name)
@@ -201,7 +202,7 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 		}
 
 		Eventually(func() (int, error) {
-			allocs, err := dasClient.OpenShiftOperatorV1alpha1().AllocationClaims("das-operator").List(ctx, metav1.ListOptions{})
+			allocs, err := dasClient.OpenShiftOperatorV1alpha1().AllocationClaims(dasOperatorNamespace).List(ctx, metav1.ListOptions{})
 			if err != nil {
 				return 0, err
 			}
@@ -357,7 +358,7 @@ var _ = Describe("Test deployment requesting single type of extended resource", 
 		}
 
 		Eventually(func() (int, error) {
-			allocs, err := dasClient.OpenShiftOperatorV1alpha1().AllocationClaims("das-operator").List(ctx, metav1.ListOptions{})
+			allocs, err := dasClient.OpenShiftOperatorV1alpha1().AllocationClaims(dasOperatorNamespace).List(ctx, metav1.ListOptions{})
 			if err != nil {
 				return 0, err
 			}
@@ -481,7 +482,7 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		insts, err := dasClient.OpenShiftOperatorV1alpha1().NodeAccelerators("das-operator").List(context.Background(), metav1.ListOptions{})
+		insts, err := dasClient.OpenShiftOperatorV1alpha1().NodeAccelerators(dasOperatorNamespace).List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		gpuCount := 0
@@ -512,9 +513,10 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 				Spec: gpuSlicePodSpec("2g.10gb", emulatedMode),
 			})
 		}
-
+		Expect(waitForServiceReady(context.Background(), dasOperatorNamespace, webhookServiceName, 2*time.Minute)).To(Succeed())
 		By(fmt.Sprintf("creating %d test pods", len(pods)))
 		Expect(createPods(context.Background(), namespace, pods)).To(Succeed())
+		Expect(waitForPodsReady(context.Background(), namespace, pods, 2*time.Minute)).To(Succeed())
 
 		for _, p := range pods {
 			podNames = append(podNames, p.Name)
@@ -554,6 +556,62 @@ func createPods(ctx context.Context, namespace string, pods []*corev1.Pod) error
 			return err
 		}
 	}
+	return nil
+}
+
+// waitForPodsReady waits until all specified Pods are in Running and Ready state
+func waitForPodsReady(ctx context.Context, namespace string, pods []*corev1.Pod, timeout time.Duration) error {
+	for _, pod := range pods {
+		podName := pod.Name
+		var lastErr error
+		Eventually(func() bool {
+			currentPod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+			if err != nil {
+				lastErr = err
+				return false
+			}
+			if currentPod.Status.Phase != corev1.PodRunning {
+				return false
+			}
+			for _, cond := range currentPod.Status.Conditions {
+				if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
+					return true
+				}
+			}
+			return false
+		}, timeout, 2*time.Second).Should(BeTrue(), fmt.Sprintf("pod %s did not become ready: %v", podName, lastErr))
+	}
+	return nil
+}
+
+// waitForServiceReady waits until the specified service(related endpoints) is Ready
+// (TODO) This is not required if in future, the operator has a correct, updated status to rely on
+func waitForServiceReady(ctx context.Context, namespace string, svc string, timeout time.Duration) error {
+	var lastErr error
+	Eventually(func() bool {
+		endpoints, err := kubeClient.CoreV1().Endpoints(namespace).Get(context.Background(), svc, metav1.GetOptions{})
+		if err != nil {
+			lastErr = err
+			return false
+		}
+		if len(endpoints.Subsets) == 0 {
+			return false
+		}
+		readyAddressesCount := 0
+		foundDesiredPort := false
+		for _, subset := range endpoints.Subsets {
+			readyAddressesCount += len(subset.Addresses)
+			for _, port := range subset.Ports {
+				if port.Port == webhookPort && port.Protocol == corev1.ProtocolTCP {
+					foundDesiredPort = true
+				}
+			}
+		}
+		if readyAddressesCount > 0 && foundDesiredPort {
+			return true
+		}
+		return false
+	}, timeout, 2*time.Second).Should(BeTrue(), fmt.Sprintf("Webhook service %s not yet ready: %v", svc, lastErr))
 	return nil
 }
 
