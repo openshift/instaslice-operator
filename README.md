@@ -558,6 +558,10 @@ The plugin integrates with the Kubernetes scheduler and runs through three frame
 
 Once promoted, the device plugin provisions the slices.
 
+The daemonset advertises GPU resources only after the NVIDIA GPU Operator's
+`ClusterPolicy` reports a **Ready** state. This prevents the scheduler from
+scheduling pods on a node before the GPU Operator has initialized the drivers.
+
 ### AllocationClaim resource
 
 `AllocationClaim` is a namespaced CRD that records which MIG slice will be prepared for a pod. Claims start in the
@@ -636,6 +640,15 @@ You can focus on specific tests:
 ```bash
 just test-e2e focus="GPU slices"
 ```
+
+### Known Issues
+
+Due to [kubernetes/kubernetes#128043](https://github.com/kubernetes/kubernetes/issues/128043)
+pods may enter an `UnexpectedAdmissionError` state if admission fails. Pods
+managed by higher level controllers such as Deployments will be recreated
+automatically. Naked pods, however, must be cleaned up manually with
+`kubectl delete pod`. Using controllers is recommended until the upstream issue
+is resolved.
 
 ## Uninstalling
 

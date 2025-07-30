@@ -316,7 +316,8 @@ func TestGetAllocationsByNodeGPU(t *testing.T) {
 	}
 	_ = allocationIndexer.Add(alloc)
 
-	srv := &Server{}
+	client := fakeclient.NewSimpleClientset(alloc)
+	srv := &Server{InstasliceClient: client}
 	res, err := srv.getAllocationsByNodeGPU(context.Background(), nodeName, resource, 1)
 	if err != nil {
 		t.Fatalf("getAllocationsByNodeGPU returned error: %v", err)
@@ -395,7 +396,7 @@ func TestWriteCDISpecForResourceWait(t *testing.T) {
 	}
 }
 
-func TestListAndWatchRebootResetsAllocations(t *testing.T) {
+func TestListAndWatchRebootDeletesAllocations(t *testing.T) {
 	dir := t.TempDir()
 	if err := cdi.Configure(cdi.WithSpecDirs(dir), cdi.WithAutoRefresh(false)); err != nil {
 		t.Fatalf("failed to configure cdi: %v", err)
@@ -423,8 +424,9 @@ func TestListAndWatchRebootResetsAllocations(t *testing.T) {
 	}
 	_ = allocationIndexer.Add(alloc)
 
+	client := fakeclient.NewSimpleClientset(alloc)
 	mgr := NewManager("mig.das.com/1g.5gb", instav1.DiscoveredNodeResources{})
-	srv := &Server{Manager: mgr, NodeName: "node1"}
+	srv := &Server{Manager: mgr, NodeName: "node1", InstasliceClient: client}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -444,8 +446,9 @@ func TestListAndWatchRebootResetsAllocations(t *testing.T) {
 		t.Fatalf("expected no devices, got %d", len(resp.Devices))
 	}
 
-	if alloc.Status.State != instav1.AllocationClaimStatusCreated {
-		t.Fatalf("expected allocation state reset to Created, got %s", alloc.Status.State)
+	key := fmt.Sprintf("%s/%s", alloc.Namespace, alloc.Name)
+	if _, exists, _ := allocationIndexer.GetByKey(key); exists {
+		t.Fatalf("expected allocation to be deleted from indexer")
 	}
 }
 

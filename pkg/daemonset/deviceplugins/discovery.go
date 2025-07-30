@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	applyconfigurationmetav1 "k8s.io/client-go/applyconfigurations/meta/v1"
+	dynamic "k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
 )
 
@@ -85,14 +86,16 @@ func (e *EmulatedMigGpuDiscoverer) Discover() (*instav1.NodeAccelerator, error) 
 
 // RealMigGpuDiscoverer implements MigGpuDiscoverer for real hardware.
 type RealMigGpuDiscoverer struct {
-	ctx         context.Context
-	nodeName    string
-	instaClient v1alpha1.NodeAcceleratorInterface
+	ctx           context.Context
+	nodeName      string
+	instaClient   v1alpha1.NodeAcceleratorInterface
+	dynamicClient dynamic.Interface
 }
 
 var _ MigGpuDiscoverer = &RealMigGpuDiscoverer{}
 
 func (r *RealMigGpuDiscoverer) Discover() (*instav1.NodeAccelerator, error) {
+
 	if err := EnsureNvmlInitialized(); err != nil {
 		klog.ErrorS(err, "NVML initialization failed")
 		return nil, err
