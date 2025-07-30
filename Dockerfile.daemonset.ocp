@@ -31,7 +31,7 @@ LABEL vendor="Red Hat, Inc."
 LABEL version="1"
 LABEL maintainer="Red Hat"
 
-LABEL io.openshift.tags=""
+LABEL io.openshift.tags="das,accelerator,dynamic,instaslice,slicer"
 # Licenses
 
 COPY LICENSE /licenses/LICENSE
