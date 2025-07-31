@@ -3,11 +3,14 @@ package webhook
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 
 	admissionctl "sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
 )
 
@@ -17,6 +20,8 @@ const (
 	HealthzEndpointURI   string = "/healthz"
 	WebhookName          string = "das-webhook"
 	secondaryScheduler   string = "das-scheduler"
+	// GPU memory resource prefix for Kueue integration
+	gpuMemoryResourcePrefix = "gpu.das.com/mem"
 )
 
 // Webhook interface
@@ -111,6 +116,15 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 				newLimits[newKey] = qty
 				newRequests[newKey] = qty
 				needsScheduler = true
+
+				// Extract GPU memory requirement and inject gpu.das.com/mem resource
+				if memGB := extractGPUMemoryFromProfile(profile); memGB > 0 {
+					memResource := corev1.ResourceName(gpuMemoryResourcePrefix)
+					memQty := resource.NewQuantity(int64(memGB*qty.Value()), resource.DecimalSI)
+					klog.InfoS("injecting GPU memory resource", "profile", profile, "memory_gb", memGB, "quantity", qty.Value())
+					newLimits[memResource] = *memQty
+					newRequests[memResource] = *memQty
+				}
 			case strings.HasPrefix(key, "nvidia.com/"):
 				newKey := corev1.ResourceName(strings.Replace(key, "nvidia.com/", "mig.das.com/", 1))
 				klog.InfoS("renaming GPU resource", "from", key, "to", newKey)
@@ -158,6 +172,20 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 
 	klog.InfoS("finished pod mutation", "mutatedPod", mutatedPod)
 	return json.Marshal(mutatedPod)
+}
+
+// extractGPUMemoryFromProfile extracts the GPU memory requirement in GB from a MIG profile name
+// Profile format is typically "1g.5gb" where 5gb represents 5GB of memory
+func extractGPUMemoryFromProfile(profile string) int64 {
+	// Match patterns like "1g.5gb", "2g.10gb", etc.
+	re := regexp.MustCompile(`(\d+)g\.(\d+)gb`)
+	match := re.FindStringSubmatch(profile)
+	if len(match) >= 3 {
+		if memGB, err := strconv.ParseInt(match[2], 10, 64); err == nil {
+			return memGB
+		}
+	}
+	return 0
 }
 
 func (s *InstasliceWebhook) renderPod(request admissionctl.Request) (*corev1.Pod, error) {

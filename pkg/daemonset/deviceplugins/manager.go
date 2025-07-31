@@ -31,6 +31,15 @@ func NewManager(resourceName string, resources instav1.DiscoveredNodeResources) 
 	}
 }
 
+// NewGPUMemoryManager creates a Manager for GPU memory resources (gpu.das.com/mem)
+func NewGPUMemoryManager(resourceName string, resources instav1.DiscoveredNodeResources) *Manager {
+	return &Manager{
+		ResourceName: resourceName,
+		resources:    resources,
+		updates:      make(chan []*pluginapi.Device, 1),
+	}
+}
+
 func countDevices(resources instav1.DiscoveredNodeResources, profile string) int {
 	mig, ok := resources.MigPlacement[profile]
 	if !ok {
@@ -45,6 +54,15 @@ func countDevices(resources instav1.DiscoveredNodeResources, profile string) int
 	return count * len(resources.NodeGPUs)
 }
 
+// countGPUMemoryDevices calculates the number of 1GB memory units available across all GPUs
+func countGPUMemoryDevices(resources instav1.DiscoveredNodeResources) int {
+	var totalMemoryGB int64
+	for _, gpu := range resources.NodeGPUs {
+		totalMemoryGB += gpu.GPUMemory.Value() / (1024 * 1024 * 1024) // Convert bytes to GB
+	}
+	return int(totalMemoryGB)
+}
+
 // Updates returns a channel that emits the latest available devices for ListAndWatch.
 func (m *Manager) Updates() <-chan []*pluginapi.Device {
 	return m.updates
@@ -54,17 +72,31 @@ func (m *Manager) Updates() <-chan []*pluginapi.Device {
 // and then running until the context is done.
 func (m *Manager) Start(ctx context.Context) {
 	klog.InfoS("Starting device manager", "resource", m.ResourceName)
-	parts := strings.SplitN(m.ResourceName, "/", 2)
-	if len(parts) < 2 {
-		klog.ErrorS(nil, "invalid resource name", "resource", m.ResourceName)
-		return
+
+	var devs []*pluginapi.Device
+
+	if m.ResourceName == "gpu.das.com/mem" {
+		// Handle GPU memory resource - each device represents 1GB of memory
+		num := countGPUMemoryDevices(m.resources)
+		devs = make([]*pluginapi.Device, 0, num)
+		for i := 0; i < num; i++ {
+			devs = append(devs, &pluginapi.Device{ID: fmt.Sprintf("gpu-mem-%d", i), Health: pluginapi.Healthy})
+		}
+	} else {
+		// Handle MIG profile resources
+		parts := strings.SplitN(m.ResourceName, "/", 2)
+		if len(parts) < 2 {
+			klog.ErrorS(nil, "invalid resource name", "resource", m.ResourceName)
+			return
+		}
+		profile := unsanitizeProfileName(parts[1])
+		num := countDevices(m.resources, profile)
+		devs = make([]*pluginapi.Device, 0, num)
+		for i := 0; i < num; i++ {
+			devs = append(devs, &pluginapi.Device{ID: fmt.Sprintf("%s-%d", profile, i), Health: pluginapi.Healthy})
+		}
 	}
-	profile := unsanitizeProfileName(parts[1])
-	num := countDevices(m.resources, profile)
-	devs := make([]*pluginapi.Device, 0, num)
-	for i := 0; i < num; i++ {
-		devs = append(devs, &pluginapi.Device{ID: fmt.Sprintf("%s-%d", profile, i), Health: pluginapi.Healthy})
-	}
+
 	select {
 	case m.updates <- devs:
 	default:

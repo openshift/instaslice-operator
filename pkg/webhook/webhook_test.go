@@ -227,3 +227,56 @@ func TestMutatePodNoResource(t *testing.T) {
 		t.Fatalf("env vars should not be added")
 	}
 }
+
+func TestMutatePodGPUMemoryInjection(t *testing.T) {
+	hook := &InstasliceWebhook{}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "gpu-mem-test"},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "test",
+					Image: "ubuntu:20.04",
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceName("nvidia.com/mig-1g.5gb"): resource.MustParse("2"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	data, err := hook.mutatePod(pod)
+	if err != nil {
+		t.Fatalf("mutatePod returned error: %v", err)
+	}
+
+	mutated := &corev1.Pod{}
+	if err := json.Unmarshal(data, mutated); err != nil {
+		t.Fatalf("failed to unmarshal mutated pod: %v", err)
+	}
+
+	if mutated.Spec.SchedulerName != secondaryScheduler {
+		t.Fatalf("expected scheduler %s, got %s", secondaryScheduler, mutated.Spec.SchedulerName)
+	}
+
+	limits := mutated.Spec.Containers[0].Resources.Limits
+
+	// Check that MIG resource was renamed
+	if _, ok := limits[corev1.ResourceName("nvidia.com/mig-1g.5gb")]; ok {
+		t.Fatalf("nvidia resource still present")
+	}
+
+	// Check that mig.das.com resource was added
+	migResource, ok := limits[corev1.ResourceName("mig.das.com/1g.5gb")]
+	if !ok || migResource.Value() != 2 {
+		t.Fatalf("expected mig.das.com resource with quantity 2, got %v", migResource)
+	}
+
+	// Check that GPU memory resource was injected (5GB * 2 = 10GB)
+	gpuMemResource, ok := limits[corev1.ResourceName("gpu.das.com/mem")]
+	if !ok || gpuMemResource.Value() != 10 {
+		t.Fatalf("expected gpu.das.com/mem resource with quantity 10, got %v", gpuMemResource)
+	}
+}
