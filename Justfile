@@ -173,6 +173,10 @@ test-e2e e2e-args="-ginkgo.v" focus="":
 [group('test')]
 test-e2e-ci: create-related-images deploy-cert-manager-ocp deploy-nfd-ocp deploy-nvidia-ocp deploy-das-ocp test-e2e
 
+# Deploy all the pre-req operators required to execute end-to-end tests on CI uding bundle
+[group('test')]
+test-e2e-deploy-pre-req: create-related-images deploy-cert-manager-ocp deploy-nfd-ocp deploy-nvidia-ocp
+
 # Create a related_images.json file with the provided env variables
 [group('generate')]
 create-related-images filename="related_images.dev.json":
