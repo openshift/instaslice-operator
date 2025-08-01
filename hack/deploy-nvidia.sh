@@ -76,7 +76,7 @@ _wait_for_apiserver() {
 }
 
 echo "Applying Nvidia"
-_kubectl apply -f hack/manifests/nvidia-cpu-operator.yaml
+_kubectl apply -f hack/manifests/nvidia-gpu-operator.yaml
 echo "Waiting for Nvidia for ${TIMEOUT}"
 _wait_for_pods_to_exist nvidia-gpu-operator gpu-operator ${TIMEOUT}
 _kubectl wait --for condition=established --timeout=300s crd/clusterpolicies.nvidia.com
