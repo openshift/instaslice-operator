@@ -8,7 +8,7 @@ ENV GOFLAGS=-mod=mod
 RUN GO_BUILD_PACKAGES=./cmd/das-scheduler make
 
 # runtime stage
-FROM registry.redhat.io/ubi9/ubi-minimal@sha256:67fee1a132e8e326434214b3c7ce90b2500b2ad02c9790cc61581feb58d281d5
+FROM registry.redhat.io/ubi9/ubi-minimal@sha256:0d7cfb0704f6d389942150a01a20cb182dc8ca872004ebf19010e2b622818926
 
 WORKDIR /
 COPY --from=build /workspace/das-scheduler /usr/bin
