@@ -19,11 +19,9 @@ metadata:
   name: gpu-operator-certified
   namespace: nvidia-gpu-operator
 spec:
-  channel: "v24.9"
   installPlanApproval: Automatic
   name: gpu-operator-certified
   source: certified-operators
   sourceNamespace: openshift-marketplace
-  startingCSV: "gpu-operator-certified.v24.9.2"
 
 
