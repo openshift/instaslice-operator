@@ -152,16 +152,24 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 
 	klog.V(2).InfoS("Got operator config", "emulated_mode", c.emulatedMode)
 
-	if _, _, err := c.manageDaemonset(ctx, ownerReference); err != nil {
+	daemonset, _, err := c.manageDaemonset(ctx, ownerReference)
+	if err != nil {
 		return err
 	}
 
-	if _, _, err := c.manageScheduler(ctx, ownerReference); err != nil {
+	schedulerDeployment, _, err := c.manageScheduler(ctx, ownerReference)
+	if err != nil {
 		return err
 	}
 
 	if err := c.manageMutatingWebhookDeployment(ctx, ownerReference); err != nil {
 		return err
+	}
+
+	webhookDeployment, err := c.kubeClient.AppsV1().Deployments(c.namespace).Get(ctx, "das-operator-webhook", metav1.GetOptions{})
+	if err != nil {
+		klog.Errorf("Failed to get webhook deployment: %v", err)
+		webhookDeployment = nil
 	}
 
 	if err := c.manageMutatingWebhookService(ctx, ownerReference); err != nil {
@@ -184,6 +192,28 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	_, _, err = c.manageWebhookCertSecret()
 	if err != nil {
 		return err
+	}
+
+	_, _, err = v1helpers.UpdateStatus(ctx, c.instasliceoperatorClient, func(status *operatorsv1.OperatorStatus) error {
+		var totalReadyPods int32 = 0
+		// count depends on the number of workers in the cluster.
+		if daemonset != nil {
+			totalReadyPods += daemonset.Status.NumberReady
+		}
+
+		if schedulerDeployment != nil {
+			totalReadyPods += schedulerDeployment.Status.ReadyReplicas
+		}
+
+		if webhookDeployment != nil {
+			totalReadyPods += webhookDeployment.Status.ReadyReplicas
+		}
+
+		status.ReadyReplicas = totalReadyPods
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update operator status: %w", err)
 	}
 
 	return nil
