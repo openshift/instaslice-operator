@@ -11,6 +11,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	clientset "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 
@@ -744,3 +745,65 @@ var _ = Describe("MIG placement start index", Ordered, func() {
 		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
 	})
 })
+
+var _ = Describe("Operator status", Ordered, func() {
+	BeforeAll(func() {
+		if os.Getenv("KUBECONFIG") == "" {
+			Skip("KUBECONFIG is not set; skipping e2e test")
+		}
+	})
+
+	It("should report correct readyReplicas", func(ctx SpecContext) {
+		By("getting the DAS operator deployment")
+		operatorDeployment, err := kubeClient.AppsV1().Deployments(dasOperatorNamespace).Get(ctx, "das-operator", metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(operatorDeployment).NotTo(BeNil())
+
+		expectedReadyReplicas := operatorDeployment.Status.ReadyReplicas
+		By(fmt.Sprintf("expecting %d ready replicas from deployment status", expectedReadyReplicas))
+
+		By("checking DAS operator CR status")
+		Eventually(func() (int32, error) {
+			dasOperator, err := dasClient.OpenShiftOperatorV1alpha1().DASOperators(dasOperatorNamespace).Get(ctx, "cluster", metav1.GetOptions{})
+			if err != nil {
+				return 0, err
+			}
+			return dasOperator.Status.ReadyReplicas, nil
+		}, 2*time.Minute, 5*time.Second).Should(Equal(expectedReadyReplicas))
+
+		By("verifying operator CR status conditions are healthy")
+		Eventually(func() (bool, error) {
+			dasOperator, err := dasClient.OpenShiftOperatorV1alpha1().DASOperators(dasOperatorNamespace).Get(ctx, "cluster", metav1.GetOptions{})
+			if err != nil {
+				return false, err
+			}
+
+			availableCondition := findCondition(dasOperator.Status.Conditions, "Available")
+			if availableCondition == nil || availableCondition.Status != "True" {
+				return false, fmt.Errorf("Available condition not True: %v", availableCondition)
+			}
+
+			progressingCondition := findCondition(dasOperator.Status.Conditions, "Progressing")
+			if progressingCondition == nil || progressingCondition.Status != "False" {
+				return false, fmt.Errorf("Progressing condition not False: %v", progressingCondition)
+			}
+
+			degradedCondition := findCondition(dasOperator.Status.Conditions, "Degraded")
+			if degradedCondition == nil || degradedCondition.Status != "False" {
+				return false, fmt.Errorf("Degraded condition not False: %v", degradedCondition)
+			}
+
+			return true, nil
+		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+	})
+})
+
+// findCondition finds a condition in a list of conditions by type.
+func findCondition(conditions []operatorv1.OperatorCondition, conditionType string) *operatorv1.OperatorCondition {
+	for i := range conditions {
+		if conditions[i].Type == conditionType {
+			return &conditions[i]
+		}
+	}
+	return nil
+}

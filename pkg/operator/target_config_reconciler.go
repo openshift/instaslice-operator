@@ -118,7 +118,6 @@ func NewTargetConfigReconciler(
 		kubeInformersForNamespaces.InformersFor(namespace).Rbac().V1().Roles().Informer(),
 	).ResyncEvery(time.Minute*5).
 		WithSync(c.sync).
-		WithSyncDegradedOnError(instasliceoperatorClient).
 		ToController("DASOperatorController", eventRecorder)
 }
 
@@ -152,15 +151,18 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 
 	klog.V(2).InfoS("Got operator config", "emulated_mode", c.emulatedMode)
 
-	if _, _, err := c.manageDaemonset(ctx, ownerReference); err != nil {
+	daemonset, _, err := c.manageDaemonset(ctx, ownerReference)
+	if err != nil {
 		return err
 	}
 
-	if _, _, err := c.manageScheduler(ctx, ownerReference); err != nil {
+	scheduler, _, err := c.manageScheduler(ctx, ownerReference)
+	if err != nil {
 		return err
 	}
 
-	if err := c.manageMutatingWebhookDeployment(ctx, ownerReference); err != nil {
+	webhook, _, err := c.manageMutatingWebhookDeployment(ctx, ownerReference)
+	if err != nil {
 		return err
 	}
 
@@ -186,6 +188,16 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		return err
 	}
 
+	// Get das-operator deployment status for readyReplicas
+	operatorDeployment, err := c.kubeClient.AppsV1().Deployments(c.namespace).Get(ctx, "das-operator", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get das-operator deployment status: %w", err)
+	}
+
+	if err := c.updateOperatorStatus(ctx, operatorDeployment, daemonset, scheduler, webhook); err != nil {
+		return fmt.Errorf("failed to update operator status: %w", err)
+	}
+
 	return nil
 }
 
@@ -201,7 +213,7 @@ func (c *TargetConfigReconciler) manageWebhookCertSecret() (*corev1.Secret, bool
 	return secret, true, nil
 }
 
-func (c *TargetConfigReconciler) manageMutatingWebhookDeployment(ctx context.Context, ownerReference metav1.OwnerReference) error {
+func (c *TargetConfigReconciler) manageMutatingWebhookDeployment(ctx context.Context, ownerReference metav1.OwnerReference) (*appsv1.Deployment, bool, error) {
 	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/instaslice-operator/webhook-deployment.yaml"))
 	required.Namespace = c.namespace
 	required.OwnerReferences = []metav1.OwnerReference{
@@ -214,13 +226,9 @@ func (c *TargetConfigReconciler) manageMutatingWebhookDeployment(ctx context.Con
 	}
 	err := injectCertManagerCA(required, c.namespace)
 	if err != nil {
-		return err
+		return nil, false, err
 	}
-	_, _, err = resourceapply.ApplyDeployment(ctx, c.kubeClient.AppsV1(), c.eventRecorder, required, resourcemerge.ExpectedDeploymentGeneration(required, c.generations))
-	if err != nil {
-		return err
-	}
-	return nil
+	return resourceapply.ApplyDeployment(ctx, c.kubeClient.AppsV1(), c.eventRecorder, required, resourcemerge.ExpectedDeploymentGeneration(required, c.generations))
 }
 
 func (c *TargetConfigReconciler) manageMutatingWebhookService(ctx context.Context, ownerReference metav1.OwnerReference) error {
@@ -433,6 +441,132 @@ func isResourceRegistered(discoveryClient discovery.DiscoveryInterface, gvk sche
 		}
 	}
 	return false, nil
+}
+
+// updateOperatorStatus calculates and updates the DAS operator status based on component health.
+func (c *TargetConfigReconciler) updateOperatorStatus(ctx context.Context, operatorDeployment *appsv1.Deployment, daemonset *appsv1.DaemonSet, scheduler *appsv1.Deployment, webhook *appsv1.Deployment) error {
+	operatorReadyReplicas := operatorDeployment.Status.ReadyReplicas
+
+	// Check component health for conditions
+	operatorReady := operatorDeployment.Status.ReadyReplicas > 0
+	schedulerReady := scheduler.Status.ReadyReplicas > 0
+	webhookReady := webhook.Status.ReadyReplicas > 0
+	daemonsetHealthy := daemonset.Status.NumberReady > 0
+
+	operatorDesired := int32(1)
+	if operatorDeployment.Spec.Replicas != nil {
+		operatorDesired = *operatorDeployment.Spec.Replicas
+	}
+	schedulerDesired := int32(1)
+	if scheduler.Spec.Replicas != nil {
+		schedulerDesired = *scheduler.Spec.Replicas
+	}
+	webhookDesired := int32(1)
+	if webhook.Spec.Replicas != nil {
+		webhookDesired = *webhook.Spec.Replicas
+	}
+
+	operatorMatches := operatorDeployment.Status.ReadyReplicas == operatorDesired
+	schedulerMatches := scheduler.Status.ReadyReplicas == schedulerDesired
+	webhookMatches := webhook.Status.ReadyReplicas == webhookDesired
+
+	conditions := c.buildOperatorConditions(operatorReady, schedulerReady, webhookReady, daemonsetHealthy, operatorMatches, schedulerMatches, webhookMatches)
+
+	// Update status using the operator client.
+	_, _, err := v1helpers.UpdateStatus(ctx, c.instasliceoperatorClient, func(status *operatorsv1.OperatorStatus) error {
+		status.ReadyReplicas = operatorReadyReplicas
+		status.Conditions = conditions
+		return nil
+	})
+
+	return err
+}
+
+func (c *TargetConfigReconciler) buildOperatorConditions(operatorReady, schedulerReady, webhookReady, daemonsetHealthy, operatorMatches, schedulerMatches, webhookMatches bool) []operatorsv1.OperatorCondition {
+	// OperatorAvailable: true if ≥1 operators AND ≥1 schedulers AND ≥1 webhooks are available.
+	availableStatus := operatorsv1.ConditionFalse
+	availableReason := "ComponentsNotAvailable"
+	availableMessage := "Not all required components have at least 1 replica available"
+
+	if operatorReady && schedulerReady && webhookReady && daemonsetHealthy {
+		availableStatus = operatorsv1.ConditionTrue
+		availableReason = "AllRequiredComponentsAvailable"
+		availableMessage = "All required components have at least 1 replica available"
+	} else {
+		var unavailableComponents []string
+		if !operatorReady {
+			unavailableComponents = append(unavailableComponents, "operator")
+		}
+		if !schedulerReady {
+			unavailableComponents = append(unavailableComponents, "scheduler")
+		}
+		if !webhookReady {
+			unavailableComponents = append(unavailableComponents, "webhook")
+		}
+		if !daemonsetHealthy {
+			unavailableComponents = append(unavailableComponents, "daemonset")
+		}
+		availableMessage = fmt.Sprintf("Components without available replicas: %s", strings.Join(unavailableComponents, ", "))
+	}
+
+	// Progressing condition
+	progressingStatus := operatorsv1.ConditionFalse
+	progressingReason := "AllComponentsAtDesiredState"
+	progressingMessage := "All components are at desired state"
+
+	if !operatorMatches || !schedulerMatches || !webhookMatches || !daemonsetHealthy {
+		progressingStatus = operatorsv1.ConditionTrue
+		progressingReason = "Reconciling"
+		progressingMessage = "Components are being reconciled to desired state"
+	}
+
+	degradedStatus := operatorsv1.ConditionFalse
+	degradedReason := "AllComponentsHealthy"
+	degradedMessage := ""
+
+	var mismatchedComponents []string
+	if !operatorMatches {
+		mismatchedComponents = append(mismatchedComponents, "operator")
+	}
+	if !schedulerMatches {
+		mismatchedComponents = append(mismatchedComponents, "scheduler")
+	}
+	if !webhookMatches {
+		mismatchedComponents = append(mismatchedComponents, "webhook")
+	}
+	if !daemonsetHealthy {
+		mismatchedComponents = append(mismatchedComponents, "daemonset")
+	}
+
+	if len(mismatchedComponents) > 0 {
+		degradedStatus = operatorsv1.ConditionTrue
+		degradedReason = "ComponentReplicaMismatch"
+		degradedMessage = fmt.Sprintf("Components not matching configured replica counts: %s", strings.Join(mismatchedComponents, ", "))
+	}
+
+	return []operatorsv1.OperatorCondition{
+		{
+			Type:               "Available",
+			Status:             availableStatus,
+			Reason:             availableReason,
+			Message:            availableMessage,
+			LastTransitionTime: metav1.Now(),
+		},
+		{
+			Type:               "Progressing",
+			Status:             progressingStatus,
+			Reason:             progressingReason,
+			Message:            progressingMessage,
+			LastTransitionTime: metav1.Now(),
+		},
+		{
+			Type:               "Degraded",
+			Status:             degradedStatus,
+			Reason:             degradedReason,
+			Message:            degradedMessage,
+			LastTransitionTime: metav1.Now(),
+		},
+	}
 }
 
 func injectCertManagerCA(obj metav1.Object, namespace string) error {
