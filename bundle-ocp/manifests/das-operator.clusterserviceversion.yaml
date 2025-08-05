@@ -21,7 +21,7 @@ metadata:
     capabilities: Basic Install
     categories: Drivers and plugins
     containerImage: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next:latest
-    createdAt: "2025-07-10T20:05:15Z"
+    createdAt: "2025-08-05T15:32:19Z"
     description: InstaSlice works with GPU operator to create mig slices on demand
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
@@ -231,7 +231,6 @@ spec:
           resources:
           - pods
           - configmaps
-          - events
           - namespaces
           - secrets
           - services
@@ -261,13 +260,19 @@ spec:
           - patch
           - update
         - apiGroups:
+          - nvidia.com
+          resources:
+          - clusterpolicies
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
           - events.k8s.io
           resources:
           - events
           verbs:
           - create
-          - patch
-          - update
         - apiGroups:
           - policy
           resources:
