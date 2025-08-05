@@ -55,7 +55,6 @@ rules:
   verbs:
   - get
 - apiGroups:
-  - ""
   - events.k8s.io
   resources:
   - events
