@@ -168,6 +168,13 @@ rules:
     verbs:
     - create
   - apiGroups:
+    - ""
+    resources:
+    - events
+    verbs:
+    - create
+    - patch
+  - apiGroups:
     - policy
     resources:
     - poddisruptionbudgets
