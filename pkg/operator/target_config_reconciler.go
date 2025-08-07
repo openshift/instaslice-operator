@@ -308,16 +308,6 @@ func (c *TargetConfigReconciler) manageScheduler(ctx context.Context, ownerRefer
 		return nil, false, err
 	}
 
-	schedulerRoleBinding := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_rbac.clusterrolebinding.yaml"))
-	schedulerRoleBinding.Namespace = c.namespace
-	schedulerRoleBinding.OwnerReferences = []metav1.OwnerReference{
-		ownerReference,
-	}
-	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, schedulerRoleBinding)
-	if err != nil {
-		return nil, false, err
-	}
-
 	schedulerSA := resourceread.ReadServiceAccountV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_serviceaccount.yaml"))
 	schedulerSA.Namespace = c.namespace
 	schedulerSA.OwnerReferences = []metav1.OwnerReference{
