@@ -3,7 +3,7 @@
 set -eou pipefail
 
 KUBECTL=${KUBECTL:-oc}
-NAMESPACE=${NAMESPACE:-"das-operator"}
+NAMESPACE=${NAMESPACE:-"openshift-das-operator"}
 WEBHOOK_TIMEOUT=${WEBHOOK_TIMEOUT:-2m}
 
 _kubectl() {

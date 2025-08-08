@@ -252,6 +252,25 @@ func (c *TargetConfigReconciler) manageMutatingWebhook(ctx context.Context, owne
 	}
 	for i := range required.Webhooks {
 		required.Webhooks[i].ClientConfig.Service.Namespace = c.namespace
+		// Ensure operator namespace is excluded from mutation
+		if sel := required.Webhooks[i].NamespaceSelector; sel != nil {
+			for j := range sel.MatchExpressions {
+				me := &sel.MatchExpressions[j]
+				if me.Key == "kubernetes.io/metadata.name" && string(me.Operator) == string(metav1.LabelSelectorOpNotIn) {
+					// Add c.namespace if not present
+					found := false
+					for _, v := range me.Values {
+						if v == c.namespace {
+							found = true
+							break
+						}
+					}
+					if !found {
+						me.Values = append(me.Values, c.namespace)
+					}
+				}
+			}
+		}
 	}
 	err := injectCertManagerCA(required, c.namespace)
 	if err != nil {
@@ -293,6 +312,11 @@ func (c *TargetConfigReconciler) manageScheduler(ctx context.Context, ownerRefer
 	schedulerCRbac.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
 	}
+	for i := range schedulerCRbac.Subjects {
+		if schedulerCRbac.Subjects[i].Kind == "ServiceAccount" {
+			schedulerCRbac.Subjects[i].Namespace = c.namespace
+		}
+	}
 	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, schedulerCRbac)
 	if err != nil {
 		return nil, false, err
@@ -313,10 +337,44 @@ func (c *TargetConfigReconciler) manageScheduler(ctx context.Context, ownerRefer
 	schedulerRoleBinding.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
 	}
+	for i := range schedulerRoleBinding.Subjects {
+		if schedulerRoleBinding.Subjects[i].Kind == "ServiceAccount" {
+			schedulerRoleBinding.Subjects[i].Namespace = c.namespace
+		}
+	}
 	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, schedulerRoleBinding)
 	if err != nil {
 		return nil, false, err
 	}
+
+
+	// Apply authentication ClusterRole for scheduler
+	schedulerAuthCR := resourceread.ReadClusterRoleV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_auth.clusterrole.yaml"))
+	schedulerAuthCR.Namespace = c.namespace
+	schedulerAuthCR.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	_, _, err = resourceapply.ApplyClusterRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, schedulerAuthCR)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// Apply authentication ClusterRoleBinding for scheduler
+	schedulerAuthCRB := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_auth.clusterrolebinding.yaml"))
+	schedulerAuthCRB.Namespace = c.namespace
+	schedulerAuthCRB.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	for i := range schedulerAuthCRB.Subjects {
+		if schedulerAuthCRB.Subjects[i].Kind == "ServiceAccount" {
+			schedulerAuthCRB.Subjects[i].Namespace = c.namespace
+		}
+	}
+	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, schedulerAuthCRB)
+	if err != nil {
+		return nil, false, err
+	}
+
 
 	schedulerSA := resourceread.ReadServiceAccountV1OrDie(bindata.MustAsset("assets/instaslice-operator/scheduler_serviceaccount.yaml"))
 	schedulerSA.Namespace = c.namespace

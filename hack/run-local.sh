@@ -7,6 +7,8 @@ if [ -f ".env" ]; then
   source .env
 fi
 
+NAMESPACE=${NAMESPACE:-"openshift-das-operator"}
+
 # Create temporary directory and copy deployment files
 TMP_DIR=$(mktemp -d)
 trap "rm -rf ${TMP_DIR}" EXIT
@@ -26,4 +28,4 @@ ${KUBECTL} apply -f ${TMP_DIR}/03_instaslice_operator.cr.yaml
 RELATED_IMAGE_DAEMONSET_IMAGE=${DAEMONSET_IMAGE} \
   RELATED_IMAGE_WEBHOOK_IMAGE=${WEBHOOK_IMAGE} \
   RELATED_IMAGE_SCHEDULER_IMAGE=${SCHEDULER_IMAGE} \
-  go run cmd/das-operator/main.go operator --namespace=das-operator --kubeconfig="${KUBECONFIG}"
+  go run cmd/das-operator/main.go operator --namespace=${NAMESPACE} --kubeconfig="${KUBECONFIG}"

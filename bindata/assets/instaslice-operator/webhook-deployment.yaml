@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/part-of: das-operator
     app.kubernetes.io/version: 0.0.1
   name: das-operator-webhook
-  namespace: das-operator
+  namespace: openshift-das-operator
 spec:
   replicas: 2
   selector:

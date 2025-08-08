@@ -72,7 +72,7 @@ var (
 )
 
 const (
-	dasOperatorNamespace    = "das-operator"
+    dasOperatorNamespace    = "openshift-das-operator"
 	testNamespace           = "das-e2e"
 	multiTestNamespace      = "das-e2e-multi"
 	multiResourceNamespace  = "das-e2e-multires"

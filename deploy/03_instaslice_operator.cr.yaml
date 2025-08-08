@@ -2,7 +2,7 @@ apiVersion: inference.redhat.com/v1alpha1
 kind: DASOperator
 metadata:
   name: cluster
-  namespace: das-operator
+  namespace: openshift-das-operator
 spec:
   managementState: Managed
   logLevel: Normal

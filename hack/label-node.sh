@@ -3,7 +3,7 @@
 set -eou pipefail
 
 KUBECTL=${KUBECTL:-oc}
-NAMESPACE=${NAMESPACE:-"das-operator"}
+NAMESPACE=${NAMESPACE:-"openshift-das-operator"}
 
 _kubectl() {
   ${KUBECTL} $@

@@ -571,13 +571,13 @@ position and pod reference.
 Example:
 
 ```console
-$ kubectl get allocationclaims -n das-operator
+$ kubectl get allocationclaims -n openshift-das-operator
 NAME                                          AGE
 8835132e-8a7a-4766-a78f-0cb853d165a2-busy-0   61s
 ```
 
 ```console
-$ kubectl get allocationclaims -n das-operator -o yaml
+$ kubectl get allocationclaims -n openshift-das-operator -o yaml
 apiVersion: inference.redhat.com/v1alpha1
 kind: AllocationClaim
 ...
@@ -585,16 +585,16 @@ kind: AllocationClaim
 
 ## Debugging
 
-All components run in the `das-operator` namespace:
+All components run in the `openshift-das-operator` namespace by default (configurable via the operator `--namespace` flag):
 
 ```console
-kubectl get pods -n das-operator
+kubectl get pods -n openshift-das-operator
 ```
 
 Inspect the active claims:
 
 ```console
-kubectl get allocationclaims -n das-operator
+kubectl get allocationclaims -n openshift-das-operator
 ```
 
 On the node, verify that the CDI devices were created:

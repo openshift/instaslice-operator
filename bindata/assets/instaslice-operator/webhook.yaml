@@ -17,7 +17,7 @@ webhooks:
   clientConfig:
     service:
       name: das-operator-webhook
-      namespace: das-operator
+      namespace: openshift-das-operator
       path: /mutate-pod
       port: 8443
   failurePolicy: Fail
@@ -27,7 +27,7 @@ webhooks:
     - key: kubernetes.io/metadata.name
       operator: NotIn
       values:
-      - das-operator
+      - openshift-das-operator
       - cert-manager
       - kube-system
       - openshift-operators

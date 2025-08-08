@@ -207,7 +207,7 @@ undeploy:
     @echo "=== Deleting K8s resources ==="
     {{ KUBECTL }} delete --ignore-not-found --wait=true -f {{ DEPLOY_DIR }}/
     # Wait for the operator namespace to be fully removed
-    {{ KUBECTL }} wait --for=delete namespace/das-operator --timeout=120s || true
+    {{ KUBECTL }} wait --for=delete namespace/openshift-das-operator --timeout=120s || true
 
 # Deploy cert-manager for Kubernetes
 [group('deploy')]

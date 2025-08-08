@@ -10,7 +10,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: default
-  namespace: das-operator
+  namespace: openshift-das-operator
 - kind: ServiceAccount
   name: das-scheduler
-  namespace: das-operator
+  namespace: openshift-das-operator

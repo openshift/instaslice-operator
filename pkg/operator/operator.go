@@ -22,7 +22,7 @@ import (
 	"github.com/openshift/instaslice-operator/pkg/operator/operatorclient"
 )
 
-var operatorNamespace = "das-operator"
+var operatorNamespace = "openshift-das-operator"
 
 func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error {
 	kubeClient, err := kubernetes.NewForConfig(cc.ProtoKubeConfig)

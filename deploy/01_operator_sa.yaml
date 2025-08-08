@@ -2,4 +2,4 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: das-operator
-  namespace: das-operator
+  namespace: openshift-das-operator
