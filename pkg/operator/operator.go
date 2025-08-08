@@ -54,13 +54,14 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	if err != nil {
 		return err
 	}
-	operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
 
 	namespace := cc.OperatorNamespace
 	if namespace == "openshift-config-managed" {
 		// we need to fall back to our default namespace rather than library-go's when running outside the cluster
 		namespace = operatorNamespace
 	}
+
+	operatorConfigInformers := operatorclientinformers.NewSharedInformerFactoryWithOptions(operatorConfigClient, 10*time.Minute, operatorclientinformers.WithNamespace(namespace))
 
 	// KubeInformer for Instaslice namespace
 	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(kubeClient, "", namespace)
