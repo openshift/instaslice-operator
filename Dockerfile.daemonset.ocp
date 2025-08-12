@@ -5,7 +5,7 @@ WORKDIR /workspace
 COPY . .
 RUN GO_BUILD_PACKAGES=./cmd/das-daemonset make
 
-FROM nvcr.io/nvidia/cuda:12.9.1-base-ubi9
+FROM nvcr.io/nvidia/cuda:13.0.0-base-ubi9
 
 ENV NVIDIA_DISABLE_REQUIRE="true"
 ENV NVIDIA_VISIBLE_DEVICES=all
