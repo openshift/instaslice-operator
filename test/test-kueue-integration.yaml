@@ -1,0 +1,79 @@
+---
+# Namespace with Kueue management label
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kueue-test
+  labels:
+    kueue.openshift.io/managed: "true"
+---
+# Kueue ResourceFlavor - defines nodes with GPU resources
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ResourceFlavor
+metadata:
+  name: default
+spec:
+  nodeLabels:
+    nvidia.com/gpu.count: "1"
+---
+# Kueue ClusterQueue - manages GPU memory for intelligent scheduling
+# Only needs to track gpu.das.openshift.io/mem for memory-aware admission control
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: gpu-cluster-queue
+spec:
+  resourceGroups:
+  - coveredResources: ["cpu", "memory", "gpu.das.openshift.io/mem"]
+    flavors:
+    - name: default
+      resources:
+      - name: cpu
+        nominalQuota: 100
+      - name: memory
+        nominalQuota: 100Gi
+      - name: gpu.das.openshift.io/mem
+        nominalQuota: 120  # Total GPU memory in GB (3 nodes × 40GB each)
+  namespaceSelector: {}  # Allow all namespaces
+---
+# Kueue LocalQueue - references ClusterQueue and is namespace-specific
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: LocalQueue
+metadata:
+  name: gpu-memory-queue
+  namespace: kueue-test
+spec:
+  clusterQueue: gpu-cluster-queue
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-inference-pod
+  namespace: kueue-test
+  labels:
+    kueue.x-k8s.io/queue-name: gpu-memory-queue
+spec:
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: gpu-app
+    image: "ubuntu:20.04"
+    command:
+    - sleep
+    - infinity
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+    resources:
+      limits:
+        nvidia.com/mig-1g.5gb: "1"
+      requests:
+        nvidia.com/mig-1g.5gb: "1"
+  restartPolicy: Never

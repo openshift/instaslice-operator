@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	instav1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
+	"github.com/openshift/instaslice-operator/pkg/constants"
 	deviceplugins "github.com/openshift/instaslice-operator/pkg/daemonset/deviceplugins"
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	instainformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
@@ -320,79 +322,60 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 
 	var claims []*instav1alpha1.AllocationClaim
 
-	for _, c := range containers {
-		profs := extractProfileNames(c.Resources.Limits)
-		for j, profileName := range profs {
-			allocated := false
-			for _, gpu := range resources.NodeGPUs {
-				if !gpuUsable[gpu.GPUUUID] {
-					continue
-				}
-				idx := gpuAllocated[gpu.GPUUUID]
-				newStart := getStartIndexFromAllocationResults(resources, profileName, idx)
-				if newStart == int32(9) {
-					continue
-				}
-				size, _, _, _ := extractGpuProfile(resources, profileName)
-				specObj := instav1alpha1.AllocationClaimSpec{
-					Profile: profileName,
-					PodRef: corev1.ObjectReference{
-						Kind:      "Pod",
-						Namespace: pod.GetNamespace(),
-						Name:      pod.GetName(),
-						UID:       pod.GetUID(),
-					},
-					MigPlacement: instav1alpha1.Placement{
-						Size:  size,
-						Start: newStart,
-					},
-					GPUUUID:  gpu.GPUUUID,
-					Nodename: types.NodeName(instObj.GetName()),
-				}
-				rawSpec, _ := json.Marshal(&specObj)
-				alloc := &instav1alpha1.AllocationClaim{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      fmt.Sprintf("%s-%s-%s-%d", pod.GetUID(), node.Name, c.Name, j),
-						Namespace: p.namespace,
-					},
-					Spec: runtime.RawExtension{Raw: rawSpec},
-				}
-				created, err := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).Create(ctx, alloc, metav1.CreateOptions{})
-				if err != nil {
-					klog.ErrorS(err, "failed to create AllocationClaim", "AllocationClaim", klog.KObj(alloc))
-					if apierrors.IsAlreadyExists(err) {
-						created, err = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).Get(ctx, alloc.Name, metav1.GetOptions{})
-						if err != nil {
-							klog.ErrorS(err, "failed to get AllocationClaim", "AllocationClaim", klog.KObj(alloc))
-							return framework.AsStatus(err)
-						}
-					} else {
-						for _, ac := range claims {
-							specAC, err2 := getAllocationClaimSpec(ac)
-							if err2 != nil {
-								klog.ErrorS(err2, "decoding AllocationClaim", "alloc", klog.KObj(ac))
-								continue
-							}
-							if string(specAC.Nodename) != node.Name {
-								continue
-							}
-							klog.Info("deleting other AllocationClaim", "AllocationClaim", klog.KObj(ac))
-							err = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
-							if err != nil && !apierrors.IsNotFound(err) {
-								klog.ErrorS(err, "failed to delete other AllocationClaim", "AllocationClaim", klog.KObj(ac))
-								return framework.AsStatus(err)
-							}
-							p.indexerDelete(ac)
-						}
-						klog.ErrorS(err, "failed to delete created AllocationClaim", "AllocationClaim", klog.KObj(created))
+	// Use profiles from getPodProfileNames (already handles annotations and resources)
+	for j, profileName := range profiles {
+		// Use first container for AllocationClaim metadata (container name needed)
+		c := containers[0]
+		allocated := false
+
+		for _, gpu := range resources.NodeGPUs {
+			if !gpuUsable[gpu.GPUUUID] {
+				continue
+			}
+			idx := gpuAllocated[gpu.GPUUUID]
+			newStart := getStartIndexFromAllocationResults(resources, profileName, idx)
+			if newStart == int32(9) {
+				continue
+			}
+			size, _, _, _ := extractGpuProfile(resources, profileName)
+			specObj := instav1alpha1.AllocationClaimSpec{
+				Profile: profileName,
+				PodRef: corev1.ObjectReference{
+					Kind:      "Pod",
+					Namespace: pod.GetNamespace(),
+					Name:      pod.GetName(),
+					UID:       pod.GetUID(),
+				},
+				MigPlacement: instav1alpha1.Placement{
+					Size:  size,
+					Start: newStart,
+				},
+				GPUUUID:  gpu.GPUUUID,
+				Nodename: types.NodeName(instObj.GetName()),
+			}
+			rawSpec, _ := json.Marshal(&specObj)
+			alloc := &instav1alpha1.AllocationClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("%s-%s-%s-%d", pod.GetUID(), node.Name, c.Name, j),
+					Namespace: p.namespace,
+				},
+				Spec: runtime.RawExtension{Raw: rawSpec},
+			}
+			created, err := p.instaClient.OpenShiftOperatorV1alpha1().
+				AllocationClaims(p.namespace).
+				Create(ctx, alloc, metav1.CreateOptions{})
+			if err != nil {
+				klog.ErrorS(err, "failed to create AllocationClaim", "AllocationClaim", klog.KObj(alloc))
+				if apierrors.IsAlreadyExists(err) {
+					created, err = p.instaClient.OpenShiftOperatorV1alpha1().
+						AllocationClaims(p.namespace).
+						Get(ctx, alloc.Name, metav1.GetOptions{})
+					if err != nil {
+						klog.ErrorS(err, "failed to get AllocationClaim", "AllocationClaim", klog.KObj(alloc))
 						return framework.AsStatus(err)
 					}
-				}
-				// TODO - may be there is no need to have updates done here with the mutation lock, there is no race condition for updating the status
-				// in the scheduler. Removing lock could speed things up a bit.
-				updated, err := deviceplugins.UpdateAllocationStatus(ctx, p.instaClient, created, instav1alpha1.AllocationClaimStatusStaged)
-				if err != nil {
-					klog.ErrorS(err, "failed to update AllocationClaim status to Staged", "AllocationClaim", klog.KObj(created))
+				} else {
+					// clean up other claims
 					for _, ac := range claims {
 						specAC, err2 := getAllocationClaimSpec(ac)
 						if err2 != nil {
@@ -402,39 +385,28 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 						if string(specAC.Nodename) != node.Name {
 							continue
 						}
-						klog.Info("deleting staged AllocationClaim", "AllocationClaim", klog.KObj(ac))
-						err = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+						klog.Info("deleting other AllocationClaim", "AllocationClaim", klog.KObj(ac))
+						err = p.instaClient.OpenShiftOperatorV1alpha1().
+							AllocationClaims(ac.Namespace).
+							Delete(ctx, ac.Name, metav1.DeleteOptions{})
 						if err != nil && !apierrors.IsNotFound(err) {
-							klog.ErrorS(err, "failed to delete staged AllocationClaim", "AllocationClaim", klog.KObj(ac))
+							klog.ErrorS(err, "failed to delete other AllocationClaim", "AllocationClaim", klog.KObj(ac))
 							return framework.AsStatus(err)
 						}
 						p.indexerDelete(ac)
 					}
-					specCreated, err3 := getAllocationClaimSpec(created)
-					if err3 != nil {
-						klog.ErrorS(err3, "decoding AllocationClaim", "alloc", klog.KObj(created))
-					} else if string(specCreated.Nodename) == node.Name {
-						err2 := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(created.Namespace).Delete(ctx, created.Name, metav1.DeleteOptions{})
-						if err2 != nil && !apierrors.IsNotFound(err2) {
-							klog.ErrorS(err2, "failed to delete created AllocationClaim", "AllocationClaim", klog.KObj(created))
-							return framework.AsStatus(err2)
-						}
-						p.indexerDelete(created)
-					}
+					klog.ErrorS(err, "failed to delete created AllocationClaim", "AllocationClaim", klog.KObj(created))
 					return framework.AsStatus(err)
 				}
-				p.indexerAdd(updated)
-				for i := int32(0); i < size; i++ {
-					idx[newStart+i] = 1
-				}
-				gpuAllocated[gpu.GPUUUID] = idx
-				claims = append(claims, created)
-				allocated = true
-				klog.InfoS("selected GPU", "uuid", gpu.GPUUUID, "profile", profileName, "node", node.Name, "container", c.Name)
-				break
 			}
-			if !allocated {
-				klog.InfoS("no GPU available", "pod", klog.KObj(pod), "node", node.Name)
+
+			// TODO - may be there is no need to have updates done here with the mutation lock, there is no race condition for updating the status
+			// in the scheduler. Removing lock could speed things up a bit.
+			updated, err := deviceplugins.UpdateAllocationStatus(
+				ctx, p.instaClient, created, instav1alpha1.AllocationClaimStatusStaged)
+			if err != nil {
+				klog.ErrorS(err, "failed to update AllocationClaim status to Staged",
+					"AllocationClaim", klog.KObj(created))
 				for _, ac := range claims {
 					specAC, err2 := getAllocationClaimSpec(ac)
 					if err2 != nil {
@@ -444,15 +416,63 @@ func (p *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *c
 					if string(specAC.Nodename) != node.Name {
 						continue
 					}
-					err = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+					klog.Info("deleting staged AllocationClaim", "AllocationClaim", klog.KObj(ac))
+					err = p.instaClient.OpenShiftOperatorV1alpha1().
+						AllocationClaims(ac.Namespace).
+						Delete(ctx, ac.Name, metav1.DeleteOptions{})
 					if err != nil && !apierrors.IsNotFound(err) {
 						klog.ErrorS(err, "failed to delete staged AllocationClaim", "AllocationClaim", klog.KObj(ac))
 						return framework.AsStatus(err)
 					}
+					p.indexerDelete(ac)
 				}
-				klog.InfoS("no GPU available for pod", "pod", klog.KObj(pod), "node", node.Name)
-				return framework.NewStatus(framework.Unschedulable, "no GPU available")
+				specCreated, err3 := getAllocationClaimSpec(created)
+				if err3 != nil {
+					klog.ErrorS(err3, "decoding AllocationClaim", "alloc", klog.KObj(created))
+				} else if string(specCreated.Nodename) == node.Name {
+					err2 := p.instaClient.OpenShiftOperatorV1alpha1().
+						AllocationClaims(created.Namespace).
+						Delete(ctx, created.Name, metav1.DeleteOptions{})
+					if err2 != nil && !apierrors.IsNotFound(err2) {
+						klog.ErrorS(err2, "failed to delete created AllocationClaim",
+							"AllocationClaim", klog.KObj(created))
+						return framework.AsStatus(err2)
+					}
+					p.indexerDelete(created)
+				}
+				return framework.AsStatus(err)
 			}
+
+			p.indexerAdd(updated)
+			for i := int32(0); i < size; i++ {
+				idx[newStart+i] = 1
+			}
+			gpuAllocated[gpu.GPUUUID] = idx
+			claims = append(claims, created)
+			allocated = true
+			klog.InfoS("selected GPU", "uuid", gpu.GPUUUID, "profile", profileName, "node", node.Name, "container", c.Name)
+			break
+		}
+
+		if !allocated {
+			klog.InfoS("no GPU available", "pod", klog.KObj(pod), "node", node.Name)
+			for _, ac := range claims {
+				specAC, err2 := getAllocationClaimSpec(ac)
+				if err2 != nil {
+					klog.ErrorS(err2, "decoding AllocationClaim", "alloc", klog.KObj(ac))
+					continue
+				}
+				if string(specAC.Nodename) != node.Name {
+					continue
+				}
+				err = p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(ac.Namespace).Delete(ctx, ac.Name, metav1.DeleteOptions{})
+				if err != nil && !apierrors.IsNotFound(err) {
+					klog.ErrorS(err, "failed to delete staged AllocationClaim", "AllocationClaim", klog.KObj(ac))
+					return framework.AsStatus(err)
+				}
+			}
+			klog.InfoS("no GPU available for pod", "pod", klog.KObj(pod), "node", node.Name)
+			return framework.NewStatus(framework.Unschedulable, "no GPU available")
 		}
 	}
 
@@ -566,9 +586,48 @@ func extractProfileNames(limits corev1.ResourceList) []string {
 	return profiles
 }
 
-// getPodProfileNames gathers all requested MIG profiles from regular,
-// init and ephemeral containers.
+// getProfilesFromAnnotations extracts MIG profiles from Pod annotations for Kueue-managed Pods.
+func getProfilesFromAnnotations(pod *corev1.Pod) []string {
+	var profiles []string
+
+	if pod.Annotations == nil {
+		return profiles
+	}
+
+	migProfilesAnnotation, exists := pod.Annotations[constants.MIGProfileAnnotation]
+	if !exists {
+		return profiles
+	}
+
+	klog.InfoS("found MIG profiles in Pod annotations for Kueue-managed Pod", "annotation", migProfilesAnnotation)
+
+	// Parse annotation format: "1g.5gb:1,2g.10gb:2"
+	profileEntries := strings.Split(migProfilesAnnotation, ",")
+	for _, entry := range profileEntries {
+		parts := strings.Split(entry, ":")
+		if len(parts) == 2 {
+			profile := parts[0]
+			if quantity, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+				for i := int64(0); i < quantity; i++ {
+					profiles = append(profiles, profile)
+				}
+				klog.InfoS("extracted MIG profile from annotation", "profile", profile, "quantity", quantity)
+			}
+		}
+	}
+
+	return profiles
+}
+
+// getPodProfileNames gathers all requested MIG profiles from annotations (Kueue-managed Pods)
+// or from regular, init and ephemeral container resources (non-Kueue Pods).
 func getPodProfileNames(pod *corev1.Pod) []string {
+	// First check annotations for Kueue-managed Pods
+	if profiles := getProfilesFromAnnotations(pod); len(profiles) > 0 {
+		return profiles
+	}
+
+	// Fallback to standard resource-based extraction for non-Kueue Pods
 	var profiles []string
 	for _, c := range pod.Spec.Containers {
 		profiles = append(profiles, extractProfileNames(c.Resources.Limits)...)

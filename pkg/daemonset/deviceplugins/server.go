@@ -35,6 +35,7 @@ import (
 	utiluuid "k8s.io/apimachinery/pkg/util/uuid"
 
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
+	"github.com/openshift/instaslice-operator/pkg/constants"
 )
 
 var _ pluginapi.DevicePluginServer = (*Server)(nil)
@@ -148,22 +149,26 @@ func (s *Server) ListAndWatch(req *pluginapi.Empty, stream pluginapi.DevicePlugi
 	// Detect system reboot by comparing in-use allocations with on-disk CDI specs
 	// TODO : filter out CDI specs and AllocationClaims that are not relevant to this server's resource
 	// because it will race with other servers that will be running on the same node.
-	migProfile := profileFromResourceName(s.Manager.ResourceName)
-	migProfile = unsanitizeProfileName(migProfile)
-	key := fmt.Sprintf("%s/%s", s.NodeName, migProfile)
-
 	var inUseAllocs []*instav1.AllocationClaim
-	if allocationIndexer != nil {
-		s.allocMutex.Lock()
-		objs, err := allocationIndexer.ByIndex("node-MigProfile", key)
-		s.allocMutex.Unlock()
-		if err != nil {
-			klog.ErrorS(err, "failed to lookup allocations by index", "key", key)
-		} else {
-			for _, obj := range objs {
-				if a, ok := obj.(*instav1.AllocationClaim); ok {
-					if a.Status.State == instav1.AllocationClaimStatusInUse {
-						inUseAllocs = append(inUseAllocs, a)
+
+	// Skip allocation checking for GPU memory resource as it doesn't use AllocationClaims.
+	if s.Manager.ResourceName != constants.GPUMemoryResource {
+		migProfile := profileFromResourceName(s.Manager.ResourceName)
+		migProfile = unsanitizeProfileName(migProfile)
+		key := fmt.Sprintf("%s/%s", s.NodeName, migProfile)
+
+		if allocationIndexer != nil {
+			s.allocMutex.Lock()
+			objs, err := allocationIndexer.ByIndex("node-MigProfile", key)
+			s.allocMutex.Unlock()
+			if err != nil {
+				klog.ErrorS(err, "failed to lookup allocations by index", "key", key)
+			} else {
+				for _, obj := range objs {
+					if a, ok := obj.(*instav1.AllocationClaim); ok {
+						if a.Status.State == instav1.AllocationClaimStatusInUse {
+							inUseAllocs = append(inUseAllocs, a)
+						}
 					}
 				}
 			}
@@ -205,8 +210,37 @@ func (s *Server) ListAndWatch(req *pluginapi.Empty, stream pluginapi.DevicePlugi
 	}
 }
 
+// allocateGPUMemory handles allocation for GPU memory resources that are used by Kueue for scheduling
+// but don't require actual device allocation.
+func (s *Server) allocateGPUMemory(ctx context.Context, req *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
+	containerRequests := req.GetContainerRequests()
+	klog.InfoS("Allocating GPU memory resources", "containerRequests", len(containerRequests))
+
+	resp := &pluginapi.AllocateResponse{
+		ContainerResponses: make([]*pluginapi.ContainerAllocateResponse, len(containerRequests)),
+	}
+
+	for i, cr := range containerRequests {
+		deviceCount := len(cr.GetDevicesIDs())
+		klog.InfoS("Allocating GPU memory devices", "container", i, "deviceCount", deviceCount)
+
+		// GPU memory resources are virtual - no actual device allocation needed.
+		resp.ContainerResponses[i] = &pluginapi.ContainerAllocateResponse{
+			Envs: map[string]string{},
+		}
+	}
+
+	klog.InfoS("Successfully allocated GPU memory resources", "containers", len(resp.ContainerResponses))
+	return resp, nil
+}
+
 func (s *Server) Allocate(ctx context.Context, req *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
-	klog.InfoS("Received Allocate request", "containerRequests", req.GetContainerRequests(), "emulatedMode", s.EmulatedMode)
+	klog.InfoS("Received Allocate request", "containerRequests", req.GetContainerRequests(), "emulatedMode", s.EmulatedMode, "resource", s.Manager.ResourceName)
+
+	// Handle GPU memory resource allocation differently.
+	if s.Manager.ResourceName == constants.GPUMemoryResource {
+		return s.allocateGPUMemory(ctx, req)
+	}
 
 	total := 0
 	for _, cr := range req.GetContainerRequests() {

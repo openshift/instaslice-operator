@@ -227,3 +227,116 @@ func TestMutatePodNoResource(t *testing.T) {
 		t.Fatalf("env vars should not be added")
 	}
 }
+
+func TestMutatePodKueueManaged(t *testing.T) {
+	hook := &InstasliceWebhook{}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "kueue-pod",
+			Labels: map[string]string{
+				"kueue.x-k8s.io/queue-name": "test-queue",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "test-container",
+					Image: "ubuntu:20.04",
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceName("nvidia.com/mig-1g.5gb"): resource.MustParse("1"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	data, err := hook.mutatePod(pod)
+	if err != nil {
+		t.Fatalf("mutatePod returned error: %v", err)
+	}
+
+	mutated := &corev1.Pod{}
+	if err := json.Unmarshal(data, mutated); err != nil {
+		t.Fatalf("unmarshal mutated pod: %v", err)
+	}
+
+	limits := mutated.Spec.Containers[0].Resources.Limits
+
+	// For Kueue-managed Pods: Should NOT have mig.das.com/* resources
+	if _, exists := limits[corev1.ResourceName("mig.das.com/1g.5gb")]; exists {
+		t.Fatalf("Kueue-managed Pod should NOT have mig.das.com/* resources")
+	}
+
+	// For Kueue-managed Pods: Should have gpu.das.openshift.io/mem
+	gpuMem, exists := limits[corev1.ResourceName("gpu.das.openshift.io/mem")]
+	if !exists {
+		t.Fatalf("Kueue-managed Pod should have gpu.das.openshift.io/mem resource")
+	}
+	if gpuMem.Value() != 5 {
+		t.Fatalf("expected GPU memory 5GB, got %d", gpuMem.Value())
+	}
+
+	// Should use DAS scheduler
+	if mutated.Spec.SchedulerName != secondaryScheduler {
+		t.Fatalf("expected DAS scheduler to be set")
+	}
+}
+
+func TestMutatePodNonKueue(t *testing.T) {
+	hook := &InstasliceWebhook{}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "non-kueue-pod",
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "test-container",
+					Image: "ubuntu:20.04",
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceName("nvidia.com/mig-1g.5gb"): resource.MustParse("1"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	data, err := hook.mutatePod(pod)
+	if err != nil {
+		t.Fatalf("mutatePod returned error: %v", err)
+	}
+
+	mutated := &corev1.Pod{}
+	if err := json.Unmarshal(data, mutated); err != nil {
+		t.Fatalf("unmarshal mutated pod: %v", err)
+	}
+
+	limits := mutated.Spec.Containers[0].Resources.Limits
+
+	// For non-Kueue Pods: Should have mig.das.com/* resources (current DAS logic)
+	migResource, exists := limits[corev1.ResourceName("mig.das.com/1g.5gb")]
+	if !exists {
+		t.Fatalf("non-Kueue Pod should have mig.das.com/* resources")
+	}
+	if migResource.Value() != 1 {
+		t.Fatalf("expected MIG resource quantity 1, got %d", migResource.Value())
+	}
+
+	// For non-Kueue Pods: Should also have gpu.das.openshift.io/mem
+	gpuMem, exists := limits[corev1.ResourceName("gpu.das.openshift.io/mem")]
+	if !exists {
+		t.Fatalf("non-Kueue Pod should have gpu.das.openshift.io/mem resource")
+	}
+	if gpuMem.Value() != 5 {
+		t.Fatalf("expected GPU memory 5GB, got %d", gpuMem.Value())
+	}
+
+	// Should use DAS scheduler
+	if mutated.Spec.SchedulerName != secondaryScheduler {
+		t.Fatalf("expected DAS scheduler to be set")
+	}
+}

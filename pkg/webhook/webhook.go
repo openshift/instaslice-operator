@@ -2,13 +2,19 @@ package webhook
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 
 	admissionctl "sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
+
+	"github.com/openshift/instaslice-operator/pkg/constants"
 )
 
 const (
@@ -37,6 +43,20 @@ type InstasliceWebhook struct{}
 
 func NewWebhook() Webhook {
 	return &InstasliceWebhook{}
+}
+
+// extractGPUMemoryFromProfile extracts the GPU memory in GB from a MIG profile string.
+func extractGPUMemoryFromProfile(profile string) int64 {
+	// Match patterns like "1g.5gb", "2g.10gb", "3g.20gb", etc.
+	// Also handle compute instance patterns like "1c.1g.5gb"
+	re := regexp.MustCompile(`(?:\d+c\.)?(\d+)g\.(\d+)gb`)
+	matches := re.FindStringSubmatch(profile)
+	if len(matches) >= 3 {
+		if memGB, err := strconv.ParseInt(matches[2], 10, 64); err == nil {
+			return memGB
+		}
+	}
+	return 0
 }
 
 // GetURI implements Webhook interface
@@ -93,6 +113,21 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 	mutatedPod := pod.DeepCopy()
 	needsScheduler := false
 
+	// Check if this Pod will be managed by Kueue (has queue label)
+	isKueueManaged := false
+	if mutatedPod.Labels != nil {
+		if queueName, exists := mutatedPod.Labels["kueue.x-k8s.io/queue-name"]; exists {
+			isKueueManaged = true
+			klog.InfoS("Pod has Kueue queue label - using annotation-based approach", "name", pod.Name, "queue", queueName)
+		}
+	}
+	if !isKueueManaged {
+		klog.InfoS("Pod not managed by Kueue - using standard resource injection", "name", pod.Name)
+	}
+
+	// Track MIG profiles for DAS scheduler via annotations (Kueue-managed Pods only).
+	migProfiles := make(map[string]int64)
+
 	mutateResources := func(c *corev1.Container) {
 		if c.Resources.Limits == nil {
 			return
@@ -100,34 +135,67 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 		klog.InfoS("checking container resources", "container", c.Name)
 		newLimits := corev1.ResourceList{}
 		newRequests := corev1.ResourceList{}
+		totalGPUMemory := int64(0)
 
 		for name, qty := range c.Resources.Limits {
 			key := string(name)
 			switch {
-			case strings.HasPrefix(key, "nvidia.com/mig-"):
-				profile := strings.TrimPrefix(key, "nvidia.com/mig-")
-				newKey := corev1.ResourceName("mig.das.com/" + profile)
-				klog.InfoS("renaming GPU resource", "from", key, "to", newKey)
-				newLimits[newKey] = qty
-				newRequests[newKey] = qty
+			case strings.HasPrefix(key, constants.NVIDIAMIGResourcePrefix):
+				profile := strings.TrimPrefix(key, constants.NVIDIAMIGResourcePrefix)
+				// For Kueue-managed Pods: Store original profile in annotations for DAS scheduler.
+				if !isKueueManaged {
+					newKey := corev1.ResourceName(constants.MIGResourcePrefix + profile)
+					klog.InfoS("renaming GPU resource for non-Kueue Pod", "from", key, "to", newKey)
+					newLimits[newKey] = qty
+					newRequests[newKey] = qty
+				} else {
+					// Store original profile for DAS scheduler to read from annotations.
+					migProfiles[profile] = qty.Value()
+					klog.InfoS("storing original MIG profile for Kueue-managed Pod", "profile", profile, "quantity", qty.Value())
+				}
 				needsScheduler = true
-			case strings.HasPrefix(key, "nvidia.com/"):
-				newKey := corev1.ResourceName(strings.Replace(key, "nvidia.com/", "mig.das.com/", 1))
+
+				// Extract GPU memory from profile and accumulate.
+				memGB := extractGPUMemoryFromProfile(profile)
+				if memGB > 0 {
+					totalGPUMemory += memGB * qty.Value()
+					klog.InfoS("extracted GPU memory from profile", "profile", profile, "memoryGB", memGB, "quantity", qty.Value(), "totalMemory", totalGPUMemory)
+				}
+			case strings.HasPrefix(key, constants.NVIDIAResourcePrefix):
+				newKey := corev1.ResourceName(strings.Replace(key, constants.NVIDIAResourcePrefix, constants.MIGResourcePrefix, 1))
 				klog.InfoS("renaming GPU resource", "from", key, "to", newKey)
 				newLimits[newKey] = qty
 				newRequests[newKey] = qty
 				needsScheduler = true
 			default:
 				newLimits[name] = qty
-				if strings.HasPrefix(key, "mig.das.com/") {
+				if strings.HasPrefix(key, constants.MIGResourcePrefix) {
 					needsScheduler = true
+					// Check if this is already a MIG profile and extract memory
+					if strings.Contains(key, constants.MIGResourcePrefix) {
+						profile := strings.TrimPrefix(key, constants.MIGResourcePrefix)
+						memGB := extractGPUMemoryFromProfile(profile)
+						if memGB > 0 {
+							totalGPUMemory += memGB * qty.Value()
+							klog.InfoS("extracted GPU memory from existing profile", "profile", profile, "memoryGB", memGB, "quantity", qty.Value(), "totalMemory", totalGPUMemory)
+						}
+					}
 				}
 			}
 		}
 
+		// Inject GPU memory resource if we found any MIG profiles.
+		if totalGPUMemory > 0 {
+			gpuMemResource := corev1.ResourceName(constants.GPUMemoryResource)
+			gpuMemQuantity := resource.NewQuantity(totalGPUMemory, resource.DecimalSI)
+			newLimits[gpuMemResource] = *gpuMemQuantity
+			newRequests[gpuMemResource] = *gpuMemQuantity
+			klog.InfoS("injecting GPU memory resource", "resource", constants.GPUMemoryResource, "totalMemoryGB", totalGPUMemory)
+		}
+
 		for name, qty := range c.Resources.Requests {
 			key := string(name)
-			if !strings.HasPrefix(key, "nvidia.com/") && !strings.HasPrefix(key, "mig.das.com/") {
+			if !strings.HasPrefix(key, constants.NVIDIAResourcePrefix) && !strings.HasPrefix(key, constants.MIGResourcePrefix) && key != constants.GPUMemoryResource {
 				newRequests[name] = qty
 			}
 		}
@@ -154,6 +222,20 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 	if needsScheduler {
 		mutatedPod.Spec.SchedulerName = secondaryScheduler
 		klog.InfoS("using secondary scheduler", "name", mutatedPod.Name)
+	}
+
+	if len(migProfiles) > 0 && isKueueManaged {
+		if mutatedPod.Annotations == nil {
+			mutatedPod.Annotations = make(map[string]string)
+		}
+
+		// Serialize MIG profiles to annotation: "1g.5gb:1,2g.10gb:2"
+		migData := make([]string, 0, len(migProfiles))
+		for profile, quantity := range migProfiles {
+			migData = append(migData, fmt.Sprintf("%s:%d", profile, quantity))
+		}
+		mutatedPod.Annotations[constants.MIGProfileAnnotation] = strings.Join(migData, ",")
+		klog.InfoS("added MIG profiles to Pod annotations for Kueue-managed Pod", "annotation", mutatedPod.Annotations[constants.MIGProfileAnnotation])
 	}
 
 	klog.InfoS("finished pod mutation", "mutatedPod", mutatedPod)
