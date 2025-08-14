@@ -164,8 +164,14 @@ For local development:
 3. Run `just bundle-generate` to generate the bundle manifests.
 4. Run `just build-push-bundle` to build and push the bundle image to your repository.
 5. Run `just deploy-cert-manager-ocp` to install cert-manager on OpenShift.
-6. Run `operator-sdk run bundle --namespace <namespace> ${BUNDLE_IMAGE}` to deploy
+6. Run `just deploy-nfd-ocp` to install Node Feature Discovery (NFD) on OpenShift.
+7. Run `just deploy-nvidia-ocp` to install NVIDIA GPU operator on Openshift.
+8. Run `operator-sdk run bundle --namespace <namespace> ${BUNDLE_IMAGE}` to deploy
    the operator.
+9. Apply the `DASOperator` custom resource to initialize the operator
+    ```bash
+    kubectl apply -f deploy/03_instaslice_operator.cr.yaml` 
+    ```
 
 #### Using a base CSV for bundle generation
 
