@@ -47,6 +47,8 @@ rules:
   - get
   - list
   - watch
+  - update
+  - patch
 - apiGroups:
   - config.openshift.io
   resources:
