@@ -1,0 +1,180 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mig-uuid-verification-dual-deployment
+  namespace: default
+  labels:
+    app: mig-uuid-verification-dual
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mig-uuid-verification-dual
+  template:
+    metadata:
+      labels:
+        app: mig-uuid-verification-dual
+    spec:
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - mig-uuid-verification-dual
+            topologyKey: kubernetes.io/hostname
+      restartPolicy: Always
+      containers:
+      - name: mig-uuid-printer
+        image: "nvidia/cuda:12.4.1-devel-ubuntu22.04"
+        command: ["sh", "-c"]
+        args:
+          - |
+            echo "=== MIG UUID Dual-Slice Test (Pod: $HOSTNAME) ==="
+            echo "This container will print the MIG slice UUIDs for all visible CUDA devices using CUDA Driver API"
+            echo "Pod hostname: $HOSTNAME"
+            echo "Node name: $NODE_NAME"
+            echo ""
+            echo "Environment Variables:"
+            echo "NVIDIA_VISIBLE_DEVICES=$NVIDIA_VISIBLE_DEVICES"
+            echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
+            echo ""
+            echo "Expected: CUDA_VISIBLE_DEVICES should be '0,1'"
+            echo "Expected: Two MIG UUIDs matching NVIDIA_VISIBLE_DEVICES entries"
+            echo ""
+
+            # Create and compile CUDA program to print all MIG UUIDs
+            cat > /tmp/print_all_mig_uuid.cu << 'EOF'
+            // Assumes latest CUDA/driver with cuDeviceGetUuid_v2
+            #include <cuda.h>
+            #include <cuda_runtime.h>
+            #include <stdio.h>
+            #include <stdlib.h>
+
+            __global__ void vecAdd(const float* A, const float* B, float* C, int N) {
+                int i = blockIdx.x * blockDim.x + threadIdx.x;
+                if (i < N) C[i] = A[i] + B[i];
+            }
+
+            static void print_uuid(const unsigned char bytes[16]) {
+                for (int i = 0; i < 16; i++) {
+                    printf("%02x", bytes[i]);
+                    if (i == 3 || i == 5 || i == 7 || i == 9) printf("-");
+                }
+            }
+
+            int main() {
+                int count = 0;
+                cudaError_t cerr = cudaGetDeviceCount(&count);
+                if (cerr != cudaSuccess) {
+                    printf("ERROR: cudaGetDeviceCount failed: %s\n", cudaGetErrorString(cerr));
+                    return 1;
+                }
+                printf("CUDA_DEVICE_COUNT=%d\n", count);
+
+                CUresult cr = cuInit(0);
+                if (cr != CUDA_SUCCESS) {
+                    printf("ERROR: cuInit failed: %d\n", (int)cr);
+                    return 1;
+                }
+
+                for (int dev = 0; dev < count; ++dev) {
+                    cudaSetDevice(dev);
+                    CUdevice cudev;
+                    cr = cuDeviceGet(&cudev, dev);
+                    if (cr != CUDA_SUCCESS) {
+                        printf("ERROR: cuDeviceGet(%d) failed: %d\n", dev, (int)cr);
+                        continue;
+                    }
+                    CUuuid uuid;
+                    cr = cuDeviceGetUuid_v2(&uuid, cudev);
+                    if (cr != CUDA_SUCCESS) {
+                        printf("ERROR: cuDeviceGetUuid_v2(%d) failed: %d\n", dev, (int)cr);
+                        continue;
+                    }
+                    printf("MIG_DEVICE_%d_UUID=MIG-", dev);
+                    print_uuid((const unsigned char*)uuid.bytes);
+                    printf("\n");
+
+                    // Minimal vector add on this device
+                    const int N = 1 << 16;
+                    const size_t size = N * sizeof(float);
+                    float *h_A = (float*)malloc(size);
+                    float *h_B = (float*)malloc(size);
+                    float *h_C = (float*)malloc(size);
+                    if (!h_A || !h_B || !h_C) {
+                        printf("ERROR: Host allocation failed on device %d\n", dev);
+                        return 1;
+                    }
+                    for (int i = 0; i < N; ++i) { h_A[i] = 1.0f; h_B[i] = 2.0f; }
+                    float *d_A = nullptr, *d_B = nullptr, *d_C = nullptr;
+                    if (cudaMalloc(&d_A, size) != cudaSuccess ||
+                        cudaMalloc(&d_B, size) != cudaSuccess ||
+                        cudaMalloc(&d_C, size) != cudaSuccess) {
+                        printf("ERROR: Device allocation failed on device %d\n", dev);
+                        return 1;
+                    }
+                    cerr = cudaMemcpy(d_A, h_A, size, cudaMemcpyHostToDevice);
+                    if (cerr != cudaSuccess) { printf("ERROR: memcpy H2D A on dev %d: %s\n", dev, cudaGetErrorString(cerr)); return 1; }
+                    cerr = cudaMemcpy(d_B, h_B, size, cudaMemcpyHostToDevice);
+                    if (cerr != cudaSuccess) { printf("ERROR: memcpy H2D B on dev %d: %s\n", dev, cudaGetErrorString(cerr)); return 1; }
+                    int threads = 256; int blocks = (N + threads - 1) / threads;
+                    vecAdd<<<blocks, threads>>>(d_A, d_B, d_C, N);
+                    cerr = cudaGetLastError();
+                    if (cerr != cudaSuccess) { printf("ERROR: Kernel launch on dev %d: %s\n", dev, cudaGetErrorString(cerr)); return 1; }
+                    cerr = cudaMemcpy(h_C, d_C, size, cudaMemcpyDeviceToHost);
+                    if (cerr != cudaSuccess) { printf("ERROR: memcpy D2H C on dev %d: %s\n", dev, cudaGetErrorString(cerr)); return 1; }
+                    bool ok = true; for (int i = 0; i < 10; ++i) { if (h_C[i] != 3.0f) { ok = false; break; } }
+                    printf("VECTOR_ADD_STATUS_DEV_%d=%s\n", dev, ok ? "OK" : "FAIL");
+                    cudaFree(d_A); cudaFree(d_B); cudaFree(d_C);
+                    free(h_A); free(h_B); free(h_C);
+                }
+
+                const char* nvv = getenv("NVIDIA_VISIBLE_DEVICES");
+                const char* cvv = getenv("CUDA_VISIBLE_DEVICES");
+                printf("NVIDIA_VISIBLE_DEVICES=%s\n", nvv ? nvv : "NOT_SET");
+                printf("CUDA_VISIBLE_DEVICES=%s\n", cvv ? cvv : "NOT_SET");
+                printf("POD_HOSTNAME=%s\n", getenv("HOSTNAME"));
+                printf("NODE_NAME=%s\n", getenv("NODE_NAME"));
+                return 0;
+            }
+            EOF
+
+            echo "Compiling CUDA program..."
+            nvcc -o /tmp/print_all_mig_uuid /tmp/print_all_mig_uuid.cu -lcuda
+
+            echo "Running MIG UUID extraction across all visible devices..."
+            /tmp/print_all_mig_uuid
+
+            echo ""
+            echo "=== Test Summary for Pod: $HOSTNAME ==="
+            echo "This pod should have:"
+            echo "- CUDA_VISIBLE_DEVICES=0,1"
+            echo "- Two distinct MIG_DEVICE_0_UUID and MIG_DEVICE_1_UUID"
+            echo "- Successful CUDA operations on both devices"
+            echo ""
+
+            # Keep running to allow log inspection
+            while true; do
+              echo "Pod $HOSTNAME is running with two MIG slices..."
+              sleep 300
+            done
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        resources:
+          limits:
+            # Request one of each MIG slice
+            nvidia.com/mig-1g.5gb: "2"
+            # nvidia.com/mig-2g.10gb: "1"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
+

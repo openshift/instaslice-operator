@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -564,7 +565,8 @@ func BuildCDIDevices(kind, sanitizedClass, id string, annotations map[string]str
 		env = []string{envVar}
 		if eq := strings.Index(envVar, "="); eq != -1 {
 			val := envVar[eq+1:]
-			env = append(env, fmt.Sprintf("CUDA_VISIBLE_DEVICES=%s", val))
+			cudaVal := convertUUIDsToIndices(val)
+			env = append(env, fmt.Sprintf("CUDA_VISIBLE_DEVICES=%s", cudaVal))
 		}
 	}
 	specObj := &cdispec.Spec{
@@ -640,6 +642,23 @@ func WriteCDISpecForResource(resourceName string, id string, annotations map[str
 	klog.InfoS("wrote CDI spec", "name", specName)
 
 	return specPath, cdiDevices, nil
+}
+
+// convertUUIDsToIndices converts a comma-separated list of UUIDs to indexed values
+// e.g., "uuid1,uuid2,uuid3" becomes "0,1,2"
+func convertUUIDsToIndices(uuidList string) string {
+	if uuidList == "" {
+		return ""
+	}
+
+	uuids := strings.Split(uuidList, ",")
+	indices := make([]string, len(uuids))
+
+	for i := range uuids {
+		indices[i] = strconv.Itoa(i)
+	}
+
+	return strings.Join(indices, ",")
 }
 
 // writeCDISpecForResource is kept for backwards compatibility with older code.
