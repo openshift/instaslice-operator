@@ -330,6 +330,27 @@ func TestGetAllocationsByNodeGPU(t *testing.T) {
 	}
 }
 
+func TestConvertUUIDsToIndices(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"uuid1", "0"},
+		{"uuid1,uuid2", "0,1"},
+		{"uuid1,uuid2,uuid3", "0,1,2"},
+		{"GPU-12345678-1234-5678-abcd-123456789012", "0"},
+		{"GPU-12345678-1234-5678-abcd-123456789012,GPU-87654321-4321-8765-dcba-210987654321", "0,1"},
+	}
+
+	for _, test := range tests {
+		result := convertUUIDsToIndices(test.input)
+		if result != test.expected {
+			t.Errorf("convertUUIDsToIndices(%q) = %q, expected %q", test.input, result, test.expected)
+		}
+	}
+}
+
 func TestWriteCDISpecForResourceEnv(t *testing.T) {
 	dir := t.TempDir()
 	if err := cdi.Configure(cdi.WithSpecDirs(dir), cdi.WithAutoRefresh(false)); err != nil {
@@ -353,7 +374,35 @@ func TestWriteCDISpecForResourceEnv(t *testing.T) {
 	if len(env) != 2 {
 		t.Fatalf("unexpected env %v", env)
 	}
-	if env[0] != "NVIDIA_VISIBLE_DEVICES=foo" || env[1] != "CUDA_VISIBLE_DEVICES=foo" {
+	if env[0] != "NVIDIA_VISIBLE_DEVICES=foo" || env[1] != "CUDA_VISIBLE_DEVICES=0" {
+		t.Fatalf("unexpected env %v", env)
+	}
+}
+
+func TestWriteCDISpecForResourceEnvMultipleUUIDs(t *testing.T) {
+	dir := t.TempDir()
+	if err := cdi.Configure(cdi.WithSpecDirs(dir), cdi.WithAutoRefresh(false)); err != nil {
+		t.Fatalf("failed to configure cdi: %v", err)
+	}
+
+	path, _, err := WriteCDISpecForResource("vendor/class", "id-env-multi", nil, "NVIDIA_VISIBLE_DEVICES=uuid1,uuid2,uuid3")
+	if err != nil {
+		t.Fatalf("failed to write spec: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read spec: %v", err)
+	}
+	var spec cdispec.Spec
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatalf("failed to unmarshal spec: %v", err)
+	}
+	env := spec.Devices[0].ContainerEdits.Env
+	if len(env) != 2 {
+		t.Fatalf("unexpected env %v", env)
+	}
+	if env[0] != "NVIDIA_VISIBLE_DEVICES=uuid1,uuid2,uuid3" || env[1] != "CUDA_VISIBLE_DEVICES=0,1,2" {
 		t.Fatalf("unexpected env %v", env)
 	}
 }

@@ -1,0 +1,183 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mig-uuid-verification-multicontainer
+  namespace: default
+  labels:
+    app: mig-uuid-verification-multicontainer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mig-uuid-verification-multicontainer
+  template:
+    metadata:
+      labels:
+        app: mig-uuid-verification-multicontainer
+    spec:
+      restartPolicy: Always
+      containers:
+      - name: gpu-a
+        image: "nvidia/cuda:12.4.1-devel-ubuntu22.04"
+        command: ["sh", "-c"]
+        args:
+          - |
+            echo "=== Multi-Container MIG Test (Container: gpu-a, Pod: $HOSTNAME) ==="
+            echo "NVIDIA_VISIBLE_DEVICES=$NVIDIA_VISIBLE_DEVICES"
+            echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
+            
+            cat > /tmp/print_mig_uuid.cu << 'EOF'
+            // Assumes latest CUDA/driver with cuDeviceGetUuid_v2
+            #include <cuda.h>
+            #include <cuda_runtime.h>
+            #include <stdio.h>
+            #include <stdlib.h>
+
+            __global__ void vecAdd(const float* A, const float* B, float* C, int N) {
+                int i = blockIdx.x * blockDim.x + threadIdx.x;
+                if (i < N) C[i] = A[i] + B[i];
+            }
+
+            static void print_uuid(const unsigned char bytes[16]) {
+                for (int i = 0; i < 16; i++) {
+                    printf("%02x", bytes[i]);
+                    if (i == 3 || i == 5 || i == 7 || i == 9) printf("-");
+                }
+            }
+
+            int main() {
+                // Expect exactly one visible device in this container
+                int count = 0;
+                cudaError_t cerr = cudaGetDeviceCount(&count);
+                if (cerr != cudaSuccess) { printf("ERROR: cudaGetDeviceCount: %s\n", cudaGetErrorString(cerr)); return 1; }
+                printf("CUDA_DEVICE_COUNT=%d\n", count);
+
+                int dev = 0;
+                cudaSetDevice(dev);
+
+                CUresult cr = cuInit(0);
+                if (cr != CUDA_SUCCESS) { printf("ERROR: cuInit: %d\n", (int)cr); return 1; }
+                CUdevice cudev; cr = cuDeviceGet(&cudev, dev);
+                if (cr != CUDA_SUCCESS) { printf("ERROR: cuDeviceGet: %d\n", (int)cr); return 1; }
+                CUuuid uuid; cr = cuDeviceGetUuid_v2(&uuid, cudev);
+                if (cr != CUDA_SUCCESS) { printf("ERROR: cuDeviceGetUuid_v2: %d\n", (int)cr); return 1; }
+                printf("MIG_SLICE_UUID=MIG-"); print_uuid((const unsigned char*)uuid.bytes); printf("\n");
+
+                // Quick GPU op to verify access
+                const int N = 1 << 16; const size_t sz = N * sizeof(float);
+                float *hA=(float*)malloc(sz), *hB=(float*)malloc(sz), *hC=(float*)malloc(sz);
+                for (int i=0;i<N;++i){hA[i]=1.0f;hB[i]=2.0f;}
+                float *dA=nullptr,*dB=nullptr,*dC=nullptr;
+                if (cudaMalloc(&dA,sz)!=cudaSuccess||cudaMalloc(&dB,sz)!=cudaSuccess||cudaMalloc(&dC,sz)!=cudaSuccess){printf("ERROR: cudaMalloc\n");return 1;}
+                cudaMemcpy(dA,hA,sz,cudaMemcpyHostToDevice); cudaMemcpy(dB,hB,sz,cudaMemcpyHostToDevice);
+                int threads=256, blocks=(N+threads-1)/threads; vecAdd<<<blocks,threads>>>(dA,dB,dC,N);
+                cerr = cudaGetLastError(); if (cerr!=cudaSuccess){printf("ERROR: kernel: %s\n", cudaGetErrorString(cerr)); return 1;}
+                cudaMemcpy(hC,dC,sz,cudaMemcpyDeviceToHost);
+                bool ok=true; for(int i=0;i<10;++i){ if(hC[i]!=3.0f){ok=false;break;} }
+                printf("VECTOR_ADD_STATUS=%s\n", ok?"OK":"FAIL");
+                cudaFree(dA); cudaFree(dB); cudaFree(dC); free(hA); free(hB); free(hC);
+                return 0;
+            }
+            EOF
+
+            nvcc -o /tmp/print_mig_uuid /tmp/print_mig_uuid.cu -lcuda
+            /tmp/print_mig_uuid
+            
+            while true; do echo "gpu-a running..."; sleep 300; done
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        resources:
+          limits:
+            nvidia.com/mig-1g.5gb: "1"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
+
+      - name: gpu-b
+        image: "nvidia/cuda:12.4.1-devel-ubuntu22.04"
+        command: ["sh", "-c"]
+        args:
+          - |
+            echo "=== Multi-Container MIG Test (Container: gpu-b, Pod: $HOSTNAME) ==="
+            echo "NVIDIA_VISIBLE_DEVICES=$NVIDIA_VISIBLE_DEVICES"
+            echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
+            
+            cat > /tmp/print_mig_uuid.cu << 'EOF'
+            // Assumes latest CUDA/driver with cuDeviceGetUuid_v2
+            #include <cuda.h>
+            #include <cuda_runtime.h>
+            #include <stdio.h>
+            #include <stdlib.h>
+
+            __global__ void vecAdd(const float* A, const float* B, float* C, int N) {
+                int i = blockIdx.x * blockDim.x + threadIdx.x;
+                if (i < N) C[i] = A[i] + B[i];
+            }
+
+            static void print_uuid(const unsigned char bytes[16]) {
+                for (int i = 0; i < 16; i++) {
+                    printf("%02x", bytes[i]);
+                    if (i == 3 || i == 5 || i == 7 || i == 9) printf("-");
+                }
+            }
+
+            int main() {
+                // Expect exactly one visible device in this container
+                int count = 0;
+                cudaError_t cerr = cudaGetDeviceCount(&count);
+                if (cerr != cudaSuccess) { printf("ERROR: cudaGetDeviceCount: %s\n", cudaGetErrorString(cerr)); return 1; }
+                printf("CUDA_DEVICE_COUNT=%d\n", count);
+
+                int dev = 0;
+                cudaSetDevice(dev);
+
+                CUresult cr = cuInit(0);
+                if (cr != CUDA_SUCCESS) { printf("ERROR: cuInit: %d\n", (int)cr); return 1; }
+                CUdevice cudev; cr = cuDeviceGet(&cudev, dev);
+                if (cr != CUDA_SUCCESS) { printf("ERROR: cuDeviceGet: %d\n", (int)cr); return 1; }
+                CUuuid uuid; cr = cuDeviceGetUuid_v2(&uuid, cudev);
+                if (cr != CUDA_SUCCESS) { printf("ERROR: cuDeviceGetUuid_v2: %d\n", (int)cr); return 1; }
+                printf("MIG_SLICE_UUID=MIG-"); print_uuid((const unsigned char*)uuid.bytes); printf("\n");
+
+                // Quick GPU op to verify access
+                const int N = 1 << 16; const size_t sz = N * sizeof(float);
+                float *hA=(float*)malloc(sz), *hB=(float*)malloc(sz), *hC=(float*)malloc(sz);
+                for (int i=0;i<N;++i){hA[i]=1.0f;hB[i]=2.0f;}
+                float *dA=nullptr,*dB=nullptr,*dC=nullptr;
+                if (cudaMalloc(&dA,sz)!=cudaSuccess||cudaMalloc(&dB,sz)!=cudaSuccess||cudaMalloc(&dC,sz)!=cudaSuccess){printf("ERROR: cudaMalloc\n");return 1;}
+                cudaMemcpy(dA,hA,sz,cudaMemcpyHostToDevice); cudaMemcpy(dB,hB,sz,cudaMemcpyHostToDevice);
+                int threads=256, blocks=(N+threads-1)/threads; vecAdd<<<blocks,threads>>>(dA,dB,dC,N);
+                cerr = cudaGetLastError(); if (cerr!=cudaSuccess){printf("ERROR: kernel: %s\n", cudaGetErrorString(cerr)); return 1;}
+                cudaMemcpy(hC,dC,sz,cudaMemcpyDeviceToHost);
+                bool ok=true; for(int i=0;i<10;++i){ if(hC[i]!=3.0f){ok=false;break;} }
+                printf("VECTOR_ADD_STATUS=%s\n", ok?"OK":"FAIL");
+                cudaFree(dA); cudaFree(dB); cudaFree(dC); free(hA); free(hB); free(hC);
+                return 0;
+            }
+            EOF
+
+            nvcc -o /tmp/print_mig_uuid /tmp/print_mig_uuid.cu -lcuda
+            /tmp/print_mig_uuid
+            
+            while true; do echo "gpu-b running..."; sleep 300; done
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        resources:
+          limits:
+            nvidia.com/mig-1g.5gb: "1"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
+

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -633,12 +634,29 @@ func verifyVisibleDevicesEnv(ctx context.Context, namespace, podName string, exp
 		}
 	}
 
-	if nvidia == "" || cuda == "" || nvidia != cuda {
+	if nvidia == "" || cuda == "" {
 		return false, nil
 	}
 
+	// CUDA_VISIBLE_DEVICES should be indexed values (0,1,2...) while NVIDIA_VISIBLE_DEVICES contains UUIDs
+	nvidiaDevices := strings.Split(strings.TrimSpace(nvidia), ",")
+	cudaDevices := strings.Split(strings.TrimSpace(cuda), ",")
+
+	// Both should have the same number of devices
+	if len(nvidiaDevices) != len(cudaDevices) {
+		return false, nil
+	}
+
+	// CUDA_VISIBLE_DEVICES should contain indexed values (0, 1, 2, ...)
+	for i, cudaDevice := range cudaDevices {
+		expectedIndex := strconv.Itoa(i)
+		if strings.TrimSpace(cudaDevice) != expectedIndex {
+			return false, nil
+		}
+	}
+
 	if expectedCount > 0 {
-		if len(strings.Split(strings.TrimSpace(nvidia), ",")) != expectedCount {
+		if len(nvidiaDevices) != expectedCount {
 			return false, nil
 		}
 	}
@@ -746,6 +764,231 @@ var _ = Describe("MIG placement start index", Ordered, func() {
 	})
 })
 
+var _ = Describe("MIG UUID verification", Ordered, func() {
+	var (
+		namespace string
+		podName   string
+	)
+
+	BeforeAll(func() {
+		if os.Getenv("KUBECONFIG") == "" {
+			Skip("KUBECONFIG is not set; skipping e2e test")
+		}
+	})
+
+	BeforeAll(func() {
+		namespace = "das-e2e-mig-uuid"
+		podName = "mig-uuid-test-pod"
+
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+		By("creating namespace " + namespace)
+		_, err := kubeClient.CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{})
+		if err != nil && !apierrors.IsAlreadyExists(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podName,
+				Namespace: namespace,
+			},
+			Spec: migUuidPodSpec(),
+		}
+
+		By("creating MIG UUID test pod")
+		Expect(createPods(context.Background(), namespace, []*corev1.Pod{pod})).To(Succeed())
+	})
+
+	AfterAll(func() {
+		By("deleting namespace " + namespace)
+		err := kubeClient.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() bool {
+			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
+			return apierrors.IsNotFound(err)
+		}, 2*time.Minute, time.Second).Should(BeTrue())
+	})
+
+	It("should be running", func(ctx SpecContext) {
+		Eventually(func() (corev1.PodPhase, error) {
+			p, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+			if err != nil {
+				return "", err
+			}
+			return p.Status.Phase, nil
+		}, 60*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
+	})
+
+	It("should have NVIDIA_VISIBLE_DEVICES matching MIG_SLICE_UUID", func(ctx SpecContext) {
+		Eventually(func() (bool, error) {
+			return verifyMigUuidMatches(ctx, namespace, podName)
+		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+	})
+
+	It("should successfully run vector addition", func(ctx SpecContext) {
+		Eventually(func() (bool, error) {
+			return verifyVectorAddSuccess(ctx, namespace, podName, "")
+		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+	})
+})
+
+var _ = Describe("MIG UUID dual slice verification", Ordered, func() {
+	var (
+		namespace string
+		podName   string
+	)
+
+	BeforeAll(func() {
+		if os.Getenv("KUBECONFIG") == "" {
+			Skip("KUBECONFIG is not set; skipping e2e test")
+		}
+	})
+
+	BeforeAll(func() {
+		namespace = "das-e2e-mig-uuid-dual"
+		podName = "mig-uuid-dual-test-pod"
+
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+		By("creating namespace " + namespace)
+		_, err := kubeClient.CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{})
+		if err != nil && !apierrors.IsAlreadyExists(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podName,
+				Namespace: namespace,
+			},
+			Spec: migUuidDualPodSpec(),
+		}
+
+		By("creating MIG UUID dual slice test pod")
+		Expect(createPods(context.Background(), namespace, []*corev1.Pod{pod})).To(Succeed())
+	})
+
+	AfterAll(func() {
+		By("deleting namespace " + namespace)
+		err := kubeClient.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() bool {
+			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
+			return apierrors.IsNotFound(err)
+		}, 2*time.Minute, time.Second).Should(BeTrue())
+	})
+
+	It("should be running", func(ctx SpecContext) {
+		Eventually(func() (corev1.PodPhase, error) {
+			p, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+			if err != nil {
+				return "", err
+			}
+			return p.Status.Phase, nil
+		}, 60*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
+	})
+
+	It("should report 2 CUDA devices", func(ctx SpecContext) {
+		Eventually(func() (bool, error) {
+			return verifyDualSliceCudaDeviceCount(ctx, namespace, podName)
+		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+	})
+
+	It("should have NVIDIA_VISIBLE_DEVICES matching MIG device UUIDs", func(ctx SpecContext) {
+		Eventually(func() (bool, error) {
+			return verifyDualSliceMigUuidMatches(ctx, namespace, podName)
+		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+	})
+
+	It("should successfully run vector addition on both devices", func(ctx SpecContext) {
+		Eventually(func() (bool, error) {
+			return verifyDualSliceVectorAddSuccess(ctx, namespace, podName)
+		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+	})
+})
+
+var _ = Describe("MIG UUID multi-container verification", Ordered, func() {
+	var (
+		namespace string
+		podName   string
+	)
+
+	BeforeAll(func() {
+		if os.Getenv("KUBECONFIG") == "" {
+			Skip("KUBECONFIG is not set; skipping e2e test")
+		}
+	})
+
+	BeforeAll(func() {
+		namespace = "das-e2e-mig-uuid-multicontainer"
+		podName = "mig-uuid-multicontainer-test-pod"
+
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+		By("creating namespace " + namespace)
+		_, err := kubeClient.CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{})
+		if err != nil && !apierrors.IsAlreadyExists(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podName,
+				Namespace: namespace,
+			},
+			Spec: migUuidMulticontainerPodSpec(),
+		}
+
+		By("creating MIG UUID multi-container test pod")
+		Expect(createPods(context.Background(), namespace, []*corev1.Pod{pod})).To(Succeed())
+	})
+
+	AfterAll(func() {
+		By("deleting namespace " + namespace)
+		err := kubeClient.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() bool {
+			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
+			return apierrors.IsNotFound(err)
+		}, 2*time.Minute, time.Second).Should(BeTrue())
+	})
+
+	It("should be running", func(ctx SpecContext) {
+		Eventually(func() (corev1.PodPhase, error) {
+			p, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+			if err != nil {
+				return "", err
+			}
+			return p.Status.Phase, nil
+		}, 60*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
+	})
+
+	It("should have NVIDIA_VISIBLE_DEVICES matching MIG_SLICE_UUID in gpu-a container", func(ctx SpecContext) {
+		Eventually(func() (bool, error) {
+			return verifyMulticontainerMigUuidMatches(ctx, namespace, podName, "gpu-a")
+		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+	})
+
+	It("should have NVIDIA_VISIBLE_DEVICES matching MIG_SLICE_UUID in gpu-b container", func(ctx SpecContext) {
+		Eventually(func() (bool, error) {
+			return verifyMulticontainerMigUuidMatches(ctx, namespace, podName, "gpu-b")
+		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+	})
+
+	It("should successfully run vector addition in gpu-a container", func(ctx SpecContext) {
+		Eventually(func() (bool, error) {
+			return verifyVectorAddSuccess(ctx, namespace, podName, "gpu-a")
+		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+	})
+
+	It("should successfully run vector addition in gpu-b container", func(ctx SpecContext) {
+		Eventually(func() (bool, error) {
+			return verifyVectorAddSuccess(ctx, namespace, podName, "gpu-b")
+		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+	})
+})
+
 var _ = Describe("Operator status", Ordered, func() {
 	BeforeAll(func() {
 		if os.Getenv("KUBECONFIG") == "" {
@@ -797,6 +1040,146 @@ var _ = Describe("Operator status", Ordered, func() {
 		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
 	})
 })
+
+func verifyMigUuidMatches(ctx context.Context, namespace, podName string) (bool, error) {
+	req := kubeClient.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{})
+	out, err := req.Do(ctx).Raw()
+	if err != nil {
+		return false, err
+	}
+
+	var nvidia, migUuid string
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "NVIDIA_VISIBLE_DEVICES=") {
+			nvidia = strings.TrimPrefix(line, "NVIDIA_VISIBLE_DEVICES=")
+		}
+		if strings.HasPrefix(line, "MIG_SLICE_UUID=") {
+			migUuid = strings.TrimPrefix(line, "MIG_SLICE_UUID=")
+		}
+	}
+
+	if nvidia == "" || migUuid == "" {
+		return false, nil
+	}
+
+	// NVIDIA_VISIBLE_DEVICES should match the MIG_SLICE_UUID
+	return strings.TrimSpace(nvidia) == strings.TrimSpace(migUuid), nil
+}
+
+func verifyDualSliceCudaDeviceCount(ctx context.Context, namespace, podName string) (bool, error) {
+	req := kubeClient.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{})
+	out, err := req.Do(ctx).Raw()
+	if err != nil {
+		return false, err
+	}
+
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "CUDA_DEVICE_COUNT=") {
+			countStr := strings.TrimPrefix(line, "CUDA_DEVICE_COUNT=")
+			count := strings.TrimSpace(countStr)
+			return count == "2", nil
+		}
+	}
+	return false, nil
+}
+
+func verifyDualSliceMigUuidMatches(ctx context.Context, namespace, podName string) (bool, error) {
+	req := kubeClient.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{})
+	out, err := req.Do(ctx).Raw()
+	if err != nil {
+		return false, err
+	}
+
+	var nvidia string
+	var migDevice0UUID, migDevice1UUID string
+
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "NVIDIA_VISIBLE_DEVICES=") {
+			nvidia = strings.TrimPrefix(line, "NVIDIA_VISIBLE_DEVICES=")
+		}
+		if strings.HasPrefix(line, "MIG_DEVICE_0_UUID=") {
+			migDevice0UUID = strings.TrimPrefix(line, "MIG_DEVICE_0_UUID=")
+		}
+		if strings.HasPrefix(line, "MIG_DEVICE_1_UUID=") {
+			migDevice1UUID = strings.TrimPrefix(line, "MIG_DEVICE_1_UUID=")
+		}
+	}
+
+	if nvidia == "" || migDevice0UUID == "" || migDevice1UUID == "" {
+		return false, nil
+	}
+
+	// NVIDIA_VISIBLE_DEVICES should contain both MIG device UUIDs, comma-separated
+	nvidiaDevices := strings.Split(strings.TrimSpace(nvidia), ",")
+	if len(nvidiaDevices) != 2 {
+		return false, nil
+	}
+
+	// Check that both UUIDs are present in NVIDIA_VISIBLE_DEVICES
+	foundDevice0 := false
+	foundDevice1 := false
+	for _, device := range nvidiaDevices {
+		trimmedDevice := strings.TrimSpace(device)
+		if trimmedDevice == strings.TrimSpace(migDevice0UUID) {
+			foundDevice0 = true
+		}
+		if trimmedDevice == strings.TrimSpace(migDevice1UUID) {
+			foundDevice1 = true
+		}
+	}
+
+	return foundDevice0 && foundDevice1, nil
+}
+
+func verifyDualSliceVectorAddSuccess(ctx context.Context, namespace, podName string) (bool, error) {
+	req := kubeClient.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{})
+	out, err := req.Do(ctx).Raw()
+	if err != nil {
+		return false, err
+	}
+
+	// Check that both devices (0 and 1) have successful vector addition
+	dev0Success := false
+	dev1Success := false
+
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "VECTOR_ADD_STATUS_DEV_0=") {
+			status := strings.TrimPrefix(line, "VECTOR_ADD_STATUS_DEV_0=")
+			dev0Success = strings.TrimSpace(status) == "OK"
+		}
+		if strings.HasPrefix(line, "VECTOR_ADD_STATUS_DEV_1=") {
+			status := strings.TrimPrefix(line, "VECTOR_ADD_STATUS_DEV_1=")
+			dev1Success = strings.TrimSpace(status) == "OK"
+		}
+	}
+
+	return dev0Success && dev1Success, nil
+}
+
+func verifyMulticontainerMigUuidMatches(ctx context.Context, namespace, podName, containerName string) (bool, error) {
+	req := kubeClient.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Container: containerName})
+	out, err := req.Do(ctx).Raw()
+	if err != nil {
+		return false, err
+	}
+
+	var nvidia, migUuid string
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "NVIDIA_VISIBLE_DEVICES=") {
+			nvidia = strings.TrimPrefix(line, "NVIDIA_VISIBLE_DEVICES=")
+		}
+		if strings.HasPrefix(line, "MIG_SLICE_UUID=") {
+			migUuid = strings.TrimPrefix(line, "MIG_SLICE_UUID=")
+		}
+	}
+
+	if nvidia == "" || migUuid == "" {
+		return false, nil
+	}
+
+	// NVIDIA_VISIBLE_DEVICES should match the MIG_SLICE_UUID for each container
+	return strings.TrimSpace(nvidia) == strings.TrimSpace(migUuid), nil
+}
 
 // findCondition finds a condition in a list of conditions by type.
 func findCondition(conditions []operatorv1.OperatorCondition, conditionType string) *operatorv1.OperatorCondition {

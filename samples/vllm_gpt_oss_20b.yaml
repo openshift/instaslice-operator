@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: huggingface-secret
+type: Opaque
+data:
+  HF_TOKEN: <base64 of your hugging face token>
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: huggingface-cache-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vllm-gpt-oss-20b
+  labels:
+    app: vllm-gpt-oss-20b
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - name: vllm
+    image: vllm/vllm-openai:latest
+    ports:
+    - containerPort: 8000
+    env:
+    - name: HUGGING_FACE_HUB_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: huggingface-secret
+          key: HF_TOKEN
+    command: ["/bin/bash"]
+    args:
+    - -c
+    - |
+      # Install latest Transformers from source to support gpt_oss model type
+      pip install git+https://github.com/huggingface/transformers.git
+
+      # Start vLLM server with GPT-OSS model
+      # GPU memory utilization reduced to 0.6 to fit in 40GB MIG slice
+      # Using explicit --port argument to avoid Kubernetes service discovery conflicts
+      vllm serve openai/gpt-oss-20b --host 0.0.0.0 --port 8000 --max-model-len 2048 --gpu-memory-utilization 0.6
+    resources:
+      limits:
+        nvidia.com/mig-7g.40gb: 1
+      requests:
+        memory: "8Gi"
+        cpu: "2"
+    volumeMounts:
+    - name: cache-volume
+      mountPath: /root/.cache/huggingface
+  volumes:
+  - name: cache-volume
+    persistentVolumeClaim:
+      claimName: huggingface-cache-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-gpt-oss-20b-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+  selector:
+    app: vllm-gpt-oss-20b
