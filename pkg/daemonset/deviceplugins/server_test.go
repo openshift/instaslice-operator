@@ -11,6 +11,10 @@ import (
 	"time"
 
 	"google.golang.org/grpc/metadata"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 	"tags.cncf.io/container-device-interface/pkg/cdi"
 	cdispec "tags.cncf.io/container-device-interface/specs-go"
@@ -20,7 +24,6 @@ import (
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	fakeclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/fake"
 	utils "github.com/openshift/instaslice-operator/test/utils"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -442,6 +445,268 @@ func TestWriteCDISpecForResourceWait(t *testing.T) {
 
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("expected spec recreated: %v", err)
+	}
+}
+
+func TestListAndWatchFiltersSpecsByResource(t *testing.T) {
+	dir := t.TempDir()
+	if err := cdi.Configure(cdi.WithSpecDirs(dir), cdi.WithAutoRefresh(false)); err != nil {
+		t.Fatalf("failed to configure cdi: %v", err)
+	}
+
+	// Create CDI specs for different resource types
+	spec1Path, _, err := WriteCDISpecForResource("mig.das.com/1g.5gb", "id1", nil, "")
+	if err != nil {
+		t.Fatalf("failed to write spec1: %v", err)
+	}
+
+	spec2Path, _, err := WriteCDISpecForResource("mig.das.com/3g.20gb", "id2", nil, "")
+	if err != nil {
+		t.Fatalf("failed to write spec2: %v", err)
+	}
+
+	spec3Path, _, err := WriteCDISpecForResource("mig.das.com/1g.5gb", "id3", nil, "")
+	if err != nil {
+		t.Fatalf("failed to write spec3: %v", err)
+	}
+
+	// Create a server for the 1g.5gb resource
+	mgr := NewManager("mig.das.com/1g.5gb", instav1.DiscoveredNodeResources{})
+	srv := &Server{Manager: mgr}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stream := newFakeListWatchServer(ctx)
+	done := make(chan error, 1)
+	go func() { done <- srv.ListAndWatch(&pluginapi.Empty{}, stream) }()
+
+	var resp *pluginapi.ListAndWatchResponse
+	select {
+	case resp = <-stream.ch:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timeout waiting for initial response")
+	}
+
+	// Should only see devices from specs that match the server's resource (1g.5gb)
+	expectedIDs := []string{filepath.Base(spec1Path), filepath.Base(spec3Path)}
+	if len(resp.Devices) != 2 {
+		t.Fatalf("expected 2 devices, got %d: %+v", len(resp.Devices), resp.Devices)
+	}
+
+	// Verify the correct devices are included
+	actualIDs := make([]string, len(resp.Devices))
+	for i, dev := range resp.Devices {
+		actualIDs[i] = dev.ID
+		if dev.Health != pluginapi.Healthy {
+			t.Fatalf("expected device %s to be healthy", dev.ID)
+		}
+	}
+
+	// Check that we got the expected IDs (order doesn't matter)
+	for _, expectedID := range expectedIDs {
+		found := false
+		for _, actualID := range actualIDs {
+			if actualID == expectedID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected device ID %s not found in actual devices %v", expectedID, actualIDs)
+		}
+	}
+
+	// Verify that the 3g.20gb spec was filtered out
+	spec2ID := filepath.Base(spec2Path)
+	for _, actualID := range actualIDs {
+		if actualID == spec2ID {
+			t.Fatalf("unexpected device ID %s found - should have been filtered out", spec2ID)
+		}
+	}
+
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("ListAndWatch returned error: %v", err)
+	}
+}
+
+func TestListAndWatchFiltersSpecsWithDifferentVendors(t *testing.T) {
+	dir := t.TempDir()
+	if err := cdi.Configure(cdi.WithSpecDirs(dir), cdi.WithAutoRefresh(false)); err != nil {
+		t.Fatalf("failed to configure cdi: %v", err)
+	}
+
+	// Create CDI specs for different vendors and classes
+	spec1Path, _, err := WriteCDISpecForResource("vendor1/class1", "id1", nil, "")
+	if err != nil {
+		t.Fatalf("failed to write spec1: %v", err)
+	}
+
+	spec2Path, _, err := WriteCDISpecForResource("vendor2/class1", "id2", nil, "")
+	if err != nil {
+		t.Fatalf("failed to write spec2: %v", err)
+	}
+
+	spec3Path, _, err := WriteCDISpecForResource("vendor1/class1", "id3", nil, "")
+	if err != nil {
+		t.Fatalf("failed to write spec3: %v", err)
+	}
+
+	// Create a server for vendor1/class1
+	mgr := NewManager("vendor1/class1", instav1.DiscoveredNodeResources{})
+	srv := &Server{Manager: mgr}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stream := newFakeListWatchServer(ctx)
+	done := make(chan error, 1)
+	go func() { done <- srv.ListAndWatch(&pluginapi.Empty{}, stream) }()
+
+	var resp *pluginapi.ListAndWatchResponse
+	select {
+	case resp = <-stream.ch:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timeout waiting for initial response")
+	}
+
+	// Should only see devices from vendor1/class1 specs
+	expectedIDs := []string{filepath.Base(spec1Path), filepath.Base(spec3Path)}
+	if len(resp.Devices) != 2 {
+		t.Fatalf("expected 2 devices, got %d: %+v", len(resp.Devices), resp.Devices)
+	}
+
+	// Verify the correct devices are included
+	actualIDs := make([]string, len(resp.Devices))
+	for i, dev := range resp.Devices {
+		actualIDs[i] = dev.ID
+	}
+
+	// Check that we got the expected IDs
+	for _, expectedID := range expectedIDs {
+		found := false
+		for _, actualID := range actualIDs {
+			if actualID == expectedID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected device ID %s not found in actual devices %v", expectedID, actualIDs)
+		}
+	}
+
+	// Verify that the vendor2/class1 spec was filtered out
+	spec2ID := filepath.Base(spec2Path)
+	for _, actualID := range actualIDs {
+		if actualID == spec2ID {
+			t.Fatalf("unexpected device ID %s found - should have been filtered out", spec2ID)
+		}
+	}
+
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("ListAndWatch returned error: %v", err)
+	}
+}
+
+func TestListAndWatchRebootDeletesPods(t *testing.T) {
+	dir := t.TempDir()
+	if err := cdi.Configure(cdi.WithSpecDirs(dir), cdi.WithAutoRefresh(false)); err != nil {
+		t.Fatalf("failed to configure cdi: %v", err)
+	}
+
+	// Create a fake AllocationClaim with pod reference
+	alloc := &instav1.AllocationClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-alloc",
+			Namespace: "test-ns",
+		},
+		Status: instav1.AllocationClaimStatus{
+			State: instav1.AllocationClaimStatusInUse,
+		},
+	}
+
+	// Create spec with pod reference
+	spec := instav1.AllocationClaimSpec{
+		Profile:  "1g.5gb",
+		Nodename: "test-node",
+		PodRef: corev1.ObjectReference{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+		},
+	}
+	specBytes, _ := json.Marshal(spec)
+	alloc.Spec.Raw = specBytes
+
+	// Setup indexer and add allocation
+	allocationIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
+		"node-MigProfile": func(obj interface{}) ([]string, error) {
+			a := obj.(*instav1.AllocationClaim)
+			spec, err := getAllocationClaimSpec(a)
+			if err != nil {
+				return nil, err
+			}
+			key := fmt.Sprintf("%s/%s", spec.Nodename, spec.Profile)
+			return []string{key}, nil
+		},
+	})
+	defer func() { allocationIndexer = nil }()
+	allocationIndexer.Add(alloc)
+
+	// Create fake Kubernetes client
+	fakeClient := fake.NewSimpleClientset()
+
+	// Create the test pod
+	testPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+		},
+	}
+	_, err := fakeClient.CoreV1().Pods("test-ns").Create(context.Background(), testPod, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("failed to create test pod: %v", err)
+	}
+
+	// Create server with fake clients
+	mgr := NewManager("mig.das.com/1g.5gb", instav1.DiscoveredNodeResources{})
+	srv := &Server{
+		Manager:          mgr,
+		InstasliceClient: fakeclient.NewSimpleClientset(),
+		KubeClient:       fakeClient,
+		NodeName:         "test-node",
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stream := newFakeListWatchServer(ctx)
+	done := make(chan error, 1)
+	go func() { done <- srv.ListAndWatch(&pluginapi.Empty{}, stream) }()
+
+	var resp *pluginapi.ListAndWatchResponse
+	select {
+	case resp = <-stream.ch:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for initial response")
+	}
+
+	// Should have 0 devices since we have 1 inUse allocation but 0 CDI specs (reboot scenario)
+	if len(resp.Devices) != 0 {
+		t.Fatalf("expected 0 devices due to reboot detection, got %d", len(resp.Devices))
+	}
+
+	// Verify the pod was deleted
+	_, err = fakeClient.CoreV1().Pods("test-ns").Get(context.Background(), "test-pod", metav1.GetOptions{})
+	if !apierrors.IsNotFound(err) {
+		t.Fatalf("expected pod to be deleted, but got error: %v", err)
+	}
+
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("ListAndWatch returned error: %v", err)
 	}
 }
 

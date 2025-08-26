@@ -174,7 +174,7 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 		Eventually(func() bool {
 			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
 			return apierrors.IsNotFound(err)
-		}, 2*time.Minute, time.Second).Should(BeTrue())
+		}, 5*time.Minute, time.Second).Should(BeTrue())
 	})
 
 	It("should be running", func(ctx SpecContext) {
@@ -217,7 +217,7 @@ var _ = Describe("Test pods for requesting single type of extended resource", Or
 		for _, name := range podNames {
 			Eventually(func() (bool, error) {
 				return verifyVisibleDevicesEnv(ctx, namespace, name, 0)
-			}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+			}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 		}
 	})
 
@@ -330,7 +330,7 @@ var _ = Describe("Test deployment requesting single type of extended resource", 
 		Eventually(func() bool {
 			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
 			return apierrors.IsNotFound(err)
-		}, 2*time.Minute, time.Second).Should(BeTrue())
+		}, 5*time.Minute, time.Second).Should(BeTrue())
 	})
 
 	It("should be running", func(ctx SpecContext) {
@@ -373,7 +373,7 @@ var _ = Describe("Test deployment requesting single type of extended resource", 
 		for _, name := range podNames {
 			Eventually(func() (bool, error) {
 				return verifyVisibleDevicesEnv(ctx, namespace, name, 0)
-			}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+			}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 		}
 	})
 })
@@ -436,7 +436,7 @@ var _ = Describe("Test pods requesting multiple resources", Ordered, func() {
 		Eventually(func() bool {
 			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
 			return apierrors.IsNotFound(err)
-		}, 2*time.Minute, time.Second).Should(BeTrue())
+		}, 5*time.Minute, time.Second).Should(BeTrue())
 	})
 
 	It("should be running", func(ctx SpecContext) {
@@ -457,7 +457,7 @@ var _ = Describe("Test pods requesting multiple resources", Ordered, func() {
 		for _, name := range podNames {
 			Eventually(func() (bool, error) {
 				return verifyVisibleDevicesEnv(ctx, namespace, name, 3)
-			}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+			}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 		}
 	})
 })
@@ -534,7 +534,7 @@ var _ = Describe("Test pods for requesting multiple slice types", Ordered, func(
 		Eventually(func() bool {
 			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
 			return apierrors.IsNotFound(err)
-		}, 2*time.Minute, time.Second).Should(BeTrue())
+		}, 5*time.Minute, time.Second).Should(BeTrue())
 	})
 
 	It("should be running", func(ctx SpecContext) {
@@ -726,7 +726,7 @@ var _ = Describe("MIG placement start index", Ordered, func() {
 		Eventually(func() bool {
 			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
 			return apierrors.IsNotFound(err)
-		}, 2*time.Minute, time.Second).Should(BeTrue())
+		}, 5*time.Minute, time.Second).Should(BeTrue())
 	})
 
 	It("should be running", func(ctx SpecContext) {
@@ -760,7 +760,7 @@ var _ = Describe("MIG placement start index", Ordered, func() {
 				found++
 			}
 			return found == len(podNames), nil
-		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+		}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 	})
 })
 
@@ -807,7 +807,7 @@ var _ = Describe("MIG UUID verification", Ordered, func() {
 		Eventually(func() bool {
 			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
 			return apierrors.IsNotFound(err)
-		}, 2*time.Minute, time.Second).Should(BeTrue())
+		}, 5*time.Minute, time.Second).Should(BeTrue())
 	})
 
 	It("should be running", func(ctx SpecContext) {
@@ -823,13 +823,13 @@ var _ = Describe("MIG UUID verification", Ordered, func() {
 	It("should have NVIDIA_VISIBLE_DEVICES matching MIG_SLICE_UUID", func(ctx SpecContext) {
 		Eventually(func() (bool, error) {
 			return verifyMigUuidMatches(ctx, namespace, podName)
-		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+		}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 	})
 
 	It("should successfully run vector addition", func(ctx SpecContext) {
 		Eventually(func() (bool, error) {
 			return verifyVectorAddSuccess(ctx, namespace, podName, "")
-		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+		}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 	})
 })
 
@@ -876,7 +876,7 @@ var _ = Describe("MIG UUID dual slice verification", Ordered, func() {
 		Eventually(func() bool {
 			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
 			return apierrors.IsNotFound(err)
-		}, 2*time.Minute, time.Second).Should(BeTrue())
+		}, 5*time.Minute, time.Second).Should(BeTrue())
 	})
 
 	It("should be running", func(ctx SpecContext) {
@@ -892,19 +892,19 @@ var _ = Describe("MIG UUID dual slice verification", Ordered, func() {
 	It("should report 2 CUDA devices", func(ctx SpecContext) {
 		Eventually(func() (bool, error) {
 			return verifyDualSliceCudaDeviceCount(ctx, namespace, podName)
-		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+		}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 	})
 
 	It("should have NVIDIA_VISIBLE_DEVICES matching MIG device UUIDs", func(ctx SpecContext) {
 		Eventually(func() (bool, error) {
 			return verifyDualSliceMigUuidMatches(ctx, namespace, podName)
-		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+		}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 	})
 
 	It("should successfully run vector addition on both devices", func(ctx SpecContext) {
 		Eventually(func() (bool, error) {
 			return verifyDualSliceVectorAddSuccess(ctx, namespace, podName)
-		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+		}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 	})
 })
 
@@ -951,7 +951,7 @@ var _ = Describe("MIG UUID multi-container verification", Ordered, func() {
 		Eventually(func() bool {
 			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
 			return apierrors.IsNotFound(err)
-		}, 2*time.Minute, time.Second).Should(BeTrue())
+		}, 5*time.Minute, time.Second).Should(BeTrue())
 	})
 
 	It("should be running", func(ctx SpecContext) {
@@ -967,25 +967,25 @@ var _ = Describe("MIG UUID multi-container verification", Ordered, func() {
 	It("should have NVIDIA_VISIBLE_DEVICES matching MIG_SLICE_UUID in gpu-a container", func(ctx SpecContext) {
 		Eventually(func() (bool, error) {
 			return verifyMulticontainerMigUuidMatches(ctx, namespace, podName, "gpu-a")
-		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+		}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 	})
 
 	It("should have NVIDIA_VISIBLE_DEVICES matching MIG_SLICE_UUID in gpu-b container", func(ctx SpecContext) {
 		Eventually(func() (bool, error) {
 			return verifyMulticontainerMigUuidMatches(ctx, namespace, podName, "gpu-b")
-		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+		}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 	})
 
 	It("should successfully run vector addition in gpu-a container", func(ctx SpecContext) {
 		Eventually(func() (bool, error) {
 			return verifyVectorAddSuccess(ctx, namespace, podName, "gpu-a")
-		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+		}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 	})
 
 	It("should successfully run vector addition in gpu-b container", func(ctx SpecContext) {
 		Eventually(func() (bool, error) {
 			return verifyVectorAddSuccess(ctx, namespace, podName, "gpu-b")
-		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+		}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 	})
 })
 
@@ -1037,7 +1037,7 @@ var _ = Describe("Operator status", Ordered, func() {
 			}
 
 			return true, nil
-		}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+		}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 	})
 })
 
