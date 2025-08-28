@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -137,18 +138,34 @@ func (s *Server) ListAndWatch(req *pluginapi.Empty, stream pluginapi.DevicePlugi
 	// build initial device list from existing CDI spec files
 	var initDevices []*pluginapi.Device
 	cache := cdi.GetDefaultCache()
-	for _, vendor := range cache.ListVendors() {
-		klog.V(4).InfoS("Enumerating CDI specs", "vendor", vendor)
-		for _, spec := range cache.GetVendorSpecs(vendor) {
+
+	// Get the expected sanitized class name for this server's resource
+	vendor, class := parser.ParseQualifier(s.Manager.ResourceName)
+	sanitizedClass := class
+	if err := parser.ValidateClassName(sanitizedClass); err != nil {
+		sanitizedClass = "c" + sanitizedClass
+	}
+	expectedKind := sanitizedClass
+	if vendor != "" {
+		expectedKind = vendor + "/" + sanitizedClass
+	}
+
+	for _, v := range cache.ListVendors() {
+		klog.V(4).InfoS("Enumerating CDI specs", "vendor", v)
+		for _, spec := range cache.GetVendorSpecs(v) {
+			// Filter CDI specs to only include those relevant to this server's resource
+			if spec.Spec.Kind != expectedKind {
+				klog.V(5).InfoS("Skipping CDI spec for different resource", "specKind", spec.Spec.Kind, "expectedKind", expectedKind, "path", spec.GetPath())
+				continue
+			}
 			id := filepath.Base(spec.GetPath())
-			klog.V(4).InfoS("Adding device from spec", "path", spec.GetPath(), "id", id)
+			klog.V(4).InfoS("Adding device from spec", "path", spec.GetPath(), "id", id, "kind", spec.Spec.Kind)
 			initDevices = append(initDevices, &pluginapi.Device{ID: id, Health: pluginapi.Healthy})
 		}
 	}
 
 	// Detect system reboot by comparing in-use allocations with on-disk CDI specs
-	// TODO : filter out CDI specs and AllocationClaims that are not relevant to this server's resource
-	// because it will race with other servers that will be running on the same node.
+	// CDI specs and AllocationClaims are now filtered to only include those relevant to this server's resource
 	migProfile := profileFromResourceName(s.Manager.ResourceName)
 	migProfile = unsanitizeProfileName(migProfile)
 	key := fmt.Sprintf("%s/%s", s.NodeName, migProfile)
@@ -173,6 +190,21 @@ func (s *Server) ListAndWatch(req *pluginapi.Empty, stream pluginapi.DevicePlugi
 
 	if len(inUseAllocs) != len(initDevices) {
 		klog.InfoS("Detected reboot, deleting allocations", "resource", s.Manager.ResourceName, "inUse", len(inUseAllocs), "specs", len(initDevices))
+
+		// Collect pod references for deletion before deleting allocations
+		var podsToDelete []corev1.ObjectReference
+		for _, alloc := range inUseAllocs {
+			spec, err := getAllocationClaimSpec(alloc)
+			if err != nil {
+				klog.ErrorS(err, "failed to decode allocation spec", "allocation", alloc.Name)
+				continue
+			}
+			if spec.PodRef.Name != "" && spec.PodRef.Namespace != "" {
+				podsToDelete = append(podsToDelete, spec.PodRef)
+			}
+		}
+
+		// Delete AllocationClaims
 		for _, alloc := range inUseAllocs {
 			err := s.InstasliceClient.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Delete(stream.Context(), alloc.Name, metav1.DeleteOptions{})
 			if err != nil && !apierrors.IsNotFound(err) {
@@ -183,6 +215,26 @@ func (s *Server) ListAndWatch(req *pluginapi.Empty, stream pluginapi.DevicePlugi
 			s.allocMutex.Lock()
 			allocationIndexer.Delete(alloc)
 			s.allocMutex.Unlock()
+		}
+
+		// Delete associated pods to mitigate kubelet bug which is admits the pods before the device plugin is ready
+		// https://github.com/kubernetes/kubernetes/issues/128043
+		// TODO - Remove this once the kubelet bug is fixed
+		if len(podsToDelete) > 0 {
+			klog.InfoS("Deleting pods associated with stale allocations", "resource", s.Manager.ResourceName, "podCount", len(podsToDelete))
+			for _, podRef := range podsToDelete {
+				err := s.KubeClient.CoreV1().Pods(podRef.Namespace).Delete(stream.Context(), podRef.Name, metav1.DeleteOptions{})
+				if err != nil {
+					if apierrors.IsNotFound(err) {
+						klog.V(4).InfoS("Pod already deleted", "pod", podRef.Name, "namespace", podRef.Namespace)
+					} else {
+						// Log error but continue with other pod deletions
+						klog.ErrorS(err, "failed to delete pod on reboot", "pod", podRef.Name, "namespace", podRef.Namespace)
+					}
+				} else {
+					klog.InfoS("Deleted pod on reboot detection", "pod", podRef.Name, "namespace", podRef.Namespace)
+				}
+			}
 		}
 	}
 
