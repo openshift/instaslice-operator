@@ -19,13 +19,13 @@ trap 'cleanup' EXIT
 cp ${DEPLOY_DIR}/*.yaml ${TMP_DIR}/
 
 echo "Rewriting Operator Image"
-sed -i "s|${OPERATOR_IMAGE_ORIGINAL}|${OPERATOR_IMAGE}|g" ${TMP_DIR}/04_deployment.yaml
+sed -i.bak "s|${OPERATOR_IMAGE_ORIGINAL}|${OPERATOR_IMAGE}|g" ${TMP_DIR}/04_deployment.yaml && rm -f ${TMP_DIR}/04_deployment.yaml.bak
 echo "Rewriting Webhook Image"
-sed -i "s|${WEBHOOK_IMAGE_ORIGINAL}|${WEBHOOK_IMAGE}|g" ${TMP_DIR}/04_deployment.yaml
+sed -i.bak "s|${WEBHOOK_IMAGE_ORIGINAL}|${WEBHOOK_IMAGE}|g" ${TMP_DIR}/04_deployment.yaml && rm -f ${TMP_DIR}/04_deployment.yaml.bak
 echo "Rewriting Scheduler Image"
-sed -i "s|${SCHEDULER_IMAGE_ORIGINAL}|${SCHEDULER_IMAGE}|g" ${TMP_DIR}/04_deployment.yaml
+sed -i.bak "s|${SCHEDULER_IMAGE_ORIGINAL}|${SCHEDULER_IMAGE}|g" ${TMP_DIR}/04_deployment.yaml && rm -f ${TMP_DIR}/04_deployment.yaml.bak
 echo "Rewriting Daemonset Image"
-sed -i "s|${DAEMONSET_IMAGE_ORIGINAL}|${DAEMONSET_IMAGE}|g" ${TMP_DIR}/04_deployment.yaml
+sed -i.bak "s|${DAEMONSET_IMAGE_ORIGINAL}|${DAEMONSET_IMAGE}|g" ${TMP_DIR}/04_deployment.yaml && rm -f ${TMP_DIR}/04_deployment.yaml.bak
 
 echo "Applying CRDs..."
 CRD_FILES=$(find ${TMP_DIR} -name "*.yaml" \( -name "*.crd.yaml" -o -exec grep -l "kind: CustomResourceDefinition" {} \; \) | sort -u)
