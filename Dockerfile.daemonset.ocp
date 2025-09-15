@@ -22,12 +22,13 @@ LABEL com.redhat.component=$NAME
 LABEL description=$DESCRIPTION
 LABEL io.k8s.description=$DESCRIPTION
 LABEL io.k8s.display-name=$NAME
-LABEL name=$NAME
+LABEL name="dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9"
 LABEL summary=$DESCRIPTION
 LABEL distribution-scope=public
 LABEL release="1"
 LABEL url="https://access.redhat.com/"
 LABEL vendor="Red Hat, Inc."
+LABEL cpe="cpe:/a:redhat:dynamic_accelerator_slicer:0.1::el9"
 LABEL version="1"
 LABEL maintainer="Red Hat"
 
