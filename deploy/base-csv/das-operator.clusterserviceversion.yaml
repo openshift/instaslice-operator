@@ -79,53 +79,52 @@ spec:
     name: Sai Ramesh Vanka
   - email: vemporop@redhat.com
     name: Vitaliy Emporopulo
-  description: "### Introduction\nDynamic Accelerator Slicer uses stable APIs and works with GPU operator
-    to create mig slices on demand.\n\n### Prerequisites\n\n1. Install the [NVIDIA
-    GPU drivers and CUDA toolkit](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#driver-installation)
-    on the host.\n2. Install the [NVIDIA Container Toolkit (CTK)](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).\n3.
-    Configure the NVIDIA Container Runtime as the default Docker runtime:\n      `sudo
-    nvidia-ctk runtime configure --runtime=docker --set-as-default`\n4. Restart Docker
-    to apply the changes:\n      `sudo systemctl restart docker`\n5. Configure the
-    NVIDIA Container Runtime to use volume mounts to select devices to inject into
-    a container:\n      `sudo nvidia-ctk config --set accept-nvidia-visible-devices-as-volume-mounts=true
-    --in-place`\n      This sets accept-nvidia-visible-devices-as-volume-mounts=true
-    in the /etc/nvidia-container-runtime/config.toml file\n6. Enable MIG on the GPU\n
-    \     Check if MIG is enabled on the host GPU - look for Enabled in the third
-    row of the nvidia GPU table, while running `nvidia-smi`\n7. Create symlink in
-    the control-plane container\n      `docker exec -ti kind-control-plane ln -s /sbin/ldconfig
-    /sbin/ldconfig.real`\n8. Unmount the nvidia devices in the control-plane container\n
-    \     `docker exec -ti kind-control-plane umount -R /proc/driver/nvidia`\n9. Install
-    the GPU Operator\n      `helm upgrade --install --wait gpu-operator -n gpu-operator
-    --create-namespace nvidia/gpu-operator \\\n        --set mig.strategy=mixed \\\n
-    \       --set cdi.enabled=true \\\n        --set migManager.enabled=false \\\n
-    \       --set migManager.config.default=\"\"`\n10. Deploy cert manager\n      `kubectl
-    apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.3/cert-manager.yaml`\n
-    \     \n### API Backward Compatibility\n**NOTE:**  Until Operator supports **seamless
-    upgrades**, a new version of\nthe operator may introduce a change that is **NOT**
-    backwards compatible with\nthe previous version. Thus, to upgrade the operator,
-    uninstall the already\ninstalled version completely (including CRDs) and install
-    the new version.\nFor example to upgrade from 0.1.0 to 0.2.0, you must uninstall
-    `0.1.0` by\nfollowing [uninstall operator section](https://github.com/openshift/instaslice-operator)\nand
-    install the new version.\n\nChanges to patch version (major.minor.patch) indicates
-    that no breaking changes\nare introduced, thus upgrade can be done without uninstalling
-    and reinstalling\nthe operator.\n\n### Why Dynamic Accelerator Slicer\n\nPartitionable accelerators
-    provided by vendors need partition to be created at node boot-time or to change
-    partitions one would have to evict all the workloads at the node level to create
-    new set of partitions.\n\nDynamic Accelerator Slicer will help if:\n\n- user does not know all
-    the accelerators partitions needed a priori on every node on the cluster\n\n-
-    user partition requirements change at the workload level rather than the node
-    level\n\n- user does not want to learn or use new API to request accelerators
-    slices\n\n- user prefers to use stable device plugins APIs for creating partitions\n\n###Features
-    Overview\n\n- Integration with Kubernetes [quota management](https://github.com/openshift/instaslice-operator/blob/main/docs/instaslice_kube_quota_int.md)\n\n-
-    Integration with project [Kueue](https://github.com/openshift/instaslice-operator/blob/main/docs/kueue.md)\n\n-
-    [Emulator](https://github.com/openshift/instaslice-operator/blob/main/docs/emulator.md)
-    mode to run test Dynamic Accelerator Slicer firstfit placement strategy\n\n- Integration with
-    vLLM, Kserve, [Deployments](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_deployment.yaml),
-    [Jobs](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_job.yaml),
-    and [Statefulsets](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_statefulset.yaml)\n\n###
-    Documentation\nDocumentation and installation guide can be found below:\n  * [Installation
-    Guide](https://github.com/openshift/instaslice-operator)\n  * [Dynamic Accelerator Slicer Operator](https://github.com/openshift/instaslice-operator/blob/main/README.md)\n\n###
-    License\ndas-operator is licensed under the Apache 2.0 license"
+  description: |-
+    ### Introduction
+    Dynamic Accelerator Slicer uses stable APIs and works with the NVIDIA GPU Operator to create MIG slices on demand.
+
+    ### Why Dynamic Accelerator Slicer
+
+    Partitionable accelerators provided by vendors need partition to be created at node boot-time or to change partitions one would have to evict all the workloads at the node level to create new set of partitions.
+
+    Dynamic Accelerator Slicer will help if:
+
+    - user does not know all the accelerators partitions needed a priori on every node on the cluster
+    - user partition requirements change at the workload level rather than the node level
+    - user does not want to learn or use new API to request accelerators slices
+    - user prefers to use stable device plugins APIs for creating partitions
+
+    ### Features
+
+    - Integration with Kubernetes [quota management](https://github.com/openshift/instaslice-operator/blob/main/docs/instaslice_kube_quota_int.md)
+    - Integration with project [Kueue](https://github.com/openshift/instaslice-operator/blob/main/docs/kueue.md)
+    - [Emulator](https://github.com/openshift/instaslice-operator/blob/main/docs/emulator.md) mode to run test Dynamic Accelerator Slicer firstfit placement strategy
+    - Integration with vLLM, Kserve, [Deployments](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_deployment.yaml), [Jobs](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_job.yaml), and [Statefulsets](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_statefulset.yaml)
+
+    ### Prerequisites
+
+    1. Install the cert-manager Operator for Red Hat OpenShift.
+    2. Install the Node Feature Discovery (NFD) Operator and create a NodeFeatureDiscovery custom resource so GPU labels are present on the cluster nodes.
+    3. Install the NVIDIA GPU Operator and configure MIG support as described in the product documentation. At a minimum:
+       - Apply a ClusterPolicy that enables MIG mode and disables the default NVIDIA device plugin on nodes where you plan to create slices.
+       - Enable MIG on each GPU (verify with `nvidia-smi` and ensure the MIG column reports `Enabled`).
+       - Confirm the GPU Operator is healthy: `oc get clusterpolicies.nvidia.com -o jsonpath='{.items[0].status.state}'`.
+
+    Refer to the OpenShift documentation for the full workflow: https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/hardware_accelerators/das-about-dynamic-accelerator-slicer-operator#das-operator-installing-web-console_das-about-dynamic-accelerator-slicer-operator.
+
+    ### API Backward Compatibility
+    **NOTE:** Until Operator supports **seamless upgrades**, a new version of the operator may introduce a change that is **NOT** backwards compatible with the previous version. Thus, to upgrade the operator, uninstall the already installed version completely (including CRDs) and install the new version.
+
+    For example to upgrade from 0.1.0 to 0.2.0, you must uninstall `0.1.0` by following [uninstall operator section](https://github.com/openshift/instaslice-operator) and install the new version.
+
+    Changes to patch version (major.minor.patch) indicates that no breaking changes are introduced, thus upgrade can be done without uninstalling and reinstalling the operator.
+
+    ### Documentation
+    Documentation and installation guide can be found below:
+      * [Dynamic Accelerator Slicer Operator](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/hardware_accelerators/das-about-dynamic-accelerator-slicer-operator#das-operator-installing-web-console_das-about-dynamic-accelerator-slicer-operator)
+    
+    ### License
+    das-operator is licensed under the Apache 2.0 license
   icon:
   - base64data: PHN2ZyBpZD0iTGF5ZXJfMSIgZGF0YS1uYW1lPSJMYXllciAxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTQ1Ij48ZGVmcz48c3R5bGU+LmNscy0xe2ZpbGw6I2UwMDt9PC9zdHlsZT48L2RlZnM+PHRpdGxlPlJlZEhhdC1Mb2dvLUhhdC1Db2xvcjwvdGl0bGU+PHBhdGggZD0iTTE1Ny43Nyw2Mi42MWExNCwxNCwwLDAsMSwuMzEsMy40MmMwLDE0Ljg4LTE4LjEsMTcuNDYtMzAuNjEsMTcuNDZDNzguODMsODMuNDksNDIuNTMsNTMuMjYsNDIuNTMsNDRhNi40Myw2LjQzLDAsMCwxLC4yMi0xLjk0bC0zLjY2LDkuMDZhMTguNDUsMTguNDUsMCwwLDAtMS41MSw3LjMzYzAsMTguMTEsNDEsNDUuNDgsODcuNzQsNDUuNDgsMjAuNjksMCwzNi40My03Ljc2LDM2LjQzLTIxLjc3LDAtMS4wOCwwLTEuOTQtMS43My0xMC4xM1oiLz48cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik0xMjcuNDcsODMuNDljMTIuNTEsMCwzMC42MS0yLjU4LDMwLjYxLTE3LjQ2YTE0LDE0LDAsMCwwLS4zMS0zLjQybC03LjQ1LTMyLjM2Yy0xLjcyLTcuMTItMy4yMy0xMC4zNS0xNS43My0xNi42QzEyNC44OSw4LjY5LDEwMy43Ni41LDk3LjUxLjUsOTEuNjkuNSw5MCw4LDgzLjA2LDhjLTYuNjgsMC0xMS42NC01LjYtMTcuODktNS42LTYsMC05LjkxLDQuMDktMTIuOTMsMTIuNSwwLDAtOC40MSwyMy43Mi05LjQ5LDI3LjE2QTYuNDMsNi40MywwLDAsMCw0Mi41Myw0NGMwLDkuMjIsMzYuMywzOS40NSw4NC45NCwzOS40NU0xNjAsNzIuMDdjMS43Myw4LjE5LDEuNzMsOS4wNSwxLjczLDEwLjEzLDAsMTQtMTUuNzQsMjEuNzctMzYuNDMsMjEuNzdDNzguNTQsMTA0LDM3LjU4LDc2LjYsMzcuNTgsNTguNDlhMTguNDUsMTguNDUsMCwwLDEsMS41MS03LjMzQzIyLjI3LDUyLC41LDU1LC41LDc0LjIyYzAsMzEuNDgsNzQuNTksNzAuMjgsMTMzLjY1LDcwLjI4LDQ1LjI4LDAsNTYuNy0yMC40OCw1Ni43LTM2LjY1LDAtMTIuNzItMTEtMjcuMTYtMzAuODMtMzUuNzgiLz48L3N2Zz4=
     mediatype: image/svg+xml
