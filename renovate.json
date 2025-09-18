@@ -6,7 +6,7 @@
   "assigneesFromCodeOwners": true,
   "automergeStrategy": "auto",
   "automergeType": "pr",
-  "baseBranches": [
+  "baseBranchPatterns": [
     "next"
   ],
   "commitMessagePrefix": "NO-JIRA: ",
@@ -34,13 +34,13 @@
   },
   "dockerfile": {
     "enabled": true,
-    "fileMatch": [
-      "bundle-ocp.Dockerfile",
-      "bundle-ocp.developer.Dockerfile",
-      "Dockerfile.daemonset.ocp",
-      "Dockerfile.ocp",
-      "Dockerfile.scheduler.ocp",
-      "Dockerfile.webhook.ocp"
+    "managerFilePatterns": [
+      "/bundle-ocp.Dockerfile/",
+      "/bundle-ocp.developer.Dockerfile/",
+      "/Dockerfile.daemonset.ocp/",
+      "/Dockerfile.ocp/",
+      "/Dockerfile.scheduler.ocp/",
+      "/Dockerfile.webhook.ocp/"
     ],
     "packageRules": [
       {
