@@ -95,10 +95,6 @@ spec:
     - user prefers to use stable device plugins APIs for creating partitions
 
     ### Features
-
-    - Integration with Kubernetes [quota management](https://github.com/openshift/instaslice-operator/blob/main/docs/instaslice_kube_quota_int.md)
-    - Integration with project [Kueue](https://github.com/openshift/instaslice-operator/blob/main/docs/kueue.md)
-    - [Emulator](https://github.com/openshift/instaslice-operator/blob/main/docs/emulator.md) mode to run test Dynamic Accelerator Slicer firstfit placement strategy
     - Integration with vLLM, Kserve, [Deployments](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_deployment.yaml), [Jobs](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_job.yaml), and [Statefulsets](https://github.com/openshift/instaslice-operator/blob/main/samples/vllm_statefulset.yaml)
 
     ### Prerequisites
