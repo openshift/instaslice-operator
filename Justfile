@@ -109,25 +109,25 @@ build-push: info build-push-scheduler build-push-daemonset build-push-operator b
 # Build and push scheduler image
 [group('build')]
 build-push-scheduler:
-    {{ PODMAN }} build -f Dockerfile.scheduler.ocp -t {{ SCHEDULER_IMAGE }} .
+    {{ PODMAN }} build --platform linux/amd64 --build-arg GOOS=linux --build-arg GOARCH=amd64 -f Dockerfile.scheduler.ocp -t {{ SCHEDULER_IMAGE }} .
     {{ PODMAN }} push {{ SCHEDULER_IMAGE }}
 
 # Build and push daemonset image
 [group('build')]
 build-push-daemonset:
-    {{ PODMAN }} build -f Dockerfile.daemonset.ocp -t {{ DAEMONSET_IMAGE }} .
+    {{ PODMAN }} build --platform linux/amd64 --build-arg GOOS=linux --build-arg GOARCH=amd64 -f Dockerfile.daemonset.ocp -t {{ DAEMONSET_IMAGE }} .
     {{ PODMAN }} push {{ DAEMONSET_IMAGE }}
 
 # Build and push operator image
 [group('build')]
 build-push-operator:
-    {{ PODMAN }} build -f Dockerfile.ocp -t {{ OPERATOR_IMAGE }} .
+    {{ PODMAN }} build --platform linux/amd64 --build-arg GOOS=linux --build-arg GOARCH=amd64 -f Dockerfile.ocp -t {{ OPERATOR_IMAGE }} .
     {{ PODMAN }} push {{ OPERATOR_IMAGE }}
 
 # Build and push webhook image
 [group('build')]
 build-push-webhook:
-    {{ PODMAN }} build -f Dockerfile.webhook.ocp -t {{ WEBHOOK_IMAGE }} .
+    {{ PODMAN }} build --platform linux/amd64 --build-arg GOOS=linux --build-arg GOARCH=amd64 -f Dockerfile.webhook.ocp -t {{ WEBHOOK_IMAGE }} .
     {{ PODMAN }} push {{ WEBHOOK_IMAGE }}
 
 # Generate operator bundle using operator-sdk
@@ -146,7 +146,7 @@ build-push-bundle: info (_build-push-bundle "bundle-ocp.Dockerfile")
 # Private function to build and push a bundle image
 [group('build')]
 _build-push-bundle bundleDockerfile:
-    {{ PODMAN }} build --build-arg RELATED_IMAGE_FILE="{{ RELATED_IMAGES }}" -f {{ bundleDockerfile }} -t {{ BUNDLE_IMAGE }} .
+    {{ PODMAN }} build --platform linux/amd64 --build-arg RELATED_IMAGE_FILE="{{ RELATED_IMAGES }}" --build-arg GOOS=linux --build-arg GOARCH=amd64 -f {{ bundleDockerfile }} -t {{ BUNDLE_IMAGE }} .
     {{ PODMAN }} push {{ BUNDLE_IMAGE }}
 
 # Deploy CRDs and run operator locally for development
