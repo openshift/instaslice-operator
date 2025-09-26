@@ -213,6 +213,8 @@ spec:
         - $(params.build-args[*])
       - name: BUILD_ARGS_FILE
         value: $(params.build-args-file)
+      - name: FORMAT
+        value: docker
       - name: PRIVILEGED_NESTED
         value: $(params.privileged-nested)
       - name: SOURCE_ARTIFACT
