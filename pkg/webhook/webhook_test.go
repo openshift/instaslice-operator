@@ -48,6 +48,10 @@ func TestMutatePodNvidiaResource(t *testing.T) {
 		t.Fatalf("expected scheduler %s, got %s", secondaryScheduler, mutated.Spec.SchedulerName)
 	}
 
+	if mutated.Spec.RuntimeClassName == nil || *mutated.Spec.RuntimeClassName != "nvidia-legacy" {
+		t.Fatalf("expected runtimeClassName nvidia-legacy")
+	}
+
 	limits := mutated.Spec.Containers[0].Resources.Limits
 	if _, ok := limits[corev1.ResourceName("nvidia.com/mig-1g.5gb")]; ok {
 		t.Fatalf("nvidia resource still present")
@@ -96,6 +100,9 @@ func TestMutatePodEphemeralNvidiaResource(t *testing.T) {
 	if mutated.Spec.SchedulerName != secondaryScheduler {
 		t.Fatalf("expected scheduler set")
 	}
+	if mutated.Spec.RuntimeClassName == nil || *mutated.Spec.RuntimeClassName != "nvidia-legacy" {
+		t.Fatalf("expected runtimeClassName nvidia-legacy")
+	}
 	limits := mutated.Spec.EphemeralContainers[0].Resources.Limits
 	if _, ok := limits[corev1.ResourceName("mig.das.com/1g.5gb")]; !ok {
 		t.Fatalf("instaslice resource missing")
@@ -142,6 +149,9 @@ func TestMutatePodOverrideValues(t *testing.T) {
 
 	if mutated.Spec.SchedulerName != secondaryScheduler {
 		t.Fatalf("scheduler not overridden")
+	}
+	if mutated.Spec.RuntimeClassName == nil || *mutated.Spec.RuntimeClassName != "nvidia-legacy" {
+		t.Fatalf("expected runtimeClassName nvidia-legacy")
 	}
 
 	envs := mutated.Spec.Containers[0].Env
@@ -194,6 +204,9 @@ func TestMutatePodInstaResource(t *testing.T) {
 	if mutated.Spec.SchedulerName != secondaryScheduler {
 		t.Fatalf("expected scheduler set")
 	}
+	if mutated.Spec.RuntimeClassName == nil || *mutated.Spec.RuntimeClassName != "nvidia-legacy" {
+		t.Fatalf("expected runtimeClassName nvidia-legacy")
+	}
 	if _, ok := mutated.Spec.Containers[0].Resources.Limits[corev1.ResourceName("mig.das.com/1g.5gb")]; !ok {
 		t.Fatalf("instaslice resource missing")
 	}
@@ -222,6 +235,9 @@ func TestMutatePodNoResource(t *testing.T) {
 	}
 	if mutated.Spec.SchedulerName != "" {
 		t.Fatalf("expected scheduler not set")
+	}
+	if mutated.Spec.RuntimeClassName != nil {
+		t.Fatalf("expected runtimeClassName not set for non-GPU pod")
 	}
 	if len(mutated.Spec.Containers[0].Env) != 0 {
 		t.Fatalf("env vars should not be added")

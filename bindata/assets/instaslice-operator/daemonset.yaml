@@ -16,6 +16,7 @@ spec:
     spec:
       nodeSelector:
         nvidia.com/mig.capable: "true"
+      runtimeClassName: nvidia-legacy
       securityContext:
         runAsNonRoot: false
         seccompProfile:

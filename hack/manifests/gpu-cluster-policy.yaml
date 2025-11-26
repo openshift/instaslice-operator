@@ -26,9 +26,6 @@ spec:
     certConfig:
       name: ""
     enabled: true
-    env:
-      - name: NVIDIA_RUNTIME_SET_AS_DEFAULT
-        value: "true"
     kernelModuleConfig:
       name: ""
     licensingConfig:
