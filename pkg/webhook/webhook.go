@@ -154,6 +154,11 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 	if needsScheduler {
 		mutatedPod.Spec.SchedulerName = secondaryScheduler
 		klog.InfoS("using secondary scheduler", "name", mutatedPod.Name)
+		// Set nvidia-legacy runtime for MIG workloads to avoid CDI resolution issues
+		// with the nvidia runtime's CDI mode
+		runtimeClass := "nvidia-legacy"
+		mutatedPod.Spec.RuntimeClassName = &runtimeClass
+		klog.InfoS("setting runtimeClassName for MIG workload", "name", mutatedPod.Name, "runtimeClassName", runtimeClass)
 	}
 
 	klog.InfoS("finished pod mutation", "mutatedPod", mutatedPod)
