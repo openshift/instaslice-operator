@@ -12,7 +12,7 @@ import (
 	"k8s.io/utils/clock"
 
 	cliflag "k8s.io/component-base/cli/flag"
-	"k8s.io/component-base/featuregate"
+	"k8s.io/component-base/compatibility"
 	logsapi "k8s.io/component-base/logs/api/v1"
 	"k8s.io/kubernetes/cmd/kube-scheduler/app"
 	scheduleroptions "k8s.io/kubernetes/cmd/kube-scheduler/app/options"
@@ -72,7 +72,7 @@ func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext, opts
 	klog.InfoS("Starting log level controller", "namespace", operatorNamespace)
 	go loglevel.NewClusterOperatorLoggingController(opClient, eventRecorder).Run(ctx, 1)
 
-	fg := opts.ComponentGlobalsRegistry.FeatureGateFor(featuregate.DefaultKubeComponent)
+	fg := opts.ComponentGlobalsRegistry.FeatureGateFor(compatibility.DefaultKubeComponent)
 	if err := logsapi.ValidateAndApply(opts.Logs, fg); err != nil {
 		return err
 	}
@@ -86,6 +86,5 @@ func RunScheduler(ctx context.Context, cc *controllercmd.ControllerContext, opts
 	if err != nil {
 		return err
 	}
-	fg.(featuregate.MutableFeatureGate).AddMetrics()
 	return app.Run(ctx, cfgCompleted, sched)
 }

@@ -16,6 +16,7 @@ import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
+	kubeschedulerframework "k8s.io/kube-scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
@@ -221,7 +222,7 @@ func TestFilter(t *testing.T) {
 	cases := []struct {
 		name     string
 		setup    func() (*Plugin, *corev1.Pod, *framework.NodeInfo)
-		expect   framework.Code
+		expect   kubeschedulerframework.Code
 		validate func(*testing.T, *Plugin)
 	}{
 		{
@@ -237,7 +238,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
-			expect: framework.Success,
+			expect: kubeschedulerframework.Success,
 		},
 		{
 			name: "unschedulable",
@@ -260,7 +261,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
-			expect: framework.Unschedulable,
+			expect: kubeschedulerframework.Unschedulable,
 		},
 		{
 			name: "no label",
@@ -274,7 +275,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}})
 				return p, pod, ni
 			},
-			expect: framework.Unschedulable,
+			expect: kubeschedulerframework.Unschedulable,
 		},
 		{
 			name: "init container",
@@ -288,7 +289,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
-			expect: framework.Success,
+			expect: kubeschedulerframework.Success,
 		},
 		{
 			name: "ephemeral container",
@@ -303,7 +304,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
-			expect: framework.Success,
+			expect: kubeschedulerframework.Success,
 		},
 		{
 			name: "multi profile container",
@@ -317,7 +318,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
-			expect: framework.Success,
+			expect: kubeschedulerframework.Success,
 		},
 		{
 			name: "multi count",
@@ -331,7 +332,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
-			expect: framework.Success,
+			expect: kubeschedulerframework.Success,
 			validate: func(t *testing.T, p *Plugin) {
 				allocs, _ := p.instaClient.OpenShiftOperatorV1alpha1().AllocationClaims(p.namespace).List(context.Background(), metav1.ListOptions{})
 				if len(allocs.Items) != 2 {
@@ -350,7 +351,7 @@ func TestFilter(t *testing.T) {
 				ni := framework.NewNodeInfo()
 				return p, pod, ni
 			},
-			expect: framework.Error,
+			expect: kubeschedulerframework.Error,
 		},
 		{
 			name: "lister error",
@@ -363,7 +364,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
-			expect: framework.Unschedulable,
+			expect: kubeschedulerframework.Unschedulable,
 		},
 		{
 			name: "unsupported accelerator",
@@ -378,7 +379,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
-			expect: framework.Unschedulable,
+			expect: kubeschedulerframework.Unschedulable,
 		},
 		{
 			name: "unmarshal error",
@@ -393,7 +394,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
-			expect: framework.Error,
+			expect: kubeschedulerframework.Error,
 		},
 		{
 			name: "no profiles",
@@ -407,7 +408,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
-			expect: framework.Success,
+			expect: kubeschedulerframework.Success,
 		},
 		{
 			name: "multi node success",
@@ -430,7 +431,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
-			expect: framework.Success,
+			expect: kubeschedulerframework.Success,
 		},
 		{
 			name: "multi node unschedulable",
@@ -453,7 +454,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node2", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
-			expect: framework.Unschedulable,
+			expect: kubeschedulerframework.Unschedulable,
 		},
 		{
 			name: "staged gpu ignored",
@@ -476,7 +477,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
-			expect: framework.Success,
+			expect: kubeschedulerframework.Success,
 		},
 		{
 			name: "all gpus staged",
@@ -505,7 +506,7 @@ func TestFilter(t *testing.T) {
 				ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 				return p, pod, ni
 			},
-			expect: framework.Unschedulable,
+			expect: kubeschedulerframework.Unschedulable,
 		},
 	}
 
@@ -514,7 +515,7 @@ func TestFilter(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p, pod, ni := tc.setup()
 			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
-			code := framework.Success
+			code := kubeschedulerframework.Success
 			if st != nil {
 				code = st.Code()
 			}
@@ -592,7 +593,7 @@ func TestFilterValidCombinations(t *testing.T) {
 			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
 			if st != nil {
-				if st.Code() != framework.Success {
+				if st.Code() != kubeschedulerframework.Success {
 					t.Fatalf("expected success, got %v", st.Code())
 				}
 			}
@@ -625,7 +626,7 @@ func TestFilterMaxProfileCounts(t *testing.T) {
 			ni := framework.NewNodeInfo()
 			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
-			if st != nil && st.Code() != framework.Success {
+			if st != nil && st.Code() != kubeschedulerframework.Success {
 				t.Fatalf("expected success, got %v", st.Code())
 			}
 		})
@@ -648,7 +649,7 @@ func TestFilterMaxProfileCounts(t *testing.T) {
 			ni := framework.NewNodeInfo()
 			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
-			if st == nil || st.Code() != framework.Unschedulable {
+			if st == nil || st.Code() != kubeschedulerframework.Unschedulable {
 				if st == nil {
 					t.Fatalf("expected unschedulable, got success")
 				} else {
@@ -728,7 +729,7 @@ func TestFilterInvalidCombinations(t *testing.T) {
 			ni := framework.NewNodeInfo()
 			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
-			if st == nil || st.Code() != framework.Unschedulable {
+			if st == nil || st.Code() != kubeschedulerframework.Unschedulable {
 				if st == nil {
 					t.Fatalf("expected unschedulable, got success")
 				} else {
@@ -816,7 +817,7 @@ func TestFilterValidCombinationsH100(t *testing.T) {
 			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
 			if st != nil {
-				if st.Code() != framework.Success {
+				if st.Code() != kubeschedulerframework.Success {
 					t.Fatalf("expected success, got %v", st.Code())
 				}
 			}
@@ -850,7 +851,7 @@ func TestFilterMaxProfileCountsH100(t *testing.T) {
 			ni := framework.NewNodeInfo()
 			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
-			if st != nil && st.Code() != framework.Success {
+			if st != nil && st.Code() != kubeschedulerframework.Success {
 				t.Fatalf("expected success, got %v", st.Code())
 			}
 		})
@@ -873,7 +874,7 @@ func TestFilterMaxProfileCountsH100(t *testing.T) {
 			ni := framework.NewNodeInfo()
 			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
-			if st == nil || st.Code() != framework.Unschedulable {
+			if st == nil || st.Code() != kubeschedulerframework.Unschedulable {
 				if st == nil {
 					t.Fatalf("expected unschedulable, got success")
 				} else {
@@ -966,7 +967,7 @@ func TestFilterInvalidCombinationsH100(t *testing.T) {
 			ni := framework.NewNodeInfo()
 			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
-			if st == nil || st.Code() != framework.Unschedulable {
+			if st == nil || st.Code() != kubeschedulerframework.Unschedulable {
 				if st == nil {
 					t.Fatalf("expected unschedulable, got success")
 				} else {
@@ -1052,7 +1053,7 @@ func TestFilterValidCombinationsH200(t *testing.T) {
 			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
 			if st != nil {
-				if st.Code() != framework.Success {
+				if st.Code() != kubeschedulerframework.Success {
 					t.Fatalf("expected success, got %v", st.Code())
 				}
 			}
@@ -1086,7 +1087,7 @@ func TestFilterMaxProfileCountsH200(t *testing.T) {
 			ni := framework.NewNodeInfo()
 			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
-			if st != nil && st.Code() != framework.Success {
+			if st != nil && st.Code() != kubeschedulerframework.Success {
 				t.Fatalf("expected success, got %v", st.Code())
 			}
 		})
@@ -1109,7 +1110,7 @@ func TestFilterMaxProfileCountsH200(t *testing.T) {
 			ni := framework.NewNodeInfo()
 			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
-			if st == nil || st.Code() != framework.Unschedulable {
+			if st == nil || st.Code() != kubeschedulerframework.Unschedulable {
 				if st == nil {
 					t.Fatalf("expected unschedulable, got success")
 				} else {
@@ -1202,7 +1203,7 @@ func TestFilterInvalidCombinationsH200(t *testing.T) {
 			ni := framework.NewNodeInfo()
 			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
-			if st == nil || st.Code() != framework.Unschedulable {
+			if st == nil || st.Code() != kubeschedulerframework.Unschedulable {
 				if st == nil {
 					t.Fatalf("expected unschedulable, got success")
 				} else {
@@ -1241,7 +1242,7 @@ func TestFilterWorksForAllGPUModels(t *testing.T) {
 			ni := framework.NewNodeInfo()
 			ni.SetNode(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"nvidia.com/mig.capable": "true"}}})
 			st := p.Filter(ctx, framework.NewCycleState(), pod, ni)
-			if st != nil && st.Code() != framework.Success {
+			if st != nil && st.Code() != kubeschedulerframework.Success {
 				t.Fatalf("expected success, got %v", st.Code())
 			}
 		})
@@ -1315,11 +1316,11 @@ func TestScheduleMultipleSliceTypes(t *testing.T) {
 			go func(n string) {
 				defer wg.Done()
 				st := p.Filter(ctx, cycle, pod, nodeInfos[n])
-				if st != nil && st.Code() != framework.Success {
+				if st != nil && st.Code() != kubeschedulerframework.Success {
 					return
 				}
-				score, st := p.Score(ctx, cycle, pod, n)
-				if st != nil && st.Code() != framework.Success {
+				score, st := p.Score(ctx, cycle, pod, nodeInfos[n])
+				if st != nil && st.Code() != kubeschedulerframework.Success {
 					errCh <- fmt.Errorf("score failed: %v", st.Code())
 					return
 				}
@@ -1356,7 +1357,7 @@ func TestScheduleMultipleSliceTypes(t *testing.T) {
 		if err := syncAllocations(ctx, p); err != nil {
 			return err
 		}
-		if st := p.PreBind(ctx, cycle, pod, bestNode); st != nil && st.Code() != framework.Success {
+		if st := p.PreBind(ctx, cycle, pod, bestNode); st != nil && st.Code() != kubeschedulerframework.Success {
 			return fmt.Errorf("prebind failed: %v", st.Code())
 		}
 		return syncAllocations(ctx, p)
@@ -1398,7 +1399,7 @@ func TestScheduleMultipleSliceTypes(t *testing.T) {
 	schedulable := false
 	for _, n := range nodes {
 		st := p.Filter(ctx, cycle, over, nodeInfos[n])
-		if st == nil || st.Code() == framework.Success {
+		if st == nil || st.Code() == kubeschedulerframework.Success {
 			schedulable = true
 		}
 		if err := syncAllocations(ctx, p); err != nil {
