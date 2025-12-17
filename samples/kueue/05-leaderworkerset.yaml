@@ -1,0 +1,111 @@
+# LeaderWorkerSet with MIG GPU - Kueue Managed
+#
+# LeaderWorkerSet manages groups of pods with a leader-worker pattern.
+# Useful for inference serving, parameter servers, etc.
+#
+# The DAS webhook transforms both leader and worker templates.
+#
+# Prerequisites:
+#   - LeaderWorkerSet controller installed
+#   - Kueue with DAS integration enabled
+#
+# Usage:
+#   kubectl apply -f 05-leaderworkerset.yaml
+
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: gpu-inference-cluster
+  labels:
+    # This label tells Kueue to manage this LeaderWorkerSet
+    kueue.x-k8s.io/queue-name: das-local-queue
+spec:
+  # Number of leader-worker groups
+  replicas: 1
+
+  leaderWorkerTemplate:
+    # Size includes the leader (1 leader + N-1 workers)
+    size: 3
+
+    # Leader pod template
+    leaderTemplate:
+      metadata:
+        labels:
+          role: leader
+      spec:
+        containers:
+        - name: leader
+          image: nvidia/cuda:12.0-base
+          command:
+          - sh
+          - -c
+          - |
+            echo "Leader starting..."
+            echo "Initializing model server..."
+            nvidia-smi
+            echo "Leader ready, coordinating workers..."
+            sleep 60
+            echo "Leader shutdown"
+          resources:
+            limits:
+              # Leader uses smaller MIG slice for coordination
+              nvidia.com/mig-1g.5gb: "1"
+              cpu: "2"
+              memory: "4Gi"
+            requests:
+              nvidia.com/mig-1g.5gb: "1"
+              cpu: "1"
+              memory: "2Gi"
+          ports:
+          - containerPort: 8080
+            name: http
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+        restartPolicy: Never
+        securityContext:
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+
+    # Worker pod template
+    workerTemplate:
+      metadata:
+        labels:
+          role: worker
+      spec:
+        containers:
+        - name: worker
+          image: nvidia/cuda:12.0-base
+          command:
+          - sh
+          - -c
+          - |
+            echo "Worker starting..."
+            echo "Connecting to leader..."
+            nvidia-smi
+            echo "Processing inference requests..."
+            sleep 60
+            echo "Worker shutdown"
+          resources:
+            limits:
+              # Workers use larger MIG slices for inference
+              nvidia.com/mig-3g.20gb: "1"
+              cpu: "4"
+              memory: "8Gi"
+            requests:
+              nvidia.com/mig-3g.20gb: "1"
+              cpu: "2"
+              memory: "4Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+        restartPolicy: Never
+        securityContext:
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault

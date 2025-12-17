@@ -88,13 +88,6 @@ func startServer() {
 	http.HandleFunc(podHook.GetReadinessURI(), podDispatcher.HandleReadiness)
 	http.HandleFunc(podHook.GetHealthzURI(), podDispatcher.HandleHealthz)
 
-	// Workload webhook (for Kueue integration)
-	workloadHook := webhook.NewWorkloadWebhook()
-	workloadDispatcher := webhook.NewGenericDispatcher(workloadHook)
-
-	http.HandleFunc(workloadHook.GetURI(), workloadDispatcher.HandleRequest)
-	klog.InfoS("Registered Workload webhook", "uri", workloadHook.GetURI())
-
 	// Job webhook (for Kueue integration - transforms Jobs before Kueue creates Workloads)
 	jobHook := webhook.NewJobWebhook()
 	jobDispatcher := webhook.NewGenericDispatcher(jobHook)

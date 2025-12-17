@@ -1,0 +1,116 @@
+# RayJob with MIG GPU - Kueue Managed
+#
+# This RayJob runs a Ray cluster with:
+#   - Head node: 1g.5gb MIG slice (5GB) for coordination
+#   - Workers: 3g.20gb MIG slices (20GB) for compute
+#
+# The DAS webhook transforms both head and worker group specs.
+#
+# Prerequisites:
+#   - KubeRay operator installed
+#   - Kueue with DAS integration enabled
+#
+# Usage:
+#   kubectl apply -f 03-rayjob.yaml
+
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: ray-gpu-job
+  labels:
+    # This label tells Kueue to manage this RayJob
+    kueue.x-k8s.io/queue-name: das-local-queue
+spec:
+  # Ray job entrypoint
+  entrypoint: |
+    python -c "
+    import ray
+    ray.init()
+
+    @ray.remote(num_gpus=1)
+    def gpu_task():
+        import torch
+        if torch.cuda.is_available():
+            return f'GPU: {torch.cuda.get_device_name(0)}'
+        return 'No GPU'
+
+    results = ray.get([gpu_task.remote() for _ in range(2)])
+    print('GPU Tasks completed:', results)
+    "
+
+  # Shutdown cluster after job completes
+  shutdownAfterJobFinishes: true
+  ttlSecondsAfterFinished: 300
+
+  rayClusterSpec:
+    # Head node configuration
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: "0.0.0.0"
+        num-gpus: "1"
+      template:
+        spec:
+          containers:
+          - name: ray-head
+            image: rayproject/ray-ml:2.9.0-py310-gpu
+            resources:
+              limits:
+                # Head uses smaller MIG slice
+                nvidia.com/mig-1g.5gb: "1"
+                cpu: "2"
+                memory: "4Gi"
+              requests:
+                nvidia.com/mig-1g.5gb: "1"
+                cpu: "1"
+                memory: "2Gi"
+            ports:
+            - containerPort: 6379
+              name: gcs
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+
+    # Worker nodes configuration
+    workerGroupSpecs:
+    - groupName: gpu-workers
+      replicas: 2
+      minReplicas: 1
+      maxReplicas: 4
+      rayStartParams:
+        num-gpus: "1"
+      template:
+        spec:
+          containers:
+          - name: ray-worker
+            image: rayproject/ray-ml:2.9.0-py310-gpu
+            resources:
+              limits:
+                # Workers use larger MIG slices
+                nvidia.com/mig-3g.20gb: "1"
+                cpu: "4"
+                memory: "8Gi"
+              requests:
+                nvidia.com/mig-3g.20gb: "1"
+                cpu: "2"
+                memory: "4Gi"
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault

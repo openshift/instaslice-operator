@@ -1,0 +1,84 @@
+# Kueue Setup for DAS (Dynamic Accelerator Slicer)
+#
+# This file sets up the Kueue resources needed for MIG GPU workloads with DAS.
+# The DAS webhook transforms nvidia.com/mig-* resources to gpu.das.openshift.io/mem
+# for quota management.
+#
+# Apply this file to set up Kueue for DAS-managed GPU workloads:
+#   kubectl apply -f 00-kueue-setup.yaml
+
+---
+# ResourceFlavor represents available GPU resources in the cluster
+# DAS uses gpu.das.openshift.io/mem for quota management (GPU memory in GB)
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ResourceFlavor
+metadata:
+  name: das-gpu-flavor
+spec:
+  # No node labels required - DAS scheduler handles GPU placement
+  nodeLabels: {}
+
+---
+# ClusterQueue defines the total GPU memory quota available
+# DAS manages quota based on gpu.das.openshift.io/mem (GPU memory in GB)
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: das-cluster-queue
+spec:
+  # Accept workloads from any namespace
+  namespaceSelector: {}
+
+  # Preemption settings (optional - adjust based on your needs)
+  preemption:
+    withinClusterQueue: Never
+    reclaimWithinCohort: Never
+
+  # Resource quota configuration
+  resourceGroups:
+  - coveredResources:
+    # GPU memory resource managed by DAS (in GB)
+    - gpu.das.openshift.io/mem
+    # Standard resources
+    - cpu
+    - memory
+    flavors:
+    - name: das-gpu-flavor
+      resources:
+      # Total GPU memory quota in GB
+      # Example: 80GB = 8x 1g.5gb slices or 4x 2g.10gb slices or 2x 3g.20gb + 2x 1g.5gb
+      - name: gpu.das.openshift.io/mem
+        nominalQuota: "80"
+      # CPU and memory quotas
+      - name: cpu
+        nominalQuota: "100"
+      - name: memory
+        nominalQuota: "200Gi"
+
+---
+# LocalQueue is created in each namespace where workloads will run
+# Workloads reference this queue via the kueue.x-k8s.io/queue-name label
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: LocalQueue
+metadata:
+  name: das-local-queue
+  namespace: default  # Change to your namespace
+spec:
+  clusterQueue: das-cluster-queue
+
+---
+# Example: Create LocalQueue in a specific namespace
+# Uncomment and modify as needed
+#
+# apiVersion: v1
+# kind: Namespace
+# metadata:
+#   name: ml-workloads
+# ---
+# apiVersion: kueue.x-k8s.io/v1beta1
+# kind: LocalQueue
+# metadata:
+#   name: das-local-queue
+#   namespace: ml-workloads
+# spec:
+#   clusterQueue: das-cluster-queue

@@ -1,0 +1,50 @@
+# Kubernetes Job with MIG GPU - Kueue Managed
+#
+# This Job requests a 1g.5gb MIG slice (5GB GPU memory).
+# The DAS webhook will:
+#   1. Transform nvidia.com/mig-1g.5gb to gpu.das.openshift.io/mem: 5
+#   2. Set schedulerName to das-scheduler
+#   3. Set runtimeClassName to nvidia-legacy
+#   4. Add das.openshift.io/mig-profiles annotation
+#
+# Usage:
+#   kubectl apply -f 01-job.yaml
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mig-job-example
+  labels:
+    # This label tells Kueue to manage this Job
+    kueue.x-k8s.io/queue-name: das-local-queue
+spec:
+  template:
+    spec:
+      containers:
+      - name: gpu-workload
+        image: nvidia/cuda:12.0-base
+        command:
+        - sh
+        - -c
+        - |
+          echo "Starting MIG GPU workload"
+          nvidia-smi
+          echo "GPU workload completed"
+        resources:
+          limits:
+            # Request a 1g.5gb MIG slice (5GB GPU memory)
+            # Other options: 2g.10gb (10GB), 3g.20gb (20GB), 4g.20gb (20GB), 7g.40gb (40GB)
+            nvidia.com/mig-1g.5gb: "1"
+          requests:
+            nvidia.com/mig-1g.5gb: "1"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+  backoffLimit: 0
