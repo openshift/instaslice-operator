@@ -192,11 +192,11 @@ func TestAllocateEmulated(t *testing.T) {
 				t.Fatalf("expected %d responses, got %d", tc.containers, len(resp.ContainerResponses))
 			}
 			for i, cr := range resp.ContainerResponses {
-				if len(cr.CDIDevices) != 1 {
-					t.Fatalf("response %d expected 1 CDI device, got %d", i, len(cr.CDIDevices))
+				if len(cr.CdiDevices) != 1 {
+					t.Fatalf("response %d expected 1 CDI device, got %d", i, len(cr.CdiDevices))
 				}
-				if !strings.HasPrefix(cr.CDIDevices[0].Name, "mig.das.com/c1g.5gb=") {
-					t.Fatalf("response %d unexpected CDI device %q", i, cr.CDIDevices[0].Name)
+				if !strings.HasPrefix(cr.CdiDevices[0].Name, "mig.das.com/c1g.5gb=") {
+					t.Fatalf("response %d unexpected CDI device %q", i, cr.CdiDevices[0].Name)
 				}
 			}
 
@@ -246,8 +246,8 @@ func TestAllocateMultipleDevices(t *testing.T) {
 	}
 
 	req := &pluginapi.AllocateRequest{ContainerRequests: []*pluginapi.ContainerAllocateRequest{
-		{DevicesIDs: []string{"id1", "id2"}},
-		{DevicesIDs: []string{"id3", "id4"}},
+		{DevicesIds: []string{"id1", "id2"}},
+		{DevicesIds: []string{"id3", "id4"}},
 	}}
 
 	resp, err := srv.Allocate(context.Background(), req)
@@ -259,8 +259,8 @@ func TestAllocateMultipleDevices(t *testing.T) {
 		t.Fatalf("expected %d responses, got %d", len(req.ContainerRequests), len(resp.ContainerResponses))
 	}
 	for i, cr := range resp.ContainerResponses {
-		if len(cr.CDIDevices) != 1 {
-			t.Fatalf("response %d expected 1 CDI device, got %d", i, len(cr.CDIDevices))
+		if len(cr.CdiDevices) != 1 {
+			t.Fatalf("response %d expected 1 CDI device, got %d", i, len(cr.CdiDevices))
 		}
 	}
 
@@ -325,11 +325,12 @@ func TestGetAllocationsByNodeGPU(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getAllocationsByNodeGPU returned error: %v", err)
 	}
-	if len(res) != 1 || res[0] != alloc {
-		t.Fatalf("expected returned allocation")
+	if len(res) != 1 || res[0].Name != alloc.Name {
+		t.Fatalf("expected returned allocation with matching name")
 	}
-	if alloc.Status.State != instav1.AllocationClaimStatusProcessing {
-		t.Fatalf("expected allocation status updated, got %s", alloc.Status.State)
+	// The returned allocation is a deep copy, so check the status on the returned copy
+	if res[0].Status.State != instav1.AllocationClaimStatusProcessing {
+		t.Fatalf("expected allocation status updated, got %s", res[0].Status.State)
 	}
 }
 
