@@ -8,7 +8,10 @@ import (
 	admissionctl "sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
+
+	"github.com/openshift/instaslice-operator/pkg/constants"
 )
 
 const (
@@ -16,7 +19,6 @@ const (
 	ReadinessEndpointURI string = "/readyz"
 	HealthzEndpointURI   string = "/healthz"
 	WebhookName          string = "das-webhook"
-	secondaryScheduler   string = "das-scheduler"
 )
 
 // Webhook interface
@@ -84,7 +86,7 @@ func (s *InstasliceWebhook) Authorized(request admissionctl.Request) admissionct
 	klog.V(4).InfoS("Returning patch response for Pod", "uid", request.UID)
 	ret = admissionctl.PatchResponseFromRaw(request.Object.Raw, mutatePod)
 	ret.UID = request.UID
-	klog.InfoS("Webhook Authorized response", "uid", request.UID, "patch", string(ret.Patch))
+	klog.V(4).InfoS("Webhook Authorized response", "uid", request.UID, "patchLen", len(ret.Patch))
 	return ret
 }
 
@@ -93,6 +95,34 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 	mutatedPod := pod.DeepCopy()
 	needsScheduler := false
 
+	// Check if this Pod will be managed by Kueue (has queue label)
+	isKueueManaged := false
+	if mutatedPod.Labels != nil {
+		if queueName, exists := mutatedPod.Labels[constants.KueueQueueLabel]; exists {
+			isKueueManaged = true
+			klog.InfoS("Pod has Kueue queue label - using annotation-based approach", "name", pod.Name, "queue", queueName)
+		}
+	}
+	if !isKueueManaged {
+		klog.InfoS("Pod not managed by Kueue - using standard resource injection", "name", pod.Name)
+	}
+
+	// Track MIG profiles for DAS scheduler via annotations (Kueue-managed Pods only).
+	migProfiles := make(map[string]int64)
+
+	// Check if the Workload webhook has already injected GPU memory resource.
+	// This happens when the Pod comes from a Kueue-managed Job/Workload.
+	gpuMemoryAlreadyInjected := false
+	for _, c := range mutatedPod.Spec.Containers {
+		if c.Resources.Limits != nil {
+			if _, exists := c.Resources.Limits[corev1.ResourceName(constants.GPUMemoryResource)]; exists {
+				gpuMemoryAlreadyInjected = true
+				klog.V(4).InfoS("GPU memory already injected by Workload webhook, skipping re-injection", "name", pod.Name)
+				break
+			}
+		}
+	}
+
 	mutateResources := func(c *corev1.Container) {
 		if c.Resources.Limits == nil {
 			return
@@ -100,35 +130,82 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 		klog.InfoS("checking container resources", "container", c.Name)
 		newLimits := corev1.ResourceList{}
 		newRequests := corev1.ResourceList{}
+		totalGPUMemory := int64(0)
 
 		for name, qty := range c.Resources.Limits {
 			key := string(name)
 			switch {
-			case strings.HasPrefix(key, "nvidia.com/mig-"):
-				profile := strings.TrimPrefix(key, "nvidia.com/mig-")
-				newKey := corev1.ResourceName("mig.das.com/" + profile)
-				klog.InfoS("renaming GPU resource", "from", key, "to", newKey)
-				newLimits[newKey] = qty
-				newRequests[newKey] = qty
+			case strings.HasPrefix(key, constants.NVIDIAMIGResourcePrefix):
+				profile := strings.TrimPrefix(key, constants.NVIDIAMIGResourcePrefix)
+				// For Kueue-managed Pods: Store original profile in annotations for DAS scheduler.
+				if !isKueueManaged {
+					newKey := corev1.ResourceName(constants.MIGResourcePrefix + profile)
+					klog.InfoS("renaming GPU resource for non-Kueue Pod", "from", key, "to", newKey)
+					newLimits[newKey] = qty
+					newRequests[newKey] = qty
+				} else {
+					// Store original profile for DAS scheduler to read from annotations.
+					migProfiles[profile] = qty.Value()
+					klog.InfoS("storing original MIG profile for Kueue-managed Pod", "profile", profile, "quantity", qty.Value())
+				}
 				needsScheduler = true
-			case strings.HasPrefix(key, "nvidia.com/"):
-				newKey := corev1.ResourceName(strings.Replace(key, "nvidia.com/", "mig.das.com/", 1))
+
+				// Extract GPU memory from profile and accumulate (only if not already injected).
+				if !gpuMemoryAlreadyInjected {
+					memGB := extractGPUMemoryFromProfile(profile)
+					if memGB > 0 {
+						totalGPUMemory += memGB * qty.Value()
+						klog.InfoS("extracted GPU memory from profile", "profile", profile, "memoryGB", memGB, "quantity", qty.Value(), "totalMemory", totalGPUMemory)
+					}
+				}
+			case strings.HasPrefix(key, constants.NVIDIAResourcePrefix):
+				newKey := corev1.ResourceName(strings.Replace(key, constants.NVIDIAResourcePrefix, constants.MIGResourcePrefix, 1))
 				klog.InfoS("renaming GPU resource", "from", key, "to", newKey)
 				newLimits[newKey] = qty
 				newRequests[newKey] = qty
 				needsScheduler = true
 			default:
 				newLimits[name] = qty
-				if strings.HasPrefix(key, "mig.das.com/") {
+				if strings.HasPrefix(key, constants.MIGResourcePrefix) {
 					needsScheduler = true
+					// Extract GPU memory from existing MIG profile resource (only if not already injected).
+					if !gpuMemoryAlreadyInjected {
+						profile := strings.TrimPrefix(key, constants.MIGResourcePrefix)
+						memGB := extractGPUMemoryFromProfile(profile)
+						if memGB > 0 {
+							totalGPUMemory += memGB * qty.Value()
+							klog.InfoS("extracted GPU memory from existing profile", "profile", profile, "memoryGB", memGB, "quantity", qty.Value(), "totalMemory", totalGPUMemory)
+						}
+					}
 				}
 			}
 		}
 
+		// Inject GPU memory resource if we found any MIG profiles and it wasn't already injected.
+		if totalGPUMemory > 0 && !gpuMemoryAlreadyInjected {
+			gpuMemResource := corev1.ResourceName(constants.GPUMemoryResource)
+			gpuMemQuantity := resource.NewQuantity(totalGPUMemory, resource.DecimalSI)
+			newLimits[gpuMemResource] = *gpuMemQuantity
+			newRequests[gpuMemResource] = *gpuMemQuantity
+			klog.InfoS("injecting GPU memory resource", "resource", constants.GPUMemoryResource, "totalMemoryGB", totalGPUMemory)
+		}
+
 		for name, qty := range c.Resources.Requests {
 			key := string(name)
-			if !strings.HasPrefix(key, "nvidia.com/") && !strings.HasPrefix(key, "mig.das.com/") {
+			// Keep non-NVIDIA resources and gpu.das.openshift.io/mem (which may have been
+			// injected by the Workload webhook and must be preserved in both limits and requests)
+			if !strings.HasPrefix(key, constants.NVIDIAResourcePrefix) && !strings.HasPrefix(key, constants.MIGResourcePrefix) {
 				newRequests[name] = qty
+			}
+		}
+
+		// Kubernetes expects extended resources to have identical Requests and Limits.
+		// In some flows (e.g. Workload webhook injection) gpu.das.openshift.io/mem may appear
+		// in Limits but not Requests; ensure we keep them consistent.
+		gpuMemResource := corev1.ResourceName(constants.GPUMemoryResource)
+		if qty, ok := newLimits[gpuMemResource]; ok {
+			if _, okReq := newRequests[gpuMemResource]; !okReq {
+				newRequests[gpuMemResource] = qty
 			}
 		}
 
@@ -152,29 +229,33 @@ func (s *InstasliceWebhook) mutatePod(pod *corev1.Pod) ([]byte, error) {
 	}
 
 	if needsScheduler {
-		mutatedPod.Spec.SchedulerName = secondaryScheduler
+		mutatedPod.Spec.SchedulerName = constants.DASSchedulerName
 		klog.InfoS("using secondary scheduler", "name", mutatedPod.Name)
 		// Set nvidia-legacy runtime for MIG workloads to avoid CDI resolution issues
 		// with the nvidia runtime's CDI mode
-		runtimeClass := "nvidia-legacy"
+		runtimeClass := constants.NvidiaLegacyRuntimeClass
 		mutatedPod.Spec.RuntimeClassName = &runtimeClass
 		klog.InfoS("setting runtimeClassName for MIG workload", "name", mutatedPod.Name, "runtimeClassName", runtimeClass)
 	}
 
-	klog.InfoS("finished pod mutation", "mutatedPod", mutatedPod)
+	if len(migProfiles) > 0 && isKueueManaged {
+		if mutatedPod.Annotations == nil {
+			mutatedPod.Annotations = make(map[string]string)
+		}
+		mutatedPod.Annotations[constants.MIGProfileAnnotation] = SerializeMIGProfiles(migProfiles)
+		klog.InfoS("added MIG profiles to Pod annotations for Kueue-managed Pod", "annotation", mutatedPod.Annotations[constants.MIGProfileAnnotation])
+	}
+
+	klog.V(5).InfoS("finished pod mutation", "name", mutatedPod.Name, "namespace", mutatedPod.Namespace, "schedulerName", mutatedPod.Spec.SchedulerName, "runtimeClassName", mutatedPod.Spec.RuntimeClassName)
 	return json.Marshal(mutatedPod)
 }
 
 func (s *InstasliceWebhook) renderPod(request admissionctl.Request) (*corev1.Pod, error) {
-	var err error
 	klog.InfoS("Rendering Pod from request", "uid", request.UID)
 	decoder := admissionctl.NewDecoder(scheme)
 	pod := &corev1.Pod{}
-	if len(request.OldObject.Raw) > 0 {
-		err = decoder.DecodeRaw(request.OldObject, pod)
-	} else {
-		err = decoder.DecodeRaw(request.Object, pod)
-	}
-
+	// Always use Object (the new/current state) for both CREATE and UPDATE operations.
+	// Using OldObject on UPDATE would cause us to lose changes made by other controllers.
+	err := decoder.DecodeRaw(request.Object, pod)
 	return pod, err
 }
