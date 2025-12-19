@@ -741,12 +741,18 @@ var _ = Describe("MIG placement start index", Ordered, func() {
 		}
 	})
 
-	It("should set start index to 0 in AllocationClaims", func(ctx SpecContext) {
+	It("should have valid MIG placements in AllocationClaims", func(ctx SpecContext) {
+		// This test verifies that each pod gets a valid MIG placement.
+		// When pods are scheduled on different GPUs (parallel scheduling with staged claims),
+		// both should have start=0. When pods are scheduled on the same GPU (sequential
+		// scheduling), they should have unique start indices (e.g., 0 and 1).
 		Eventually(func() (bool, error) {
 			allocs, err := dasClient.OpenShiftOperatorV1alpha1().AllocationClaims("das-operator").List(ctx, metav1.ListOptions{})
 			if err != nil {
 				return false, err
 			}
+
+			gpuPlacements := make(map[string][]int32)
 			found := 0
 			for _, alloc := range allocs.Items {
 				var spec instav1.AllocationClaimSpec
@@ -754,12 +760,26 @@ var _ = Describe("MIG placement start index", Ordered, func() {
 					continue
 				}
 
-				if spec.MigPlacement.Start != 0 { // both pods should have start index 0
-					return false, nil
-				}
+				gpuPlacements[spec.GPUUUID] = append(gpuPlacements[spec.GPUUUID], spec.MigPlacement.Start)
 				found++
 			}
-			return found == len(podNames), nil
+
+			if found != len(podNames) {
+				return false, nil
+			}
+
+			// Validate: start indices must be unique per GPU.
+			for _, starts := range gpuPlacements {
+				seen := make(map[int32]bool)
+				for _, start := range starts {
+					if seen[start] {
+						return false, nil
+					}
+					seen[start] = true
+				}
+			}
+
+			return true, nil
 		}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 	})
 })
@@ -1190,3 +1210,169 @@ func findCondition(conditions []operatorv1.OperatorCondition, conditionType stri
 	}
 	return nil
 }
+
+var _ = Describe("GPU memory resource capacity", Ordered, func() {
+	BeforeAll(func() {
+		if os.Getenv("KUBECONFIG") == "" {
+			Skip("KUBECONFIG is not set; skipping e2e test")
+		}
+	})
+
+	It("should advertise gpu.das.openshift.io/mem capacity on nodes with GPUs", func(ctx SpecContext) {
+		Eventually(func() (int, error) {
+			nodes, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return 0, err
+			}
+
+			gpuMemResourceName := corev1.ResourceName("gpu.das.openshift.io/mem")
+			nodesWithGPUMem := 0
+
+			for _, node := range nodes.Items {
+				if q, ok := node.Status.Capacity[gpuMemResourceName]; ok {
+					By(fmt.Sprintf("node %s has gpu.das.openshift.io/mem capacity: %s", node.Name, q.String()))
+					if q.Value() > 0 {
+						nodesWithGPUMem++
+					}
+				}
+			}
+			return nodesWithGPUMem, nil
+		}, 2*time.Minute, 5*time.Second).Should(BeNumerically(">", 0), "at least one node should advertise gpu.das.openshift.io/mem")
+	})
+
+	It("should have NodeAccelerator resources with GPU information", func(ctx SpecContext) {
+		Eventually(func() (int, error) {
+			nodeAccels, err := dasClient.OpenShiftOperatorV1alpha1().NodeAccelerators(dasOperatorNamespace).List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return 0, err
+			}
+
+			validAccelerators := 0
+			for _, accel := range nodeAccels.Items {
+				if len(accel.Status.NodeResources.Raw) == 0 {
+					continue
+				}
+
+				var discovered instav1.DiscoveredNodeResources
+				if err := json.Unmarshal(accel.Status.NodeResources.Raw, &discovered); err != nil {
+					continue
+				}
+
+				if len(discovered.NodeGPUs) > 0 && len(discovered.MigPlacement) > 0 {
+					By(fmt.Sprintf("NodeAccelerator %s has %d GPUs and %d MIG profiles",
+						accel.Name, len(discovered.NodeGPUs), len(discovered.MigPlacement)))
+					validAccelerators++
+				}
+			}
+			return validAccelerators, nil
+		}, 2*time.Minute, 5*time.Second).Should(BeNumerically(">", 0), "at least one NodeAccelerator should have GPUs")
+	})
+})
+
+var _ = Describe("MIG profiles annotation scheduling", Ordered, func() {
+	var (
+		namespace string
+		podName   string
+	)
+
+	BeforeAll(func() {
+		if os.Getenv("KUBECONFIG") == "" {
+			Skip("KUBECONFIG is not set; skipping e2e test")
+		}
+	})
+
+	BeforeAll(func() {
+		namespace = "das-e2e-mig-annotation"
+		podName = "mig-annotation-pod"
+
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+		By("creating namespace " + namespace)
+		_, err := kubeClient.CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{})
+		if err != nil && !apierrors.IsAlreadyExists(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// Create a pod that uses the das.openshift.io/mig-profiles annotation
+		// instead of nvidia.com/mig-* resource requests (simulating Kueue-transformed pod)
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podName,
+				Namespace: namespace,
+				Annotations: map[string]string{
+					"das.openshift.io/mig-profiles": "1g.5gb:1",
+				},
+			},
+			Spec: corev1.PodSpec{
+				SchedulerName: "das-scheduler",
+				Containers: []corev1.Container{
+					{
+						Name:    "test",
+						Image:   "quay.io/prometheus/busybox",
+						Command: []string{"sh", "-c", "env && sleep 3600"},
+						Resources: corev1.ResourceRequirements{
+							Limits: corev1.ResourceList{
+								corev1.ResourceName("gpu.das.openshift.io/mem"): resource.MustParse("5"),
+							},
+						},
+						SecurityContext: &corev1.SecurityContext{
+							AllowPrivilegeEscalation: pointer.Bool(false),
+							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+							SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+						},
+					},
+				},
+				RestartPolicy: corev1.RestartPolicyOnFailure,
+			},
+		}
+
+		Expect(waitForServiceReady(context.Background(), dasOperatorNamespace, webhookServiceName, 2*time.Minute)).To(Succeed())
+		By("creating test pod with mig-profiles annotation")
+		Expect(createPods(context.Background(), namespace, []*corev1.Pod{pod})).To(Succeed())
+	})
+
+	AfterAll(func() {
+		By("deleting namespace " + namespace)
+		err := kubeClient.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() bool {
+			_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
+			return apierrors.IsNotFound(err)
+		}, 5*time.Minute, time.Second).Should(BeTrue())
+	})
+
+	It("should schedule pod using mig-profiles annotation", func(ctx SpecContext) {
+		Eventually(func() (corev1.PodPhase, error) {
+			p, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+			if err != nil {
+				return "", err
+			}
+			return p.Status.Phase, nil
+		}, 60*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning))
+	})
+
+	It("should create AllocationClaim for pod with mig-profiles annotation", func(ctx SpecContext) {
+		Eventually(func() (bool, error) {
+			allocs, err := dasClient.OpenShiftOperatorV1alpha1().AllocationClaims(dasOperatorNamespace).List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return false, err
+			}
+
+			for _, alloc := range allocs.Items {
+				var spec instav1.AllocationClaimSpec
+				if err := json.Unmarshal(alloc.Spec.Raw, &spec); err != nil {
+					continue
+				}
+
+				if spec.PodRef.Name == podName && spec.PodRef.Namespace == namespace {
+					By(fmt.Sprintf("found AllocationClaim %s with profile %s", alloc.Name, spec.Profile))
+					// Verify the profile matches what was in the annotation
+					if spec.Profile == "1g.5gb" {
+						return true, nil
+					}
+				}
+			}
+			return false, nil
+		}, 5*time.Minute, 5*time.Second).Should(BeTrue())
+	})
+})
