@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
 	v1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -26,7 +27,8 @@ import (
 // with apply.
 type DASOperatorSpecApplyConfiguration struct {
 	v1.OperatorSpecApplyConfiguration `json:",inline"`
-	NodeSelector                      map[string]string `json:"nodeSelector,omitempty"`
+	NodeSelector                      map[string]string            `json:"nodeSelector,omitempty"`
+	TLSSecurityProfile                *configv1.TLSSecurityProfile `json:"tlsSecurityProfile,omitempty"`
 }
 
 // DASOperatorSpecApplyConfiguration constructs a declarative configuration of the DASOperatorSpec type for use with
@@ -86,5 +88,13 @@ func (b *DASOperatorSpecApplyConfiguration) WithNodeSelector(entries map[string]
 	for k, v := range entries {
 		b.NodeSelector[k] = v
 	}
+	return b
+}
+
+// WithTLSSecurityProfile sets the TLSSecurityProfile field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the TLSSecurityProfile field is set to the value of the last call.
+func (b *DASOperatorSpecApplyConfiguration) WithTLSSecurityProfile(value configv1.TLSSecurityProfile) *DASOperatorSpecApplyConfiguration {
+	b.TLSSecurityProfile = &value
 	return b
 }

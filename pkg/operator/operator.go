@@ -5,14 +5,17 @@ import (
 	"os"
 	"time"
 
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/loglevel"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 
 	apiextclientv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	appsv1client "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/klog/v2"
 
@@ -21,6 +24,10 @@ import (
 	operatorclientinformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
 	"github.com/openshift/instaslice-operator/pkg/operator/operatorclient"
 )
+
+func init() {
+	utilruntime.Must(configv1.AddToScheme(clientgoscheme.Scheme))
+}
 
 var operatorNamespace = "das-operator"
 

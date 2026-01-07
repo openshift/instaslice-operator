@@ -142,6 +142,15 @@ rules:
       - infrastructures
     verbs:
       - get
+  # TLS security profile access
+  - apiGroups:
+      - config.openshift.io
+    resources:
+      - apiservers
+    verbs:
+      - get
+      - list
+      - watch
   - apiGroups:
     - cert-manager.io
     resources:

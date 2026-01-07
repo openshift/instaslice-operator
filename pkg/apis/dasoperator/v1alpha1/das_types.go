@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -43,6 +44,13 @@ type DASOperatorSpec struct {
 	// NodeSelector allows additional node label filters for the daemonset pods
 	// +optional
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	// tlsSecurityProfile specifies the TLS security profile for the operator's
+	// HTTPS endpoints (webhooks, metrics). If not set, the cluster-wide
+	// APIServer TLS profile is used. If that is also not set, the Intermediate
+	// profile is used as default.
+	// +optional
+	TLSSecurityProfile *configv1.TLSSecurityProfile `json:"tlsSecurityProfile,omitempty"`
 }
 
 // DASOperatorStatus defines the observed state of DASOperator

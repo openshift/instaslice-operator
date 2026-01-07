@@ -55,6 +55,15 @@ rules:
   - infrastructures
   verbs:
   - get
+# TLS security profile access
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - apiservers
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - events.k8s.io
   resources:
