@@ -9,7 +9,7 @@
   },
   {
     "name": "instaslice-webhook-next",
-    "image": "registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-webhook-rhel9@sha256:d13a59ed2494fa49d087e86863e65d1779e569f151d9bd4f9c61127540f56f62"
+    "image": "registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-webhook-rhel9@sha256:6eba619677b177cdb31538502deebc257936abcecb1f5ad92be7bffd1da05854"
   },
   {
     "name": "instaslice-operator-next",
