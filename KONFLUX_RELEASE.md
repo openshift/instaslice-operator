@@ -4,7 +4,11 @@
 
 This guide documents the step-by-step process for adding new OpenShift Container Platform (OCP) release support to the InstaSlice Operator (Dynamic Accelerator Slicer) in the Konflux release infrastructure.
 
-The InstaSlice operator uses File-Based Catalog (FBC) releases for different OCP versions. Each new OCP version requires changes in **two separate repositories**:
+The InstaSlice operator uses File-Based Catalog (FBC) releases for different OCP versions. Each new OCP version requires changes in **two separate repositories**.
+
+For additional context on Konflux concepts and workflows, refer to the [official Konflux documentation](https://konflux-ci.dev/docs/). For File-Based Catalog fundamentals, see the [FBC documentation](https://olm.operatorframework.io/docs/reference/file-based-catalogs/).
+
+### Repository Changes Required
 
 ### Important Prerequisite
 
@@ -57,6 +61,8 @@ git checkout -b add_ocp_<VERSION>_support
 This section covers creating the Konflux application and setting up the build pipelines for the new OCP version in the instaslice-fbc repository.
 
 **Important:** Complete this part first to create the Konflux application (e.g., `dynamicacceleratorslicer-fbc-4-20`). This application must exist and be building successfully before you can configure the release plans in Part B.
+
+**Reference Examples:** For a complete example of this process, see [PR #9: Add 4.19](https://github.com/openshift/instaslice-fbc/pull/9) which demonstrates adding OCP 4.19 support. For more information on File-Based Catalogs in Konflux, refer to the [Konflux OLM Operator Sample Documentation](https://github.com/konflux-ci/olm-operator-konflux-sample/blob/main/docs/konflux-onboarding.md#building-a-file-based-catalog).
 
 After completing these steps, proceed to Part B for konflux-release-data repository changes.
 
@@ -290,6 +296,8 @@ Once the application is confirmed to be working, you can proceed to Part B to co
 This section covers the steps required in the konflux-release-data repository to configure the release plans.
 
 **Important:** Before proceeding with Part B, ensure that the Konflux application for your target OCP version has been created and is building successfully (Part A must be completed first). The release plans created in this section will reference the application created in Part A.
+
+**Reference Examples:** For examples of release plan configurations, search the konflux-release-data repository MR history for branches named "das_4.19" or "das_4.18". For more information on Konflux release pipelines, see the [Konflux Release Pipeline Documentation](https://konflux-ci.dev/docs/advanced-how-tos/releasing/).
 
 After completing these steps, your new OCP version will be fully configured for both staging and production releases!
 
@@ -764,11 +772,23 @@ git add CODEOWNERS
 
 ## References
 
-- [Konflux Release Service Documentation](https://github.com/konflux-ci/release-service-catalog)
-- [konflux-release-data Repository](https://gitlab.cee.redhat.com/releng/konflux-release-data)
-- [instaslice-fbc Repository](https://github.com/openshift/instaslice-fbc)
-- [Konflux OLM Operator Sample Documentation](https://github.com/konflux-ci/olm-operator-konflux-sample/blob/main/docs/konflux-onboarding.md#building-a-file-based-catalog)
-- [Operator Package Manager (opm)](https://github.com/operator-framework/operator-registry)
+### Official Konflux Documentation
+
+- [Konflux Documentation](https://konflux-ci.dev/docs/) - Main Konflux documentation portal
+- [Konflux Release Service Documentation](https://github.com/konflux-ci/release-service-catalog) - Release service catalog and examples
+- [Konflux OLM Operator Sample Documentation](https://github.com/konflux-ci/olm-operator-konflux-sample/blob/main/docs/konflux-onboarding.md#building-a-file-based-catalog) - Guide for building File-Based Catalogs in Konflux
+- [Konflux Release Pipeline Documentation](https://konflux-ci.dev/docs/advanced-how-tos/releasing/) - How to configure and use release pipelines
+- [File-Based Catalog (FBC) Documentation](https://olm.operatorframework.io/docs/reference/file-based-catalogs/) - Operator Framework FBC reference
+
+### Repositories
+
+- [konflux-release-data Repository](https://gitlab.cee.redhat.com/releng/konflux-release-data) - Release configuration repository
+- [instaslice-fbc Repository](https://github.com/openshift/instaslice-fbc) - InstaSlice File-Based Catalog repository
+
+### Tools Documentation
+
+- [Operator Package Manager (opm)](https://github.com/operator-framework/operator-registry) - Tool for managing operator bundles and catalogs
+- [Kustomize Documentation](https://kubectl.docs.kubernetes.io/references/kustomize/) - Kubernetes manifest customization tool
 
 ---
 **Last Updated:** 2026-01-22
