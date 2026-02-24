@@ -1,0 +1,15 @@
+# Allow outbound traffic to kube-apiserver for all DAS pods.
+# All components (operator, webhook, scheduler, daemonset) need API server access.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: das-allow-egress-kube-apiserver
+  namespace: das-operator
+spec:
+  podSelector: {}
+  egress:
+  - ports:
+    - protocol: TCP
+      port: 6443
+  policyTypes:
+  - Egress

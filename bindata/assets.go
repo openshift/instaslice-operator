@@ -2,6 +2,8 @@ package bindata
 
 import (
 	"embed"
+	"io/fs"
+	"path/filepath"
 )
 
 //go:embed assets/*
@@ -21,4 +23,19 @@ func MustAsset(name string) []byte {
 	}
 
 	return data
+}
+
+// AssetDir returns the file names in the given directory within the embedded filesystem.
+func AssetDir(dir string) ([]string, error) {
+	entries, err := fs.ReadDir(f, dir)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			names = append(names, filepath.Base(entry.Name()))
+		}
+	}
+	return names, nil
 }

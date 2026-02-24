@@ -1,0 +1,17 @@
+# Allow inbound traffic from kube-apiserver to the webhook pods on port 8443.
+# The API server calls the webhook for pod admission mutations.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: das-allow-ingress-webhook
+  namespace: das-operator
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: das-operator-webhook
+  ingress:
+  - ports:
+    - protocol: TCP
+      port: 8443
+  policyTypes:
+  - Ingress

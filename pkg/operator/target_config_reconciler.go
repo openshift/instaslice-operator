@@ -26,6 +26,7 @@ import (
 	slicev1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
 	instasliceoperatorv1alphaclientset "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1"
 	operatorclientv1alpha1informers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions/dasoperator/v1alpha1"
+	utilresourceapply "github.com/openshift/instaslice-operator/pkg/util/resourceapply"
 
 	"github.com/openshift/instaslice-operator/pkg/operator/operatorclient"
 	"github.com/openshift/library-go/pkg/controller/factory"
@@ -34,6 +35,9 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
+
+	"k8s.io/klog/v2"
+	"path/filepath"
 )
 
 const (
@@ -115,6 +119,7 @@ func NewTargetConfigReconciler(
 		kubeInformersForNamespaces.InformersFor(namespace).Rbac().V1().ClusterRoles().Informer(),
 		kubeInformersForNamespaces.InformersFor(namespace).Rbac().V1().RoleBindings().Informer(),
 		kubeInformersForNamespaces.InformersFor(namespace).Rbac().V1().Roles().Informer(),
+		kubeInformersForNamespaces.InformersFor(namespace).Networking().V1().NetworkPolicies().Informer(),
 	).ResyncEvery(time.Minute*5).
 		WithSync(c.sync).
 		ToController("DASOperatorController", eventRecorder)
@@ -182,6 +187,10 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 
 	_, _, err = c.manageWebhookCertSecret()
 	if err != nil {
+		return err
+	}
+
+	if err := c.manageNetworkPolicies(ctx, ownerReference); err != nil {
 		return err
 	}
 
@@ -593,6 +602,32 @@ func (c *TargetConfigReconciler) buildOperatorConditions(operatorReady, schedule
 			LastTransitionTime: metav1.Now(),
 		},
 	}
+}
+
+func (c *TargetConfigReconciler) manageNetworkPolicies(ctx context.Context, ownerReference metav1.OwnerReference) error {
+	networkPolicyDir := "assets/instaslice-operator/networkpolicy"
+
+	files, err := bindata.AssetDir(networkPolicyDir)
+	if err != nil {
+		return fmt.Errorf("failed to read networkpolicy directory %q: %w", networkPolicyDir, err)
+	}
+
+	for _, file := range files {
+		assetPath := filepath.Join(networkPolicyDir, file)
+		want := utilresourceapply.ReadNetworkPolicyV1OrDie(bindata.MustAsset(assetPath))
+		want.Namespace = c.namespace
+		want.OwnerReferences = []metav1.OwnerReference{
+			ownerReference,
+		}
+
+		_, _, err := utilresourceapply.ApplyNetworkPolicy(ctx, c.kubeClient.NetworkingV1(), c.eventRecorder, want)
+		if err != nil {
+			klog.Errorf("unable to apply network policy %q: %v", want.Name, err)
+			return err
+		}
+	}
+
+	return nil
 }
 
 func injectCertManagerCA(obj metav1.Object, namespace string) error {
