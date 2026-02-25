@@ -50,12 +50,15 @@ spec:
     - kind: DASOperator
       name: dasoperators.inference.redhat.com
       version: v1alpha1
+      description: DASOperator is the Schema for the DASOperator API
     - kind: AllocationClaim
       name: allocationclaims.inference.redhat.com
       version: v1alpha1
+      description: AllocationClaim is the Schema for GPU slice allocation custom resource.
     - kind: NodeAccelerator
       name: nodeaccelerators.inference.redhat.com
       version: v1alpha1
+      description: NodeAccelerator is the Schema for the nodeaccelerators API
   description: |-
     ### Introduction
     Dynamic Accelerator Slicer uses stable APIs and works with the NVIDIA GPU Operator to create MIG slices on demand.
