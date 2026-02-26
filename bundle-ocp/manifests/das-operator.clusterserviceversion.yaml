@@ -54,7 +54,7 @@ spec:
     - kind: AllocationClaim
       name: allocationclaims.inference.redhat.com
       version: v1alpha1
-      description: AllocationClaim is the Schema for GPU slice allocation custom resource.
+      description: AllocationClaim is the schema for GPU slice allocation custom resource.
     - kind: NodeAccelerator
       name: nodeaccelerators.inference.redhat.com
       version: v1alpha1
