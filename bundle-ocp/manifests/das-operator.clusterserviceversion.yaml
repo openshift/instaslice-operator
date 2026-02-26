@@ -50,7 +50,7 @@ spec:
     - kind: DASOperator
       name: dasoperators.inference.redhat.com
       version: v1alpha1
-      description: DASOperator is the Schema for the DASOperator API
+      description: DASOperator is the schema for the DASOperator API
     - kind: AllocationClaim
       name: allocationclaims.inference.redhat.com
       version: v1alpha1
