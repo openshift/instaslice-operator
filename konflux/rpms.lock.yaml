@@ -4,13 +4,6 @@ lockfileVendor: redhat
 arches:
 - arch: x86_64
   packages:
-  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/appstream/os/Packages/j/jq-1.6-15.el9.x86_64.rpm
-    repoid: ubi-9-for-x86_64-appstream-rpms
-    size: 194271
-    checksum: sha256:d3157267cce88006c2ad3327ea7eb8983bea6f69327c157228b89814a3c473ae
-    name: jq
-    evr: 1.6-15.el9
-    sourcerpm: jq-1.6-15.el9.src.rpm
   - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/appstream/os/Packages/o/oniguruma-6.9.6-1.el9.5.x86_64.rpm
     repoid: ubi-9-for-x86_64-appstream-rpms
     size: 226331
@@ -18,5 +11,23 @@ arches:
     name: oniguruma
     evr: 6.9.6-1.el9.5
     sourcerpm: oniguruma-6.9.6-1.el9.5.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/j/jq-1.6-19.el9.x86_64.rpm
+    repoid: ubi-9-for-x86_64-baseos-rpms
+    size: 191662
+    checksum: sha256:6b4d82714813d7b4a3200bf2856a3c1493d186e9caa916d7a700ec25e4996462
+    name: jq
+    evr: 1.6-19.el9
+    sourcerpm: jq-1.6-19.el9.src.rpm
+  - url: https://internal.console.redhat.com/api/pulp-content/rhel-ai/cuda-rhel-9-x86_64/Packages/l/libnvidia-ml-595.45.04-1.el9.x86_64.rpm
+    repoid: ml-x86_64-baseos-rpms
+    size: 692305
+    checksum: sha256:6d12954313bfe1f35364d5b1f16612d984236e3181772b52385de5432ff7a052
+    name: libnvidia-ml
+    evr: 3:595.45.04-1.el9
+    sourcerpm: nvidia-driver-595.45.04-1.el9.src.rpm
   source: []
-  module_metadata: []
+  module_metadata:
+  - url: https://internal.console.redhat.com/api/pulp-content/rhel-ai/cuda-rhel-9-x86_64/repodata/1fa7d4f1fec7de205bb2157b34470bd56918ad67c42e386048a76b169a8b8e57-modules.yaml
+    repoid: ml-x86_64-baseos-rpms
+    size: 5394607
+    checksum: sha256:1fa7d4f1fec7de205bb2157b34470bd56918ad67c42e386048a76b169a8b8e57

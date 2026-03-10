@@ -1,4 +1,6 @@
-packages: [jq] 
+packages:
+  - jq
+  - libnvidia-ml
 contentOrigin:
-  repofiles: ["./ubi.repo"] 
+  repofiles: ["./ubi.repo", "./ml.repo"] 
 arches: [x86_64] 

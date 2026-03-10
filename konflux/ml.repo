@@ -1,0 +1,6 @@
+[ml-$basearch-baseos-rpms]
+name = cuda-rhel-9 repo
+baseurl = https://internal.console.redhat.com/api/pulp-content/rhel-ai/cuda-rhel-9-x86_64/
+enabled = 1
+gpgcheck = 0
+repo_gpgcheck = 0
