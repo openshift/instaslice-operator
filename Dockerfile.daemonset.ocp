@@ -5,7 +5,33 @@ WORKDIR /workspace
 COPY . .
 RUN GO_BUILD_PACKAGES=./cmd/das-daemonset make
 
-FROM nvcr.io/nvidia/cuda:13.1.1-base-ubi9
+# Build stage to install libnvidia-ml package
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.23 AS nvidia-libs
+
+# NVIDIA driver version must match GPU Operator installation
+# GPU Operator 25.10.1 uses driver 580.105.08 (see https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/release-notes.html)
+ARG NVIDIA_DRIVER_VERSION=580.105.08
+
+# Install libnvidia-ml package from internal CUDA repo
+# Place repo file in both locations to work with ART wrapper and standard dnf
+RUN printf '%s\n' \
+      '[cuda-rhel9]' \
+      'name=cuda-rhel9' \
+      'baseurl=https://internal.console.redhat.com/api/pulp-content/rhel-ai/cuda-rhel-9-x86_64/' \
+      'enabled=1' \
+      'gpgcheck=0' \
+      > /etc/yum.repos.d/cuda-rhel9.repo \
+    && mkdir -p /etc/yum.repos.art/ci \
+    && cp /etc/yum.repos.d/cuda-rhel9.repo /etc/yum.repos.art/ci/cuda-rhel9.repo \
+    && dnf install -y libnvidia-ml-${NVIDIA_DRIVER_VERSION} \
+    && dnf clean all
+
+# Final stage - use clean UBI9 minimal to avoid CVEs from NVIDIA base image (CVE-2025-66471, CVE-2026-21441)
+FROM registry.redhat.io/ubi9/ubi-minimal@sha256:6fc28bcb6776e387d7a35a2056d9d2b985dc4e26031e98a2bd35a7137cd6fd71
+
+# Copy NVIDIA libraries from build stage and create symlink for go-nvml
+COPY --from=nvidia-libs /usr/lib64/libnvidia-ml.so* /usr/lib64/
+RUN ln -s /usr/lib64/libnvidia-ml.so.1 /usr/lib64/libnvidia-ml.so
 
 ENV NVIDIA_DISABLE_REQUIRE="true"
 ENV NVIDIA_VISIBLE_DEVICES=all
