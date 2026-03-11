@@ -21,8 +21,17 @@ RUN printf '%s\n' \
 # GPU Operator 25.10.1 uses driver 580.105.08 (see https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/release-notes.html)
 ARG NVIDIA_DRIVER_VERSION=580.105.08
 
-# Download and install libnvidia-ml package directly from internal CUDA repo
-RUN dnf install --nogpgcheck --setopt=repo_gpgcheck=0 -y libnvidia-ml
+# Install libnvidia-ml package from internal CUDA repo
+# Version must match konflux/rpms.lock.yaml for hermetic builds with cachi2
+# Enable nvidia-driver:580 module stream to avoid modular filtering
+RUN dnf module enable -y nvidia-driver:580 && \
+    dnf install --nogpgcheck --setopt=repo_gpgcheck=0 -y libnvidia-ml-${NVIDIA_DRIVER_VERSION}-1.el9 && \
+    INSTALLED_VERSION=$(rpm -q --queryformat '%{VERSION}' libnvidia-ml) && \
+    if [ "$INSTALLED_VERSION" != "${NVIDIA_DRIVER_VERSION}" ]; then \
+        echo "ERROR: Installed libnvidia-ml version ($INSTALLED_VERSION) does not match expected version (${NVIDIA_DRIVER_VERSION})"; \
+        exit 1; \
+    fi && \
+    echo "SUCCESS: Verified libnvidia-ml version ${INSTALLED_VERSION}"
 
 # Final stage - use clean UBI9 minimal to avoid CVEs from NVIDIA base image (CVE-2025-66471, CVE-2026-21441)
 FROM registry.redhat.io/ubi9/ubi-minimal@sha256:6fc28bcb6776e387d7a35a2056d9d2b985dc4e26031e98a2bd35a7137cd6fd71

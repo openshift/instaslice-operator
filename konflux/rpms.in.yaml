@@ -1,6 +1,8 @@
 packages:
   - jq
   - libnvidia-ml
+modules:
+  - nvidia-driver:580
 contentOrigin:
-  repofiles: ["./ubi.repo", "./ml.repo"] 
+  repofiles: ["./ubi.repo", "./ml.repo"]
 arches: [x86_64] 
