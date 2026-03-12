@@ -1,7 +1,7 @@
 [
   {
     "name": "instaslice-scheduler-next",
-    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-scheduler-next@sha256:efbdfbb310ddc4b0ecb7d98c4d153a7c032f7c1bf175cf6cea03341bad696d9c"
+    "image": "quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-scheduler-next@sha256:bb6512351837ea497b466624017f0ece7a4e01548851c8d2a2768b0397dae11b"
   },
   {
     "name": "instaslice-daemonset-next",
