@@ -5,22 +5,30 @@ import (
 	"os"
 	"time"
 
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/loglevel"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 
 	apiextclientv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	appsv1client "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/klog/v2"
 
 	slicev1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
+	"github.com/openshift/instaslice-operator/pkg/controller/tlsobserver"
 	operatorconfigclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	operatorclientinformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
 	"github.com/openshift/instaslice-operator/pkg/operator/operatorclient"
 )
+
+func init() {
+	utilruntime.Must(configv1.AddToScheme(clientgoscheme.Scheme))
+}
 
 var operatorNamespace = "das-operator"
 
@@ -82,6 +90,13 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		emMode = slicev1alpha1.EmulatedMode(emulatedMode)
 	}
 
+	// Create the TLS observer for dynamic TLS profile updates (OCPSTRAT-2611)
+	tlsObserver, err := tlsobserver.NewTLSObserver(cc.KubeConfig)
+	if err != nil {
+		klog.Warningf("Could not create TLS observer: %v", err)
+		// Continue without TLS observer - will use defaults
+	}
+
 	targetConfigReconciler := NewTargetConfigReconciler(
 		emMode,
 		os.Getenv("RELATED_IMAGE_DAEMONSET_IMAGE"),
@@ -98,6 +113,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		kubeClient,
 		apiextensionClient,
 		cc.EventRecorder,
+		tlsObserver,
 	)
 
 	// Create the log controller
@@ -106,6 +122,21 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	klog.Infof("Starting informers")
 	operatorConfigInformers.Start(ctx.Done())
 	kubeInformersForNamespaces.Start(ctx.Done())
+
+	// Start TLS observer informer
+	if tlsObserver != nil {
+		klog.Infof("Starting TLS observer")
+		if err := tlsObserver.Start(ctx); err != nil {
+			klog.Warningf("TLS observer failed to start: %v", err)
+		} else {
+			// Register a callback to log TLS profile changes
+			tlsObserver.RegisterCallback(func(newConfig *tlsobserver.TLSConfig) {
+				klog.InfoS("TLS profile changed",
+					"profile", newConfig.ProfileDescription(),
+					"minTLSVersion", newConfig.MinTLSVersion)
+			})
+		}
+	}
 
 	klog.Infof("Starting log level controller")
 	go logLevelController.Run(ctx, 1)

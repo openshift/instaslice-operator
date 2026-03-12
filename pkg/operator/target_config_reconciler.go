@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"maps"
 	"strings"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/openshift/instaslice-operator/bindata"
 	slicev1alpha1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
+	"github.com/openshift/instaslice-operator/pkg/controller/tlsobserver"
 	instasliceoperatorv1alphaclientset "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned/typed/dasoperator/v1alpha1"
 	operatorclientv1alpha1informers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions/dasoperator/v1alpha1"
 
@@ -40,6 +42,8 @@ const (
 	WebhookCertificateSecretName  = "webhook-server-cert"
 	WebhookCertificateName        = "das-serving-cert"
 	CertManagerInjectCaAnnotation = "cert-manager.io/inject-ca-from"
+	// TLSProfileHashAnnotation is used to trigger rolling updates when TLS profile changes
+	TLSProfileHashAnnotation = "das-operator.openshift.io/tls-profile-hash"
 )
 
 type TargetConfigReconciler struct {
@@ -61,6 +65,7 @@ type TargetConfigReconciler struct {
 	targetSchedulerImage       string
 	emulatedMode               slicev1alpha1.EmulatedMode
 	nodeSelector               map[string]string
+	tlsObserver                *tlsobserver.TLSObserver
 }
 
 func NewTargetConfigReconciler(
@@ -79,6 +84,7 @@ func NewTargetConfigReconciler(
 	kubeClient kubernetes.Interface,
 	apiExtensionClient *apiextclientv1.Clientset,
 	eventRecorder events.Recorder,
+	tlsObserver *tlsobserver.TLSObserver,
 ) factory.Controller {
 	c := &TargetConfigReconciler{
 		apiextensionClient:         apiExtensionClient,
@@ -98,6 +104,7 @@ func NewTargetConfigReconciler(
 		targetSchedulerImage:       targetSchedulerImage,
 		cache:                      resourceapply.NewResourceCache(),
 		emulatedMode:               emulatedMode,
+		tlsObserver:                tlsObserver,
 	}
 
 	return factory.New().WithInformers(
@@ -216,11 +223,27 @@ func (c *TargetConfigReconciler) manageMutatingWebhookDeployment(ctx context.Con
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
 	}
+
+	// Get TLS config from observer and inject as CLI args (OCPSTRAT-2611)
+	tlsArgs := c.getTLSArgs()
+
 	for i := range required.Spec.Template.Spec.Containers {
 		if c.targetWebhookImage != "" {
 			required.Spec.Template.Spec.Containers[i].Image = c.targetWebhookImage
 		}
+		// Append TLS args to container args
+		required.Spec.Template.Spec.Containers[i].Args = append(
+			required.Spec.Template.Spec.Containers[i].Args,
+			tlsArgs...,
+		)
 	}
+
+	// Add TLS profile hash annotation to trigger rolling updates on TLS changes (OCPSTRAT-2611)
+	if required.Spec.Template.Annotations == nil {
+		required.Spec.Template.Annotations = make(map[string]string)
+	}
+	required.Spec.Template.Annotations[TLSProfileHashAnnotation] = c.getTLSProfileHash()
+
 	if err := injectCertManagerCA(required, c.namespace); err != nil {
 		return nil, err
 	}
@@ -372,6 +395,9 @@ func (c *TargetConfigReconciler) manageDaemonset(ctx context.Context, ownerRefer
 		}
 		maps.Copy(required.Spec.Template.Spec.NodeSelector, c.nodeSelector)
 	}
+	// Get TLS config from observer and inject as CLI args (OCPSTRAT-2611)
+	tlsArgs := c.getTLSArgs()
+
 	for i := range required.Spec.Template.Spec.Containers {
 		if c.targetDaemonsetImage != "" {
 			required.Spec.Template.Spec.Containers[i].Image = c.targetDaemonsetImage
@@ -382,7 +408,19 @@ func (c *TargetConfigReconciler) manageDaemonset(ctx context.Context, ownerRefer
 				Value: slicev1alpha1.EmulatedModeEnabled,
 			})
 		}
+		// Append TLS args to container args
+		required.Spec.Template.Spec.Containers[i].Args = append(
+			required.Spec.Template.Spec.Containers[i].Args,
+			tlsArgs...,
+		)
 	}
+
+	// Add TLS profile hash annotation to trigger rolling updates on TLS changes (OCPSTRAT-2611)
+	if required.Spec.Template.Annotations == nil {
+		required.Spec.Template.Annotations = make(map[string]string)
+	}
+	required.Spec.Template.Annotations[TLSProfileHashAnnotation] = c.getTLSProfileHash()
+
 	daemonset, updated, err := resourceapply.ApplyDaemonSet(ctx,
 		c.appsClient,
 		c.eventRecorder,
@@ -606,4 +644,55 @@ func injectCertManagerCA(obj metav1.Object, namespace string) error {
 	annotations[CertManagerInjectCaAnnotation] = injectAnnotation
 	obj.SetAnnotations(annotations)
 	return nil
+}
+
+// getTLSProfileHash returns a hash of the current TLS profile configuration.
+// This hash is used as a pod template annotation to trigger rolling updates
+// when the cluster TLS profile changes (OCPSTRAT-2611).
+func (c *TargetConfigReconciler) getTLSProfileHash() string {
+	if c.tlsObserver == nil {
+		return "default"
+	}
+	tlsConfig := c.tlsObserver.GetCurrentTLSConfig()
+	if tlsConfig == nil {
+		return "default"
+	}
+	// Create a hash from profile description and min TLS version
+	hashInput := fmt.Sprintf("%s:%s:%d",
+		tlsConfig.ProfileDescription(),
+		tlsConfig.MinTLSVersion,
+		len(tlsConfig.CipherSuites))
+	hash := sha256.Sum256([]byte(hashInput))
+	return fmt.Sprintf("%x", hash[:8]) // Use first 8 bytes for shorter annotation
+}
+
+// getTLSArgs returns CLI arguments for TLS configuration.
+// The operator serializes the cluster TLS profile into CLI args that are
+// passed to webhook and daemonset containers (OCPSTRAT-2611).
+func (c *TargetConfigReconciler) getTLSArgs() []string {
+	if c.tlsObserver == nil {
+		// Return default Intermediate profile settings
+		return []string{
+			"--tls-min-version=VersionTLS12",
+		}
+	}
+
+	tlsConfig := c.tlsObserver.GetCurrentTLSConfig()
+	if tlsConfig == nil {
+		return []string{
+			"--tls-min-version=VersionTLS12",
+		}
+	}
+
+	args := []string{
+		fmt.Sprintf("--tls-min-version=%s", tlsConfig.MinTLSVersion),
+	}
+
+	// Add cipher suites if available (use IANA names)
+	if len(tlsConfig.CipherSuitesIANA) > 0 {
+		args = append(args, fmt.Sprintf("--tls-cipher-suites=%s",
+			strings.Join(tlsConfig.CipherSuitesIANA, ",")))
+	}
+
+	return args
 }
