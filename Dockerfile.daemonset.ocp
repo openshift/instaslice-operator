@@ -5,7 +5,40 @@ WORKDIR /workspace
 COPY . .
 RUN GO_BUILD_PACKAGES=./cmd/das-daemonset make
 
-FROM nvcr.io/nvidia/cuda:13.1.1-base-ubi9
+# Build stage to install libnvidia-ml package
+FROM registry.redhat.io/ubi9/ubi@sha256:cecb1cde7bda7c8165ae27841c2335667f8a3665a349c0d051329c61660a496c as nvidia-libs
+
+RUN printf '%s\n' \
+  '[ml-$basearch-baseos-rpms]' \
+  'name=cuda-rhel-9 repo' \
+  'baseurl=https://internal.console.redhat.com/api/pulp-content/rhel-ai/cuda-rhel-9-x86_64/' \
+  'enabled=1' \
+  'gpgcheck=0' \
+  'repo_gpgcheck=0' \
+  > /etc/yum.repos.d/cuda-rhel-9.repo
+
+# NVIDIA driver version must match GPU Operator installation
+# GPU Operator 25.10.1 uses driver 580.105.08 (see https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/release-notes.html)
+ARG NVIDIA_DRIVER_VERSION=580.105.08
+
+# Install libnvidia-ml package from internal CUDA repo
+# Version must match konflux/rpms.lock.yaml for hermetic builds with cachi2
+# Enable nvidia-driver:580 module stream to avoid modular filtering
+RUN dnf module enable -y nvidia-driver:580 && \
+    dnf install --nogpgcheck --setopt=repo_gpgcheck=0 -y libnvidia-ml-${NVIDIA_DRIVER_VERSION}-1.el9 && \
+    INSTALLED_VERSION=$(rpm -q --queryformat '%{VERSION}' libnvidia-ml) && \
+    if [ "$INSTALLED_VERSION" != "${NVIDIA_DRIVER_VERSION}" ]; then \
+        echo "ERROR: Installed libnvidia-ml version ($INSTALLED_VERSION) does not match expected version (${NVIDIA_DRIVER_VERSION})"; \
+        exit 1; \
+    fi && \
+    echo "SUCCESS: Verified libnvidia-ml version ${INSTALLED_VERSION}"
+
+# Final stage - use clean UBI9 minimal to avoid CVEs from NVIDIA base image (CVE-2025-66471, CVE-2026-21441)
+FROM registry.redhat.io/ubi9/ubi-minimal@sha256:6fc28bcb6776e387d7a35a2056d9d2b985dc4e26031e98a2bd35a7137cd6fd71
+
+# Copy NVIDIA libraries from build stage and create symlink for go-nvml
+COPY --from=nvidia-libs /usr/lib64/libnvidia-ml.so* /usr/lib64/
+RUN ln -s /usr/lib64/libnvidia-ml.so.1 /usr/lib64/libnvidia-ml.so
 
 ENV NVIDIA_DISABLE_REQUIRE="true"
 ENV NVIDIA_VISIBLE_DEVICES=all
