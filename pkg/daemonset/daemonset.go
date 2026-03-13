@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	configv1 "github.com/openshift/api/config/v1"
 	deviceplugins "github.com/openshift/instaslice-operator/pkg/daemonset/deviceplugins"
 	"github.com/openshift/instaslice-operator/pkg/daemonset/watcher"
 	instaclient "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
@@ -13,11 +14,17 @@ import (
 	"github.com/openshift/instaslice-operator/pkg/operator/operatorclient"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/loglevel"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	kubernetes "k8s.io/client-go/kubernetes"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"tags.cncf.io/container-device-interface/pkg/cdi"
 )
+
+func init() {
+	utilruntime.Must(configv1.AddToScheme(clientgoscheme.Scheme))
+}
 
 func RunDaemonset(ctx context.Context, cc *controllercmd.ControllerContext) error {
 	klog.InfoS("RunDaemonset started")
