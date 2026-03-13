@@ -21,7 +21,7 @@ metadata:
     capabilities: Basic Install
     categories: Drivers and plugins
     containerImage: quay.io/redhat-user-workloads/dynamicacceleratorsl-tenant/instaslice-operator-next:latest
-    createdAt: "2025-09-19T20:10:57Z"
+    createdAt: "2026-03-13T23:31:57Z"
     description: Dynamic Accelerator Slicer works with GPU operator to create mig
       slices on demand
     features.operators.openshift.io/cnf: "false"
@@ -37,7 +37,7 @@ metadata:
     operatorframework.io/suggested-namespace: das-operator
     operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift
       Container Platform", "OpenShift Platform Plus"]'
-    operators.operatorframework.io/builder: operator-sdk-v1.41.1
+    operators.operatorframework.io/builder: operator-sdk-unknown
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/openshift/instaslice-operator
     support: https://github.com/openshift/instaslice-operator/issues
@@ -106,6 +106,18 @@ spec:
     spec:
       clusterPermissions:
       - rules:
+        - apiGroups:
+          - networking.k8s.io
+          resources:
+          - networkpolicies
+          verbs:
+          - list
+          - watch
+          - get
+          - create
+          - delete
+          - patch
+          - update
         - apiGroups:
           - inference.redhat.com
           resources:

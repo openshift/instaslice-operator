@@ -4,6 +4,18 @@ metadata:
   name: das-operator
 rules:
   - apiGroups:
+      - networking.k8s.io
+    resources:
+      - networkpolicies
+    verbs:
+      - list
+      - watch
+      - get
+      - create
+      - delete
+      - patch
+      - update
+  - apiGroups:
       - inference.redhat.com
     resources:
       - nodeaccelerators
