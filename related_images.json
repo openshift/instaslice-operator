@@ -13,7 +13,7 @@
   },
   {
     "name": "instaslice-operator-next",
-    "image": "registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:24cc2fdb28108461f402327eac6e4d826f7e594cf42a77947824a15f39fdd5f0"
+    "image": "registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-rhel9-operator@sha256:90fd27bf9bc0b58544d15b3073c1b906ce523cfc17bf0217f3dc6f9ae2824e69"
   },
   {
     "name": "instaslice-operator-bundle-next",
