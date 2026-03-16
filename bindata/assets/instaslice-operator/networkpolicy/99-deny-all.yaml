@@ -1,0 +1,13 @@
+# Default deny-all policy for the DAS operator namespace.
+# Denies all ingress and egress traffic for all pods in the namespace.
+# Required communication is explicitly allowed by other NetworkPolicy resources.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: das-deny-all
+  namespace: das-operator
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress

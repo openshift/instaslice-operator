@@ -1,0 +1,23 @@
+# Allow outbound traffic to cluster DNS service for all DAS pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: das-allow-egress-cluster-dns
+  namespace: das-operator
+spec:
+  podSelector: {}
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: openshift-dns
+      podSelector:
+        matchLabels:
+          dns.operator.openshift.io/daemonset-dns: default
+    ports:
+    - protocol: TCP
+      port: dns-tcp
+    - protocol: UDP
+      port: dns
+  policyTypes:
+  - Egress

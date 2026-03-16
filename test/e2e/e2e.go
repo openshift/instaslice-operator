@@ -1041,6 +1041,48 @@ var _ = Describe("Operator status", Ordered, func() {
 	})
 })
 
+var _ = Describe("Operator NetworkPolicies", Ordered, func() {
+	BeforeAll(func() {
+		if os.Getenv("KUBECONFIG") == "" {
+			Skip("KUBECONFIG is not set; skipping e2e test")
+		}
+	})
+
+	It("should create all expected NetworkPolicy resources", func(ctx SpecContext) {
+		expectedPolicies := []string{
+			"das-deny-all",
+			"das-allow-egress-kube-apiserver",
+			"das-allow-egress-cluster-dns",
+			"das-allow-ingress-webhook",
+		}
+
+		By("listing NetworkPolicies in das-operator namespace")
+		Eventually(func() ([]string, error) {
+			netPolicies, err := kubeClient.NetworkingV1().NetworkPolicies(dasOperatorNamespace).List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			var names []string
+			for _, np := range netPolicies.Items {
+				names = append(names, np.Name)
+			}
+			return names, nil
+		}, 2*time.Minute, 5*time.Second).Should(ContainElements(expectedPolicies))
+	})
+
+	It("should reconcile deleted NetworkPolicy", func(ctx SpecContext) {
+		By("deleting the deny-all NetworkPolicy")
+		err := kubeClient.NetworkingV1().NetworkPolicies(dasOperatorNamespace).Delete(ctx, "das-deny-all", metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("waiting for the operator to recreate it")
+		Eventually(func() error {
+			_, err := kubeClient.NetworkingV1().NetworkPolicies(dasOperatorNamespace).Get(ctx, "das-deny-all", metav1.GetOptions{})
+			return err
+		}, 5*time.Minute, 5*time.Second).Should(Succeed())
+	})
+})
+
 func verifyMigUuidMatches(ctx context.Context, namespace, podName string) (bool, error) {
 	req := kubeClient.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{})
 	out, err := req.Do(ctx).Raw()
