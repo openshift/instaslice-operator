@@ -18,15 +18,15 @@ arches:
     name: jq
     evr: 1.6-19.el9
     sourcerpm: jq-1.6-19.el9.src.rpm
-  # NVIDIA driver version must match GPU Operator 25.10.1 (driver 580.105.08)
+  # NVIDIA driver version must match GPU Operator 26.3.0 (driver 580.126.20)
   # See NVIDIA_DRIVER_VERSION in Dockerfile.daemonset.ocp
-  - url: https://internal.console.redhat.com/api/pulp-content/rhel-ai/cuda-rhel-9-x86_64/Packages/l/libnvidia-ml-580.105.08-1.el9.x86_64.rpm
+  - url: https://internal.console.redhat.com/api/pulp-content/rhel-ai/cuda-rhel-9-x86_64/Packages/l/libnvidia-ml-580.126.20-1.el9.x86_64.rpm
     repoid: ml-x86_64-baseos-rpms
-    size: 685446
-    checksum: sha256:b261f01cf5bd6cf22c3624e53a6d1df7a20a76bd6a7b2b917c607a153c69dcb1
+    size: 686059
+    checksum: sha256:c9dd2f8dde64372b7ea4ce2ebffdbeb7764668c5aef2f804fe0144343592e1a2
     name: libnvidia-ml
-    evr: 3:580.105.08-1.el9
-    sourcerpm: nvidia-driver-580.105.08-1.el9.src.rpm
+    evr: 3:580.126.20-1.el9
+    sourcerpm: nvidia-driver-580.126.20-1.el9.src.rpm
     module: nvidia-driver:580
   source: []
   module_metadata:
