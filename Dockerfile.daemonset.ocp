@@ -18,8 +18,8 @@ RUN printf '%s\n' \
   > /etc/yum.repos.d/cuda-rhel-9.repo
 
 # NVIDIA driver version must match GPU Operator installation
-# GPU Operator 25.10.1 uses driver 580.105.08 (see https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/release-notes.html)
-ARG NVIDIA_DRIVER_VERSION=580.105.08
+# GPU Operator 26.3.0 uses driver 580.126.20 (see https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/release-notes.html)
+ARG NVIDIA_DRIVER_VERSION=580.126.20
 
 # Install libnvidia-ml package from internal CUDA repo
 # Version must match konflux/rpms.lock.yaml for hermetic builds with cachi2
