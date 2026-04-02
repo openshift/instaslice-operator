@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 
@@ -40,6 +41,57 @@ func NewDispatcher(hook Webhook) *Dispatcher {
 	return &Dispatcher{
 		hook: hook,
 	}
+}
+
+// GenericWebhook interface for any webhook that implements Authorized
+type GenericWebhook interface {
+	Authorized(request admissionctl.Request) admissionctl.Response
+	GetURI() string
+	Name() string
+}
+
+// GenericDispatcher handles requests for any webhook implementing GenericWebhook
+type GenericDispatcher struct {
+	hook GenericWebhook
+	name string
+}
+
+// NewGenericDispatcher creates a new GenericDispatcher
+func NewGenericDispatcher(hook GenericWebhook) *GenericDispatcher {
+	return &GenericDispatcher{
+		hook: hook,
+		name: hook.Name(),
+	}
+}
+
+// HandleRequest handles webhook requests generically
+func (d *GenericDispatcher) HandleRequest(w http.ResponseWriter, r *http.Request) {
+	klog.InfoS("Handling webhook request", "webhook", d.name, "requestURI", r.RequestURI)
+	_, err := url.Parse(r.RequestURI)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		klog.ErrorS(err, "Failed to parse request URL", "requestURI", r.RequestURI)
+		SendResponse(w, admissionctl.Errored(http.StatusBadRequest, err))
+		return
+	}
+
+	request, _, err := ParseHTTPRequest(r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		klog.ErrorS(err, "Error parsing HTTP request body")
+		SendResponse(w, admissionctl.Errored(http.StatusBadRequest, err))
+		return
+	}
+
+	resp := d.hook.Authorized(request)
+	if err := resp.Complete(request); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		klog.ErrorS(err, "Failed to complete response")
+		SendResponse(w, admissionctl.Errored(http.StatusInternalServerError, err))
+		return
+	}
+
+	SendResponse(w, resp)
 }
 
 // HandleRequest http request
@@ -109,8 +161,14 @@ func ParseHTTPRequest(r *http.Request) (admissionctl.Request, admissionctl.Respo
 		return req, resp, err
 	}
 	contentType := r.Header.Get("Content-Type")
-	if contentType != validContentType {
-		err := fmt.Errorf("contentType=%s, expected application/json", contentType)
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		err := fmt.Errorf("invalid contentType=%q: %w", contentType, err)
+		resp = admissionctl.Errored(http.StatusBadRequest, err)
+		return req, resp, err
+	}
+	if mediaType != validContentType {
+		err := fmt.Errorf("contentType=%s, expected %s", mediaType, validContentType)
 		resp = admissionctl.Errored(http.StatusBadRequest, err)
 		return req, resp, err
 	}

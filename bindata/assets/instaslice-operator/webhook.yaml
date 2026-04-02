@@ -21,17 +21,14 @@ webhooks:
       path: /mutate-pod
       port: 8443
   failurePolicy: Fail
-  name: instaslice.redhat.com
+  name: pod.instaslice.redhat.com
   namespaceSelector:
     matchExpressions:
     - key: kubernetes.io/metadata.name
       operator: NotIn
       values:
       - das-operator
-      - cert-manager
       - kube-system
-      - openshift-operators
-      - openshift-marketplace
   rules:
   - apiGroups:
     - ""
@@ -41,4 +38,465 @@ webhooks:
     - CREATE
     resources:
     - pods
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: das-operator-webhook
+      namespace: das-operator
+      path: /mutate-job
+      port: 8443
+  failurePolicy: Ignore
+  name: job.das.redhat.com
+  namespaceSelector:
+    matchExpressions:
+    - key: kueue.openshift.io/managed
+      operator: In
+      values:
+      - "true"
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - das-operator
+      - kube-system
+  rules:
+  - apiGroups:
+    - batch
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - jobs
+  sideEffects: None
+# PyTorchJob webhook - Kubeflow Training Operator
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: das-operator-webhook
+      namespace: das-operator
+      path: /mutate-pytorchjob
+      port: 8443
+  failurePolicy: Ignore
+  name: pytorchjob.das.redhat.com
+  namespaceSelector:
+    matchExpressions:
+    - key: kueue.openshift.io/managed
+      operator: In
+      values:
+      - "true"
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - das-operator
+      - kube-system
+  rules:
+  - apiGroups:
+    - kubeflow.org
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - pytorchjobs
+  sideEffects: None
+# MPIJob webhook - Kubeflow Training Operator
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: das-operator-webhook
+      namespace: das-operator
+      path: /mutate-mpijob
+      port: 8443
+  failurePolicy: Ignore
+  name: mpijob.das.redhat.com
+  namespaceSelector:
+    matchExpressions:
+    - key: kueue.openshift.io/managed
+      operator: In
+      values:
+      - "true"
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - das-operator
+      - kube-system
+  rules:
+  - apiGroups:
+    - kubeflow.org
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - mpijobs
+  sideEffects: None
+# TFJob webhook - Kubeflow Training Operator
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: das-operator-webhook
+      namespace: das-operator
+      path: /mutate-tfjob
+      port: 8443
+  failurePolicy: Ignore
+  name: tfjob.das.redhat.com
+  namespaceSelector:
+    matchExpressions:
+    - key: kueue.openshift.io/managed
+      operator: In
+      values:
+      - "true"
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - das-operator
+      - kube-system
+  rules:
+  - apiGroups:
+    - kubeflow.org
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - tfjobs
+  sideEffects: None
+# XGBoostJob webhook - Kubeflow Training Operator
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: das-operator-webhook
+      namespace: das-operator
+      path: /mutate-xgboostjob
+      port: 8443
+  failurePolicy: Ignore
+  name: xgboostjob.das.redhat.com
+  namespaceSelector:
+    matchExpressions:
+    - key: kueue.openshift.io/managed
+      operator: In
+      values:
+      - "true"
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - das-operator
+      - kube-system
+  rules:
+  - apiGroups:
+    - kubeflow.org
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - xgboostjobs
+  sideEffects: None
+# PaddleJob webhook - Kubeflow Training Operator
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: das-operator-webhook
+      namespace: das-operator
+      path: /mutate-paddlejob
+      port: 8443
+  failurePolicy: Ignore
+  name: paddlejob.das.redhat.com
+  namespaceSelector:
+    matchExpressions:
+    - key: kueue.openshift.io/managed
+      operator: In
+      values:
+      - "true"
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - das-operator
+      - kube-system
+  rules:
+  - apiGroups:
+    - kubeflow.org
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - paddlejobs
+  sideEffects: None
+# JAXJob webhook - Kubeflow Training Operator
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: das-operator-webhook
+      namespace: das-operator
+      path: /mutate-jaxjob
+      port: 8443
+  failurePolicy: Ignore
+  name: jaxjob.das.redhat.com
+  namespaceSelector:
+    matchExpressions:
+    - key: kueue.openshift.io/managed
+      operator: In
+      values:
+      - "true"
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - das-operator
+      - kube-system
+  rules:
+  - apiGroups:
+    - kubeflow.org
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - jaxjobs
+  sideEffects: None
+# RayJob webhook - KubeRay
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: das-operator-webhook
+      namespace: das-operator
+      path: /mutate-rayjob
+      port: 8443
+  failurePolicy: Ignore
+  name: rayjob.das.redhat.com
+  namespaceSelector:
+    matchExpressions:
+    - key: kueue.openshift.io/managed
+      operator: In
+      values:
+      - "true"
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - das-operator
+      - kube-system
+  rules:
+  - apiGroups:
+    - ray.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - rayjobs
+  sideEffects: None
+# RayCluster webhook - KubeRay
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: das-operator-webhook
+      namespace: das-operator
+      path: /mutate-raycluster
+      port: 8443
+  failurePolicy: Ignore
+  name: raycluster.das.redhat.com
+  namespaceSelector:
+    matchExpressions:
+    - key: kueue.openshift.io/managed
+      operator: In
+      values:
+      - "true"
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - das-operator
+      - kube-system
+  rules:
+  - apiGroups:
+    - ray.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - rayclusters
+  sideEffects: None
+# JobSet webhook - Kubernetes JobSet
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: das-operator-webhook
+      namespace: das-operator
+      path: /mutate-jobset
+      port: 8443
+  failurePolicy: Ignore
+  name: jobset.das.redhat.com
+  namespaceSelector:
+    matchExpressions:
+    - key: kueue.openshift.io/managed
+      operator: In
+      values:
+      - "true"
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - das-operator
+      - kube-system
+  rules:
+  - apiGroups:
+    - jobset.x-k8s.io
+    apiVersions:
+    - v1alpha2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - jobsets
+  sideEffects: None
+# Deployment webhook - Long-running workloads with Kueue
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: das-operator-webhook
+      namespace: das-operator
+      path: /mutate-deployment
+      port: 8443
+  failurePolicy: Ignore
+  name: deployment.das.redhat.com
+  namespaceSelector:
+    matchExpressions:
+    - key: kueue.openshift.io/managed
+      operator: In
+      values:
+      - "true"
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - das-operator
+      - kube-system
+  rules:
+  - apiGroups:
+    - apps
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - deployments
+  sideEffects: None
+# StatefulSet webhook - Long-running workloads with Kueue
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: das-operator-webhook
+      namespace: das-operator
+      path: /mutate-statefulset
+      port: 8443
+  failurePolicy: Ignore
+  name: statefulset.das.redhat.com
+  namespaceSelector:
+    matchExpressions:
+    - key: kueue.openshift.io/managed
+      operator: In
+      values:
+      - "true"
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - das-operator
+      - kube-system
+  rules:
+  - apiGroups:
+    - apps
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - statefulsets
+  sideEffects: None
+# LeaderWorkerSet webhook - LWS for distributed workloads
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: das-operator-webhook
+      namespace: das-operator
+      path: /mutate-leaderworkerset
+      port: 8443
+  failurePolicy: Ignore
+  name: leaderworkerset.das.redhat.com
+  namespaceSelector:
+    matchExpressions:
+    - key: kueue.openshift.io/managed
+      operator: In
+      values:
+      - "true"
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - das-operator
+      - kube-system
+  rules:
+  - apiGroups:
+    - leaderworkerset.x-k8s.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - leaderworkersets
+  sideEffects: None
+# AppWrapper webhook - CodeFlare
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: das-operator-webhook
+      namespace: das-operator
+      path: /mutate-appwrapper
+      port: 8443
+  failurePolicy: Ignore
+  name: appwrapper.das.redhat.com
+  namespaceSelector:
+    matchExpressions:
+    - key: kueue.openshift.io/managed
+      operator: In
+      values:
+      - "true"
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - das-operator
+      - kube-system
+  rules:
+  - apiGroups:
+    - workload.codeflare.dev
+    apiVersions:
+    - v1beta2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - appwrappers
   sideEffects: None

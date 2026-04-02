@@ -1,0 +1,113 @@
+# JobSet with MIG GPU - Kueue Managed
+#
+# JobSet allows running multiple related Jobs as a single unit.
+# This example runs a driver job and multiple worker jobs.
+#
+# The DAS webhook transforms all replicatedJobs pod templates.
+#
+# Prerequisites:
+#   - JobSet controller installed
+#   - Kueue with DAS integration enabled
+#
+# Usage:
+#   kubectl apply -f 04-jobset.yaml
+
+apiVersion: jobset.x-k8s.io/v1alpha2
+kind: JobSet
+metadata:
+  name: distributed-gpu-training
+  labels:
+    # This label tells Kueue to manage this JobSet
+    kueue.x-k8s.io/queue-name: das-local-queue
+spec:
+  # Network configuration for pod-to-pod communication
+  network:
+    enableDNSHostnames: true
+    subdomain: jobset-network
+
+  replicatedJobs:
+  # Driver/coordinator job
+  - name: driver
+    replicas: 1
+    template:
+      spec:
+        parallelism: 1
+        completions: 1
+        template:
+          spec:
+            containers:
+            - name: driver
+              image: nvidia/cuda:12.0-base
+              command:
+              - sh
+              - -c
+              - |
+                echo "Driver starting..."
+                echo "Waiting for workers..."
+                sleep 10
+                echo "Coordinating distributed training..."
+                nvidia-smi
+                echo "Training complete!"
+              resources:
+                limits:
+                  # Driver uses smaller MIG slice
+                  nvidia.com/mig-1g.5gb: "1"
+                  cpu: "2"
+                  memory: "4Gi"
+                requests:
+                  nvidia.com/mig-1g.5gb: "1"
+                  cpu: "1"
+                  memory: "2Gi"
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                  - ALL
+            restartPolicy: Never
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+
+  # Worker jobs
+  - name: workers
+    replicas: 2
+    template:
+      spec:
+        parallelism: 1
+        completions: 1
+        template:
+          spec:
+            containers:
+            - name: worker
+              image: nvidia/cuda:12.0-base
+              command:
+              - sh
+              - -c
+              - |
+                echo "Worker starting..."
+                echo "Connecting to driver..."
+                nvidia-smi
+                echo "Processing batch..."
+                sleep 30
+                echo "Worker complete!"
+              resources:
+                limits:
+                  # Workers use larger MIG slices
+                  nvidia.com/mig-2g.10gb: "1"
+                  cpu: "4"
+                  memory: "8Gi"
+                requests:
+                  nvidia.com/mig-2g.10gb: "1"
+                  cpu: "2"
+                  memory: "4Gi"
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                  - ALL
+            restartPolicy: Never
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault

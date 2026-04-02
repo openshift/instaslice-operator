@@ -83,7 +83,7 @@ func TestCDIWatcherLifecycle(t *testing.T) {
 		{
 			name: "add device",
 			action: func() {
-				base, _, _, _ := deviceplugins.BuildCDIDevices("vendor/class", "class", "test", annotations, "")
+				base, _, _, _ := deviceplugins.BuildCdiDevices("vendor/class", "class", "test", annotations, "")
 				d := base.Devices[0]
 				d.Name = "dev1"
 				base.Devices = append(base.Devices, d)
@@ -101,7 +101,7 @@ func TestCDIWatcherLifecycle(t *testing.T) {
 		{
 			name: "remove device",
 			action: func() {
-				base, _, _, _ := deviceplugins.BuildCDIDevices("vendor/class", "class", "test", annotations, "")
+				base, _, _, _ := deviceplugins.BuildCdiDevices("vendor/class", "class", "test", annotations, "")
 				if err := os.WriteFile(path, mustJSON(t, base), 0644); err != nil {
 					t.Fatalf("failed to update spec: %v", err)
 				}
@@ -146,7 +146,7 @@ func TestHandleWriteEvent(t *testing.T) {
 		t.Fatalf("failed to configure cdi: %v", err)
 	}
 	cache := NewCDICache(nil)
-	spec, _, path, _ := deviceplugins.BuildCDIDevices("vendor/class", "class", "id", nil, "")
+	spec, _, path, _ := deviceplugins.BuildCdiDevices("vendor/class", "class", "id", nil, "")
 	if err := os.WriteFile(path, mustJSON(t, spec), 0644); err != nil {
 		t.Fatalf("failed to write spec: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestProcessDeviceRemoval(t *testing.T) {
 	client := fakeclient.NewSimpleClientset(alloc)
 	data, _ := json.Marshal([]instav1.AllocationClaim{*alloc})
 	annotations := map[string]string{allocationAnnotationKey: string(data)}
-	spec, _, _, _ := deviceplugins.BuildCDIDevices("vendor/class", "class", "id", annotations, "")
+	spec, _, _, _ := deviceplugins.BuildCdiDevices("vendor/class", "class", "id", annotations, "")
 	dev := spec.Devices[0]
 	ctx := context.Background()
 	processDeviceRemoval(ctx, dev, "dummy", client)
@@ -178,7 +178,7 @@ func TestProcessDeviceRemovalMultiple(t *testing.T) {
 	client := fakeclient.NewSimpleClientset(alloc1, alloc2)
 	data, _ := json.Marshal([]instav1.AllocationClaim{*alloc1, *alloc2})
 	annotations := map[string]string{allocationAnnotationKey: string(data)}
-	spec, _, _, _ := deviceplugins.BuildCDIDevices("vendor/class", "class", "id", annotations, "")
+	spec, _, _, _ := deviceplugins.BuildCdiDevices("vendor/class", "class", "id", annotations, "")
 	dev := spec.Devices[0]
 	ctx := context.Background()
 	processDeviceRemoval(ctx, dev, "dummy", client)

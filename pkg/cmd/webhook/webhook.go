@@ -60,13 +60,54 @@ func NewWebhook(ctx context.Context) *cobra.Command {
 	return cmd
 }
 
-func startServer() {
-	hook := webhook.NewWebhook()
-	dispatcher := webhook.NewDispatcher(hook)
+// registerGenericWebhooks registers all Kueue integration webhooks
+func registerGenericWebhooks() {
+	// Kubeflow training jobs
+	webhooks := []webhook.GenericWebhook{
+		webhook.NewPyTorchJobWebhook(),
+		webhook.NewMPIJobWebhook(),
+		webhook.NewTFJobWebhook(),
+		webhook.NewXGBoostJobWebhook(),
+		webhook.NewPaddleJobWebhook(),
+		webhook.NewJaxJobWebhook(),
+		// Ray
+		webhook.NewRayJobWebhook(),
+		webhook.NewRayClusterWebhook(),
+		// JobSet
+		webhook.NewJobSetWebhook(),
+		// Long-running workloads
+		webhook.NewDeploymentWebhook(),
+		webhook.NewStatefulSetWebhook(),
+		webhook.NewLeaderWorkerSetWebhook(),
+		// CodeFlare
+		webhook.NewAppWrapperWebhook(),
+	}
 
-	http.HandleFunc(hook.GetURI(), dispatcher.HandleRequest)
-	http.HandleFunc(hook.GetReadinessURI(), dispatcher.HandleReadiness)
-	http.HandleFunc(hook.GetHealthzURI(), dispatcher.HandleHealthz)
+	for _, hook := range webhooks {
+		dispatcher := webhook.NewGenericDispatcher(hook)
+		http.HandleFunc(hook.GetURI(), dispatcher.HandleRequest)
+		klog.InfoS("Registered webhook", "name", hook.Name(), "uri", hook.GetURI())
+	}
+}
+
+func startServer() {
+	// Pod webhook (existing)
+	podHook := webhook.NewWebhook()
+	podDispatcher := webhook.NewDispatcher(podHook)
+
+	http.HandleFunc(podHook.GetURI(), podDispatcher.HandleRequest)
+	http.HandleFunc(podHook.GetReadinessURI(), podDispatcher.HandleReadiness)
+	http.HandleFunc(podHook.GetHealthzURI(), podDispatcher.HandleHealthz)
+
+	// Job webhook (for Kueue integration - transforms Jobs before Kueue creates Workloads)
+	jobHook := webhook.NewJobWebhook()
+	jobDispatcher := webhook.NewGenericDispatcher(jobHook)
+
+	http.HandleFunc(jobHook.GetURI(), jobDispatcher.HandleRequest)
+	klog.InfoS("Registered Job webhook", "uri", jobHook.GetURI())
+
+	// Register all Kueue integration webhooks using generic dispatcher
+	registerGenericWebhooks()
 
 	if testHooks {
 		os.Exit(0)

@@ -30,6 +30,10 @@ spec:
         command: ["das-scheduler"]
         args:
         - "--config=/etc/das-scheduler/config.yaml"
+        # Disable DynamicResourceAllocation feature gate to prevent scheduler
+        # startup failures when DRA CRDs are not installed in the cluster.
+        # K8s 1.32+ enables DRA by default, which causes informer sync issues.
+        - "--feature-gates=DynamicResourceAllocation=false"
         volumeMounts:
         - name: config
           mountPath: /etc/das-scheduler

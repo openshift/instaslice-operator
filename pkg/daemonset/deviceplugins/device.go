@@ -12,6 +12,7 @@ import (
 	"time"
 
 	instav1 "github.com/openshift/instaslice-operator/pkg/apis/dasoperator/v1alpha1"
+	"github.com/openshift/instaslice-operator/pkg/constants"
 	versioned "github.com/openshift/instaslice-operator/pkg/generated/clientset/versioned"
 	instainformers "github.com/openshift/instaslice-operator/pkg/generated/informers/externalversions"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -192,14 +193,19 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 
 	// define the extended resources to serve based on the discovered
 	// NodeAccelerator resources
-	resourceNames := make([]string, 0, len(discovered.MigPlacement))
+	resourceNames := make([]string, 0, len(discovered.MigPlacement)+1)
 	for profile := range discovered.MigPlacement {
 		sanitizedProfile := sanitizeProfileName(profile)
-		resourceNames = append(resourceNames, fmt.Sprintf("mig.das.com/%s", sanitizedProfile))
+		resourceNames = append(resourceNames, fmt.Sprintf("%s%s", constants.MIGResourcePrefix, sanitizedProfile))
 	}
+
+	// Add GPU memory resource if we have any GPUs
+	if len(discovered.NodeGPUs) > 0 {
+		resourceNames = append(resourceNames, constants.GPUMemoryResource)
+	}
+
 	// ensure deterministic ordering for stable socket names
 	sort.Strings(resourceNames)
-	const socketDir = "/var/lib/kubelet/device-plugins"
 
 	for _, res := range resourceNames {
 		mgr := NewManager(res, discovered)
@@ -207,7 +213,7 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 		sanitized := strings.ReplaceAll(res, "/", "_")
 		sanitized = sanitizeProfileName(sanitized)
 		endpoint := sanitized + ".sock"
-		socketPath := filepath.Join(socketDir, endpoint)
+		socketPath := filepath.Join(constants.DevicePluginSocketDir, endpoint)
 
 		srv, err := NewServer(mgr, socketPath, kubeConfig, emulatedMode)
 		if err != nil {
@@ -223,13 +229,9 @@ func StartDevicePlugins(ctx context.Context, kubeConfig *rest.Config) error {
 	return nil
 }
 
-// UpdateAllocationStatus safely updates the status of the given AllocationClaim using
-// the provided client while holding the allocation mutex. This prevents multiple
-// goroutines from updating the same object concurrently.
+// UpdateAllocationStatus updates the status of the given AllocationClaim using
+// the provided client. It uses RetryOnConflict to handle concurrent updates.
 func UpdateAllocationStatus(ctx context.Context, client versioned.Interface, alloc *instav1.AllocationClaim, status instav1.AllocationClaimState) (*instav1.AllocationClaim, error) {
-	allocationMutex.Lock()
-	defer allocationMutex.Unlock()
-
 	var result *instav1.AllocationClaim
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		current, err := client.OpenShiftOperatorV1alpha1().AllocationClaims(alloc.Namespace).Get(ctx, alloc.Name, metav1.GetOptions{})
