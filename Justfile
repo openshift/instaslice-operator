@@ -167,7 +167,7 @@ test-e2e e2e-args="-ginkgo.v" focus="":
     fi
 
     echo "=== Running e2e tests ==="
-    GOFLAGS=-mod=vendor go test ./test/e2e -v -count=1 -args ${args[@]}
+    GOFLAGS=-mod=vendor go test ./test/e2e -v -count=1 -timeout=90m -args ${args[@]}
 
 # Deploy all the pre-req operators, das-operator and execute end-to-end tests on CI
 [group('test')]
