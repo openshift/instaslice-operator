@@ -4,7 +4,7 @@ WORKDIR /workspace
 COPY . .
 RUN GO_BUILD_PACKAGES=./cmd/das-webhook make
 
-FROM registry.redhat.io/ubi9/ubi-minimal@sha256:83006d535923fcf1345067873524a3980316f51794f01d8655be55d6e9387183
+FROM registry.redhat.io/ubi9/ubi-minimal@sha256:d91be7cea9f03a757d69ad7fcdfcd7849dba820110e7980d5e2a1f46ed06ea3b
 WORKDIR /
 COPY --from=build /workspace/das-webhook /usr/bin
 USER 65532:65532
