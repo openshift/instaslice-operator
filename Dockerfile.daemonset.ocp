@@ -6,7 +6,7 @@ COPY . .
 RUN GO_BUILD_PACKAGES=./cmd/das-daemonset make
 
 # Build stage to install libnvidia-ml package
-FROM registry.redhat.io/ubi9/ubi@sha256:039095faabf1edde946ff528b3b6906efa046ee129f3e33fd933280bb6936221 as nvidia-libs
+FROM registry.redhat.io/ubi9/ubi@sha256:11becb127877f123fc739687bdaaf7909ed7f64c1b69d2c9e59928c16f66ed52 as nvidia-libs
 
 RUN printf '%s\n' \
   '[ml-$basearch-baseos-rpms]' \
