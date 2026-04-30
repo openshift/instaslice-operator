@@ -5,7 +5,7 @@
   },
   {
     "name": "instaslice-daemonset-next",
-    "image": "registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:f825608761e389ea3d581608f61a313282d29b9e8e3a06b3db0835daf733951c"
+    "image": "registry.redhat.io/dynamic-accelerator-slicer-tech-preview/instaslice-daemonset-rhel9@sha256:a8c7328bf1dadd1605bcf136baa8f359af1a778784e5533a4c75d676d9255b01"
   },
   {
     "name": "instaslice-webhook-next",
