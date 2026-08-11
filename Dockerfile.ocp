@@ -4,7 +4,7 @@ WORKDIR /workspace
 COPY . .
 RUN GO_BUILD_PACKAGES=./cmd/das-operator make
 
-FROM registry.redhat.io/ubi9/ubi-minimal@sha256:7d4e47500f28ac3a2bff06c25eff9127ff21048538ae03ce240d57cf756acd00
+FROM registry.redhat.io/ubi9/ubi-minimal@sha256:7c372902c8d211db2d25c8277ba534a73b92742a334874dced829a63b0f21221
 WORKDIR /
 COPY --from=build /workspace/das-operator /usr/bin
 USER 65532:65532
